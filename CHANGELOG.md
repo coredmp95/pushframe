@@ -16,6 +16,8 @@ frames; it is not affiliated with Aura Frames Inc.
 
 - (v5.1 work will land here)
 
+## [5.1.0] — 2026-09-29
+
 ### Added (phase 25: Multi-frame & Scheduling)
 
 - **Named pairs** (MTF-01): `pushframe config pair add/remove/list` —
