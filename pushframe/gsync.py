@@ -253,6 +253,14 @@ def run_google_sync(album_target: str, frame_arg: str, *, apply: bool = False,
         is_interactive = sys.stdin.isatty()
 
     if session is None:
+        # PRF-01 (phase 24): the vault preflight BEFORE any work — named,
+        # with the full remedy (google-link + the headless ssh -X recipe).
+        try:
+            from pushframe.preflight import require_google_vault
+            require_google_vault()
+        except Exception as e:
+            print(f'google-sync failed: {e}')
+            return 1
         try:
             session = GoogleSession.from_vault()
         except CookieVaultError as e:
@@ -302,11 +310,20 @@ def run_google_sync(album_target: str, frame_arg: str, *, apply: bool = False,
         from pushframe.cli import _configure_cli_logging
         aura = Aura()
         _configure_cli_logging(debug)
-    try:
-        aura.login()
-    except Exception as e:
-        print(f'Login failed: {e}')
-        return 1
+        # Phase 24 (SEC-01/02): the ONE session path — stored token first
+        # (the scheduled google-sync case), env password override, else the
+        # ONE tty prompt. Non-TTY without any credential fails named, never
+        # hangs. An INJECTED aura (tests, doctor) manages its own auth —
+        # the DI contract says call sites never re-authenticate it.
+        from pushframe.session import establish_session, SessionError
+        try:
+            aura = establish_session(aura=aura)
+        except SessionError as e:
+            print(f'not authenticated: {e}')
+            return 1
+        except Exception as e:
+            print(f'Login failed: {e}')
+            return 1
 
     frames = aura.frame_api.get_frames()
     frame_res = resolve_frame(frame_arg, frames)

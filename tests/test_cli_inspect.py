@@ -162,18 +162,22 @@ def test_inspect_tolerates_unprocessed_placeholder_asset(monkeypatch, capsys):
     assert 'None' in out
 
 
-def test_inspect_login_failure_exits_nonzero(monkeypatch, capsys):
-    monkeypatch.setenv('AURA_EMAIL', 'you@example.invalid')
-    monkeypatch.setenv('AURA_PASSWORD', 'super-secret-pw')
-    aura = offline_aura(overrides={
-        '/v5/login.json': httpx.Response(200, json={'error': 'invalid_credentials', 'message': 'Bad login'})
-    })
+def test_inspect_no_credentials_exits_nonzero_named(tmp_path, monkeypatch, capsys):
+    """Phase 24: with no aura injected and no credentials anywhere, inspect
+    fails NAMED (remedy) — the env-override login-failure shape is owned by
+    establish_session (test_session.py) since the call sites never
+    re-authenticate an injected aura (DI contract)."""
+    from pushframe.utils import settings
+    monkeypatch.setattr(settings, 'CONFIG_PATH', tmp_path / 'config.json')
+    for var in ('AURA_EMAIL', 'AURA_PASSWORD', 'PUSHFRAME_EMAIL', 'PUSHFRAME_PASSWORD'):
+        monkeypatch.delenv(var, raising=False)
 
-    rc = run_inspect('Fake', aura=aura)
+    rc = run_inspect('Fake')
 
     assert rc == 1
     out = capsys.readouterr().out
-    assert 'Login failed' in out
+    assert 'not authenticated' in out
+    assert 'pushframe config' in out
 
 
 def test_inspect_quiet_by_default_suppresses_verbose_stderr(monkeypatch, capsys):

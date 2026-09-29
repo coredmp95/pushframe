@@ -226,18 +226,20 @@ def test_reconcile_listed_in_root_help(capsys):
     assert 'reconcile' in out
 
 
-def test_run_reconcile_login_failure_exits_nonzero(monkeypatch, capsys):
-    monkeypatch.setenv('AURA_EMAIL', 'you@example.invalid')
-    monkeypatch.setenv('AURA_PASSWORD', 'super-secret-pw')
-    aura = offline_aura(overrides={
-        '/v5/login.json': httpx.Response(200, json={'error': 'invalid_credentials', 'message': 'Bad login'})
-    })
+def test_run_reconcile_no_credentials_exits_nonzero_named(tmp_path, monkeypatch, capsys):
+    """Phase 24: no aura injected + no credentials anywhere = named failure
+    (DI contract: call sites never re-authenticate an injected aura)."""
+    from pushframe.utils import settings
+    monkeypatch.setattr(settings, 'CONFIG_PATH', tmp_path / 'config.json')
+    for var in ('AURA_EMAIL', 'AURA_PASSWORD', 'PUSHFRAME_EMAIL', 'PUSHFRAME_PASSWORD'):
+        monkeypatch.delenv(var, raising=False)
 
-    rc = run_reconcile('Fake', aura=aura)
+    rc = run_reconcile('Fake')
 
     assert rc == 1
     out = capsys.readouterr().out
-    assert 'Login failed' in out
+    assert 'not authenticated' in out
+    assert 'pushframe config' in out
 
 
 # ===========================================================================

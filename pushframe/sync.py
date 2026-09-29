@@ -666,7 +666,26 @@ def execute_plan(plan: SyncPlan, aura, frame_id: str, *, s3_client, sqs_client,
     # seams stay injectable for offline tests -- the same pattern every
     # other cross-cutting concern in this function uses.
     if relogin is None:
-        relogin = aura.login
+        # Phase 24 (SEC-01/02): the 401-retry relogin is TOKEN-AWARE now —
+        # the old default (aura.login) assumed a password, which a stored
+        # session deliberately never has. Env password → real login; a TTY →
+        # the ONE prompt (session._prompt_login charges the budget as today);
+        # otherwise the retry surfaces AuthenticationError named (the chunk
+        # fails, the breaker still guards) — never a loop, never a hang.
+        from pushframe import session as _session_mod
+        if _session_mod._env_password_present():
+            relogin = aura.login
+        else:
+            def _token_relogin():
+                if _session_mod._tty_available():
+                    _session_mod._prompt_login(aura, True)
+                else:
+                    raise AuthenticationError(
+                        'write 401 persisted and the stored session cannot '
+                        're-login non-interactively — re-run `pushframe config` '
+                        'interactively, or provide PUSHFRAME_EMAIL/'
+                        'PUSHFRAME_PASSWORD for this run')
+            relogin = _token_relogin
     if asset_probe is None:
         asset_probe = aura.asset_api.get_asset_by_local_identifier
 
