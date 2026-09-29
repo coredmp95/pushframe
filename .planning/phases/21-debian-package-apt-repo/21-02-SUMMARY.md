@@ -58,4 +58,8 @@
 - The signing key is a **root of trust** for every user: `signing-key.asc`
   and its revocation cert must be backed up outside this machine; loss =
   users must re-trust a new fingerprint.
+  **[Done 2026-09-29]** Both are stored in the operator's Vault at
+  `kv/pushframe/apt-signing-key` (https://vault.coredmp.net, KV v2):
+  fingerprint + armored secret key + openpgp revocation cert, round-trip
+  fingerprint verified. The local 0600 copy remains the working set.
 - `PUSHFRAME_APT_KEY_DIR` env override exists for CI/machine migration.

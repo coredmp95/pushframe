@@ -59,4 +59,6 @@ production system touched beyond the project's own Pages site).
 - GitHub flags the 56.4 MB deb above its 50 MB *recommended* size (hard
   limit 100 MB) — accepted; diet candidates recorded in 21-02-SUMMARY.
 - The signing key backup (`~/.config/pushframe-apt-key/signing-key.asc`) is
-  the repo's root of trust — must be backed up by the operator.
+  the repo's root of trust — stored 2026-09-29 in the operator's Vault
+  (`kv/pushframe/apt-signing-key`, KV v2) together with the revocation cert;
+  round-trip verified.
