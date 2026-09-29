@@ -37,7 +37,7 @@ on PyPI, already taken.
      carries its own venv (opt-in layout /opt or /usr/lib) rather than fighting
      distutils — the modern, hermetic, upstream-recommended pattern for apps. -->
 
-- [ ] **DEB-01**: `dpkg -i pushframe_<version>_all.deb` (or `apt install ./pushframe_….deb`) installs a working `pushframe` on Ubuntu 26.04: binary on PATH, `pushframe status --help` runs, dependencies satisfied — verified in a clean container/schroot, not just the dev machine
+- [ ] **DEB-01**: `dpkg -i pushframe_<version>_amd64.deb` (or `apt install ./pushframe_….deb`) installs a working `pushframe` on Ubuntu 26.04: binary on PATH, `pushframe status --help` runs, dependencies satisfied — verified in a clean container/schroot, not just the dev machine
 - [ ] **DEB-02**: The package is built reproducibly by a repo script (e.g. `scripts/build-deb.sh` or `fpm`/`dpkg-deb` via pyproject metadata — version read from the single source of truth) and emits the `.deb` as a CI/release artifact; building requires no Debian packaging expertise
 - [ ] **DEB-03**: Correct Debian metadata: Package `pushframe`, Section `utils`, Maintainer, Description (with the unofficial disclaimer), License, Depends expressing the interpreter requirement (e.g. `python3 (>= 3.14)` or the bundled-runtime equivalent), and Conflicts/Replaces/Provides for the never-shipped `aura-cli` name avoided (no conflict needed — the name was never packaged; documented decision)
 - [ ] **DEB-04**: Install/uninstall is clean per Debian policy as observed by `lintian` (no errors): files under `/usr/lib/pushframe/` (private venv) + `/usr/bin/pushframe` symlink, config strictly under `$HOME` at runtime (no root-owned files in `~`), postrm removes nothing from `$HOME`

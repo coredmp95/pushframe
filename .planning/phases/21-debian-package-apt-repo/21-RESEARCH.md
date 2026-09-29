@@ -91,7 +91,7 @@ evidence-backed, not preference.
 
 ## Verification Commands (plan-level, deterministic)
 
-- Build: `scripts/build-deb.sh` → `dist/pushframe_<v>_all.deb` exists
+- Build: `scripts/build-deb.sh` → `dist/pushframe_<v>_amd64.deb` exists
 - Clean-room: `scripts/test-deb-container.sh` → exit 0 (install + --help +
   metadata + removal checks inside `ubuntu:26.04`)
 - lintian: containerized `lintian --fail-on error` → no errors

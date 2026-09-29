@@ -1,0 +1,39 @@
+# Lintian overrides for pushframe.
+#
+# The package embeds a hermetic private CPython 3.14 runtime
+# (python-build-standalone + binary wheels) under /usr/lib/pushframe/python/
+# — a deliberate architecture decision (21-CONTEXT D-02/D-03): the distro's
+# Python is never touched, and the package is self-contained by design.
+# Every override below is a class of tag that is INHERENT to shipping a
+# private interpreter tree and does not indicate a real defect.
+
+# python-build-standalone ships unstripped binaries/objects; stripping an
+# embedded interpreter risks breaking it for zero benefit.
+pushframe: unstripped-binary-or-object *
+
+# The interpreter statically embeds common libs (zlib, expat, ncurses, ...)
+# and binary wheels vendor their own shared libs (pillow.libs, ...) — that
+# is what "hermetic" means here; deduplicating them would reintroduce the
+# system-python coupling the package exists to avoid.
+pushframe: embedded-library *
+
+# python-build-standalone's tcl/tk builds carry $ORIGIN-style RPATHs pointing
+# into their build prefix; they are only loaded from the embedded tree.
+pushframe: custom-library-search-path *
+
+# Stdlib demo/vendored scripts keep non-absolute shebangs; embedded runtime
+# scripts are not executed via the distro's interpreter lookup.
+pushframe: unusual-interpreter *
+
+# Binary wheels ship pre-compressed data files (botocore service models)
+# whose gzip headers carry their own timestamps; recompressing hundreds of
+# vendored data files buys nothing.
+pushframe: package-contains-timestamped-gzip *
+
+# CLI manpage deferred to the release-engineering phase (REL polish); the
+# --help output is the documented interface for now.
+pushframe: no-manual-page [usr/bin/pushframe]
+
+# python-build-standalone ships the interpreter without PIE hardening flags;
+# it is a prebuilt upstream binary and not rebuilt here.
+pushframe: hardening-no-pie [usr/lib/pushframe/python/bin/python3.14]

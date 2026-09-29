@@ -1,0 +1,10 @@
+#!/bin/sh
+# postinst for pushframe — a one-line hint, nothing else.
+# DEB-04: the package never touches $HOME; user config is created at first run.
+set -e
+
+if [ "$1" = "configure" ]; then
+    echo "pushframe installed. Get started: pushframe status"
+fi
+
+exit 0

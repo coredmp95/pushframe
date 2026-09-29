@@ -24,7 +24,7 @@ evidence on the table:
 <domain>
 ## Phase Boundary
 
-Delivers: a repo script that builds `pushframe_<version>_all.deb` (staging tree +
+Delivers: a repo script that builds `pushframe_<version>_amd64.deb` (staging tree +
 `dpkg-deb --build`), the embedded runtime layout (`/usr/lib/pushframe/python/` +
 wrapper `/usr/bin/pushframe`), correct Debian metadata (control, maint-scripts),
 lintian-clean output, a containerized clean-room install test (DEB-01), and the
@@ -66,7 +66,7 @@ any behavior change to the tool itself.
   `*.dist-info/RECORD` noise kept (needed by pip, harmless), write control
   files from a template with the version interpolated → `dpkg-deb --build
   --root-owner-group` → optional `lintian` when present. Output:
-  `dist/pushframe_<version>_all.deb`.
+  `dist/pushframe_<version>_amd64.deb`.
 - **D-09:** Clean-room verification (DEB-01) = `docker run ubuntu:26.04` mounting
   the built `.deb`: `apt install /mnt/pushframe_*.deb && pushframe status --help`
   (offline smoke; a full live login is NOT required in the container — `--help`

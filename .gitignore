@@ -201,3 +201,7 @@ fabric.properties
 data/
 buffet/
 .planning/milestone.lock
+
+# pushframe packaging (phase 21): the upstream template pattern [Ss]cripts
+# (meant for IDE dot-dirs) ignores our real repo scripts/ — re-include it.
+!scripts/

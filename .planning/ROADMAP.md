@@ -65,7 +65,7 @@ side-action (create repo) + `git remote set-url` + push — no force-push anywhe
 **Requirements**: DEB-01, DEB-02, DEB-03, DEB-04, DEB-05
 **Success Criteria** (what must be TRUE):
 
-  1. In a clean Ubuntu 26.04 container, `apt install ./pushframe_<v>_all.deb && pushframe status --help` works with the binary on PATH and no manual Python setup.
+  1. In a clean Ubuntu 26.04 container, `apt install ./pushframe_<v>_amd64.deb && pushframe status --help` works with the binary on PATH and no manual Python setup.
   2. A single repo script (version read from pyproject) builds the `.deb` deterministically; `lintian` reports no errors.
   3. Debian metadata is correct: Package `pushframe`, maintainer, description with the unofficial disclaimer, license, interpreter dependency expressed, files under `/usr/lib/pushframe/` + `/usr/bin/pushframe`, nothing root-owned in `$HOME`, postrm leaves `$HOME` alone.
   4. The GitHub Pages APT repo serves the package: after adding the sources entry and key per the README instructions, `apt update && apt install pushframe` installs it; the Release file is signed.

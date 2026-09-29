@@ -6,7 +6,7 @@
     {
       "number": "20",
       "name": "pushframe Rename, Migration & Repo Switch",
-      "status": "pending"
+      "status": "complete"
     },
     {
       "number": "21",
@@ -22,7 +22,7 @@
   "next": {
     "command": "/gsd:progress --next",
     "label": "Advance to the next step",
-    "reason": "Phase 20 of 3 · 0% · executing"
+    "reason": "Phase 21 of 3 · 0% · executing"
   },
-  "updated_at": "2026-09-29T06:52:23.479Z"
+  "updated_at": "2026-09-29T08:54:26.276Z"
 }
