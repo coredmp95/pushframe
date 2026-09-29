@@ -5,15 +5,15 @@
 
 ## Current Position
 
-Phase: 24 — EXECUTED (verification pending)
+Phase: 24 — VERIFIED (passed)
 Current Plan: 24-01 complete
 Total Plans in Phase: 1 (phase 24)
-Status: Executed — run verify-phase 24 next
+Status: Verified — next: phase 25 (Multi-frame + systemd)
 
 ## Milestone Roadmap (v5.1, Phases 23-25)
 
 - [x] Phase 23 — Config Wizard & Precedence (CFG-01..04)
-- [ ] Phase 24 — Token-First Sessions & Preflight Sweep (SEC-01..03, PRF-01..02)
+- [x] Phase 24 — Token-First Sessions & Preflight Sweep (SEC-01..03, PRF-01..02)
 - [ ] Phase 25 — Multi-frame Mappings & systemd User Scheduling (MTF-01..03, TMR-01..03)
 
 ## Completed Milestones
