@@ -216,7 +216,16 @@ def run_google_sync(album_target: str, frame_arg: str, *, apply: bool = False,
                     workers: int = 4, threshold: float | None = None,
                     input_fn=None, is_interactive: bool | None = None,
                     list_shared=None, cache_dir=None,
-                    manifest_path=None, batch_size: int | None = None) -> int:
+                    manifest_path=None, batch_size: int | None = None,
+                    pair: str | None = None, run_all: bool = False,
+                    scheduled: bool = False) -> int:
+    """`pair=` selects a named pair (album+frame from the config store, state
+    sharded under the pair name); `run_all=True` runs every configured pair
+    with ONE shared budget (MTF-03), recording per-pair outcomes and NEVER
+    aborting the loop on one pair's failure (D-02) — exit 1 if any failed.
+    `scheduled=True` flips SAFE-02's threshold gate to SKIP-AND-LOG (TMR-03:
+    a timed run that would mass-hide reports and stops; it must not proceed
+    silently and must not fail the unit)."""
     """The mutating half: album → frame mirror end to end (plan 18-03).
 
     DI seams mirror run_sync/run_google_album conventions: session/aura/s3/
@@ -251,6 +260,54 @@ def run_google_sync(album_target: str, frame_arg: str, *, apply: bool = False,
         input_fn = input
     if is_interactive is None:
         is_interactive = sys.stdin.isatty()
+
+    # --- pair mode (phase 25, MTF-01..03) ----------------------------------
+    if run_all or pair is not None:
+        from pushframe import pairs as pairs_mod
+        if run_all:
+            names = list(pairs_mod.all_pairs())
+            if not names:
+                print('google-sync: no pairs configured — add one with '
+                      '`pushframe config pair add <name> --album A --frame F`')
+                return 2
+        else:
+            try:
+                pairs_mod.pair_resolve(pair)
+            except Exception as e:
+                print(f'google-sync: {e}')
+                return 2
+            names = [pair]
+
+        # D-02: run every pair; one shared budget (MTF-03); exit 1 if any
+        # pair failed, 0 only if all OK.
+        results = []
+        for name in sorted(names):                    # deterministic order
+            spec = pairs_mod.pair_resolve(name)
+            m_path, c_path = pairs_mod.pair_state_paths(name)
+            print(f'=== pair [{name}]: album "{spec["album"]}" → frame '
+                  f'"{spec["frame"]}" ===')
+            rc = run_google_sync(spec['album'], spec['frame'], apply=apply,
+                                 yes=yes, debug=debug, session=session,
+                                 aura=aura, s3_client=s3_client,
+                                 sqs_client=sqs_client, budget=budget,
+                                 workers=workers, threshold=threshold,
+                                 input_fn=input_fn,
+                                 is_interactive=is_interactive,
+                                 list_shared=list_shared,
+                                 cache_dir=str(c_path),
+                                 manifest_path=m_path,
+                                 batch_size=batch_size,
+                                 scheduled=scheduled)
+            results.append((name, rc))
+        failed = [n for n, rc in results if rc != 0]
+        print('--- --all report ---')
+        for n, rc in results:
+            print(f'  [{"ok" if rc == 0 else "FAILED"}] {n}')
+        return 0 if not failed else 1
+    if pair is None and frame_arg == '--all':
+        # handled above only when run_all=True; a literal '--all' frame name
+        # without the flag is a user mistake — keep it explicit:
+        pass
 
     if session is None:
         # PRF-01 (phase 24): the vault preflight BEFORE any work — named,

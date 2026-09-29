@@ -87,9 +87,13 @@ def build_parser() -> argparse.ArgumentParser:
                                help='Session/frames checks only (no test image written)')
     doctor_parser.add_argument('--debug', action='store_true', default=False)
     config_parser = subparsers.add_parser(
-        'config', help='Interactive setup wizard; subcommands: show, import, set, get, path')
+        'config', help='Interactive setup wizard; subcommands: show, import, set, get, path, pair')
+    # argparse_known: config_args may itself contain --flags (pair add
+    # --album A --frame F); parse_known_args would otherwise reject them as
+    # unknown top-level options.
     config_parser.add_argument('config_args', nargs='*', metavar='args',
-                               help='show | import [--file F] | set <k> <v> | get <k> | path')
+                               help='show | import [--file F] | set <k> <v> | '
+                                    'get <k> | path | pair add/remove/list')
     inspect_parser = subparsers.add_parser('inspect', help="Inspect a frame's photos and metadata")
     inspect_parser.add_argument('--frame', required=True, help='Frame name (substring) or id')
     sync_parser = subparsers.add_parser('sync', help='Dry-run diff a local directory against a frame')
@@ -190,8 +194,20 @@ def build_parser() -> argparse.ArgumentParser:
     gsync_parser.add_argument(
         'album', help='Album share URL, AF1Qip… id, or album-name substring')
     gsync_parser.add_argument(
-        '--frame', required=True,
-        help='Target frame name substring or id (single album→frame pair)')
+        '--frame', default=None,
+        help='Target frame name substring or id (single album→frame pair). '
+             'Use --all instead to run every configured pair')
+    gsync_parser.add_argument(
+        '--all', action='store_true', default=False, dest='all_pairs',
+        help='Run every configured pair (album/frame come from config; state '
+             'shards per pair; ONE shared write budget caps the total)')
+    gsync_parser.add_argument(
+        '--pair', default=None,
+        help='Run one named pair (album/frame from the config store)')
+    gsync_parser.add_argument(
+        '--scheduled', action='store_true', default=False,
+        help='Timed-run semantics: SAFE-02 threshold breach SKIPS AND LOGS '
+             'instead of proceeding (used by pushframe schedule units)')
     gsync_parser.add_argument(
         '--apply', action='store_true', default=False,
         help='Execute the plan (uploads + hides). Without it, only print the plan')
@@ -276,6 +292,38 @@ def run_config(wizard_args=None, stdin_isatty: bool | None = None) -> int:
     is_tty = _sys.stdin.isatty() if stdin_isatty is None else stdin_isatty
 
     # --- subcommands -------------------------------------------------------
+    if args and args[0] == 'pair':
+        # Phase 25 (MTF-01): the named-pair store (add/remove/list).
+        from pushframe import pairs as pairs_mod
+        sub = args[1:]
+        if not sub or sub[0] == 'list':
+            pairs_mod.pair_list()
+            return 0
+        if sub[0] == 'add' and len(sub) >= 2 and '--album' in sub and '--frame' in sub:
+            name = sub[1]
+            album = sub[sub.index('--album') + 1]
+            frame = sub[sub.index('--frame') + 1]
+            try:
+                pairs_mod.pair_add(name, album=album, frame=frame)
+            except Exception as e:
+                print(f'pair not added: {e}')
+                return 1
+            m, c = pairs_mod.pair_state_paths(name)
+            print(f'pair "{name}" saved (album "{album}" → frame "{frame}")')
+            print(f'  state: {m.parent} (+ cache {c})')
+            return 0
+        if sub[0] == 'remove' and len(sub) >= 2:
+            if pairs_mod.pair_remove(sub[1]):
+                print(f'pair "{sub[1]}" removed (its state files, if any, '
+                      f'are left in place under pairs/{sub[1]}/ — delete '
+                      f'them manually if you want a clean slate)')
+            else:
+                print(f'no pair named "{sub[1]}".')
+            return 0
+        print('usage: pushframe config pair list | pair add <name> --album A '
+              '--frame F | pair remove <name>')
+        return 1
+
     if args and args[0] == 'show':
         return _config_show()
     if args and args[0] == 'path':
@@ -1398,7 +1446,22 @@ def main(argv=None) -> int:
     _notice = migration_notice()
     if _notice:
         print(_notice)
-    args = build_parser().parse_args(argv)
+    parser = build_parser()
+    # `config` sub-args carry their own --flags (pair add --album …); split
+    # them out BEFORE argparse so they are not rejected as unknown options.
+    argv_list = list(argv) if argv is not None else None
+    config_tail = []
+    if argv_list is not None and 'config' in argv_list:
+        i = argv_list.index('config')
+        config_tail = argv_list[i + 1:]
+        argv_list = argv_list[:i + 1]
+    elif argv_list is None and 'config' in (sys.argv[1:] or []):
+        i = sys.argv.index('config')
+        config_tail = sys.argv[i + 1:]
+        sys.argv = sys.argv[:i + 1]
+    args = parser.parse_args(argv_list)
+    if args.command == 'config' and config_tail:
+        args.config_args = config_tail
 
     if args.command == 'config':
         return run_config(wizard_args=getattr(args, 'config_args', []) or [])
@@ -1416,9 +1479,16 @@ def main(argv=None) -> int:
         return run_google_album(args.target, list_all=args.list, debug=args.debug)
     if args.command == 'google-sync':
         from pushframe.gsync import run_google_sync
-        return run_google_sync(args.album, args.frame, apply=args.apply,
-                               yes=args.yes, debug=args.debug,
-                               batch_size=args.batch_size)
+        if not args.all_pairs and not args.frame:
+            print('google-sync: give --frame FRAME (one pair) or --all '
+                  '(every configured pair)')
+            return 2
+        return run_google_sync(args.album, args.frame or '--all',
+                               apply=args.apply, yes=args.yes,
+                               debug=args.debug, batch_size=args.batch_size,
+                               pair=args.pair,
+                               run_all=args.all_pairs,
+                               scheduled=args.scheduled)
     if args.command == 'inspect':
         return run_inspect(args.frame, debug=args.debug)
     if args.command == 'sync':
