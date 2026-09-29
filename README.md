@@ -1,5 +1,9 @@
 # Aura Frames (PUSHD) Python Client [unofficial]
 
+[![tests](https://github.com/coredmp95/pushframe/actions/workflows/tests.yml/badge.svg)](https://github.com/coredmp95/pushframe/actions/workflows/tests.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python 3.14](https://img.shields.io/badge/python-3.14-blue.svg)](https://www.python.org/downloads/)
+
 Implements most of the AuraFrames APIs in Python.
 
 Any advice or issues are welcome.
