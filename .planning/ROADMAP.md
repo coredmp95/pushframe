@@ -71,14 +71,25 @@ side-action (create repo) + `git remote set-url` + push — no force-push anywhe
   4. The GitHub Pages APT repo serves the package: after adding the sources entry and key per the README instructions, `apt update && apt install pushframe` installs it; the Release file is signed.
   5. The uninstall path is clean: `apt remove pushframe` leaves `$HOME` intact and removes only `/usr/lib/pushframe/` + the symlink.
 
-**Plans**: TBD
+**Plans**: 2/2 plans complete (planned 2026-09-29)
+
+Plans:
+**Wave 1**
+
+- [ ] 21-01-PLAN.md — build-deb.sh (dpkg-deb, embedded uv-standalone runtime, control metadata), test-deb-container.sh (clean-room install/help/metadata/remove + lintian), README .deb install pointer (DEB-01..04)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 21-02-PLAN.md — dedicated GPG key, zero-dependency signed APT tree (scanpackages + hand-built Release/InRelease), gh-pages publication, container journey test, README APT journey (DEB-05)
 
 **Notes**: Chosen layout is a private runtime under `/usr/lib/pushframe/` (hermetic,
 upstream-recommended app pattern) rather than distutils-installing into the system
 Python — Python 3.14 is the pinned interpreter and the distro's python3 must never be
-mutated. fpm vs hand-rolled dpkg-deb vs dh is a plan-level decision; the script matters,
-not the tool. The APT repo lives in a `gh-pages`-style branch of the new repo (reprepro
-or dpkg-scanpackages; a dedicated key documented in the README).
+mutated. Discuss session 2026-09-29 settled: dpkg-deb + script (D-01), embedded
+standalone Python proven by probe (D-03 — a host-system venv does NOT survive
+relocation into a clean container), dedicated GPG key (D-04), gh-pages hosting (D-05).
+The APT repo lives in a `gh-pages` branch of the project repo (zero-dependency
+scanpackages + hand-built signed Release).
 
 ### Phase 22: PyPI + Release Engineering
 
@@ -106,7 +117,7 @@ deps.
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 20. pushframe Rename, Migration & Repo Switch | 1/1 | Complete | 2026-09-29 |
-| 21. Debian Package & APT Repo | 0/? | Not started | - |
+| 21. Debian Package & APT Repo | 0/2 | Planned | - |
 | 22. PyPI + Release Engineering | 0/? | Not started | - |
 
 ## Requirement Coverage (v5.0)
