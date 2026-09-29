@@ -12,6 +12,7 @@ talks to the frame over your local network — everything goes through your Aura
 ## Contents
 
 - [Global usage](#global-usage)
+- [`doctor`](#doctor--can-this-machine-write-today)
 - [`config`](#config--set-up-credentials-and-settings-once)
 - [`status`](#status--check-credentials-and-list-frames)
 - [`inspect`](#inspect--look-at-one-frame)
@@ -69,6 +70,25 @@ Resolution rules:
 
 Ambiguity is never resolved silently, so a loose substring can't quietly target the wrong
 frame.
+
+## `doctor` — can this machine write today?
+
+The pre-flight gate for any long write run. Offline tests and install
+journeys cannot prove a real WRITE lands on a real frame from THIS machine,
+THIS IP, today — the anti-abuse layer can be scoped per-IP/per-surface
+(venus, 2026-09: reads green, writes 401). Doctor probes exactly that,
+deliberately, with one 4×4 test image:
+
+```bash
+pushframe doctor            # session → frames → WRITE probe → verify → cleanup
+pushframe doctor --no-write # session + frames reads only (zero writes)
+pushframe doctor --frame "Cadre"
+```
+
+Five checks, one unambiguous verdict: **GO** (writes work from here, now —
+launch the sync) or **NO-GO** with the captured 401 server body and its
+classification (anti-abuse trip vs token problem). Charges ~6 write-budget
+tokens; safe to repeat; never run it in CI.
 
 ## `config` — set up credentials and settings once
 

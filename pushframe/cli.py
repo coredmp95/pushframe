@@ -77,6 +77,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     subparsers = parser.add_subparsers(dest='command', required=True)
     subparsers.add_parser('status', help='Check config/auth health and list account frames')
+    doctor_parser = subparsers.add_parser(
+        'doctor', help='Field write-probe: 1 tiny test image through the real '
+                       'write path, then GO/NO-GO for a sync from this machine')
+    doctor_parser.add_argument('--frame', default=None,
+                               help='Target frame name (substring) or id — default: first frame')
+    doctor_parser.add_argument('--no-write', action='store_true', default=False,
+                               help='Session/frames checks only (no test image written)')
+    doctor_parser.add_argument('--debug', action='store_true', default=False)
     config_parser = subparsers.add_parser(
         'config', help='Interactive setup wizard; subcommands: show, import, set, get, path')
     config_parser.add_argument('config_args', nargs='*', metavar='args',
@@ -1354,6 +1362,10 @@ def main(argv=None) -> int:
 
     if args.command == 'config':
         return run_config(wizard_args=getattr(args, 'config_args', []) or [])
+    if args.command == 'doctor':
+        from pushframe.doctor import run_doctor
+        return run_doctor(args.frame, do_write=not args.no_write,
+                          debug=args.debug)
     if args.command == 'status':
         return run_status(debug=args.debug)
     if args.command == 'google-link':
