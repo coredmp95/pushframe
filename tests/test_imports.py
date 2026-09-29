@@ -49,7 +49,8 @@ def test_aws_literals_stay_out_of_aws_modules():
     ):
         assert hasattr(module, attr), f'{module.__name__} lost {attr}'
     # The env-config values are ONLY sourced from settings: the AWS modules
-    # must not carry a same-named attribute that could drift from settings.
-    assert s3client.BUCKET_KEY is settings.AWS_S3_BUCKET
-    assert s3client.UPLOAD_IDENTITY_POOL_ID is settings.AWS_UPLOAD_IDENTITY_POOL_ID
-    assert sqsclient.SQS_IDENTITY_POOL_ID is settings.AWS_SQS_IDENTITY_POOL_ID
+    # read DYNAMICALLY (phase 23 — the config file can change them at any
+    # time), so the module carries accessor functions, not frozen aliases.
+    assert s3client.bucket_key() == settings.AWS_S3_BUCKET
+    assert s3client.upload_identity_pool_id() == settings.AWS_UPLOAD_IDENTITY_POOL_ID
+    assert sqsclient.sqs_identity_pool_id() == settings.AWS_SQS_IDENTITY_POOL_ID

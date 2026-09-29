@@ -61,7 +61,32 @@ class Aura:
             'x-token-auth': user.auth_token,
             'x-user-id': user.id
         })
+        # Session facts for the config wizard (phase 23): the wizard stores
+        # these so later commands can RESUME the session without a password
+        # (roadmap §23 criterion 1; full token-first lands in phase 24).
+        self.auth_token = user.auth_token
+        self.user_id = user.id
 
+        return self
+
+    def resume_session(self, email: str = None, auth_token: str = None,
+                       user_id: str = None):
+        """Attach a previously-established session (phase 23): sets the auth
+        headers from stored {email, auth_token, user_id} config WITHOUT any
+        login call. Env vars stay the override path (criterion 2); `status`
+        falls back to this only when no password-bearing env is set.
+
+        auth_token is mandatory — a session without it cannot authenticate;
+        the caller checks the config before deciding to resume.
+        """
+        if not auth_token:
+            raise ValueError('resume_session needs a stored auth_token')
+        self._client.add_default_headers({
+            'x-token-auth': auth_token,
+            'x-user-id': user_id or ''
+        })
+        self.auth_token = auth_token
+        self.user_id = user_id
         return self
 
     def main(self):

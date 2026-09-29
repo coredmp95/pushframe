@@ -12,6 +12,70 @@ every channel.
 `pushframe` is an unofficial community CLI for Aura Frames digital photo
 frames; it is not affiliated with Aura Frames Inc.
 
+## [Unreleased]
+
+### Added
+
+- **`pushframe config`** (v5.1, phase 23): interactive wizard that asks for
+  the email + password (hidden input), **verifies the login against the real
+  Aura API before writing anything**, and stores email + session token —
+  never the password — in `~/.config/pushframe/config.json` (0600, atomic
+  writes, schema-versioned). Subcommands: `show` (effective value + source
+  per key, secrets masked, env-shadow warnings), `import FILE` (adopts an
+  existing `.env`, skipping what env already provides), `set/get/path`.
+  With a stored session, `status` runs with **zero environment variables**
+  (resumes the session — no login call, no password traffic; proven by a
+  pristine-container journey, `scripts/test-config-journey-container.sh`).
+- Headless `google-link` recipe documented (ssh -X); a `--remote-assist`
+  mode is a backlog candidate.
+
+### Changed
+
+- Settings now resolve **at use time** with the precedence
+  **environment → config file → default** (previously environment → default
+  only, frozen at import time). Every `settings.X` reader keeps working
+  unchanged; long-running processes now see updated values. This also makes
+  `PUSHFRAME_API_BASE_URL` effective for real — it sat in the settings table
+  but `client.py` still read its own frozen constant.
+- google-link detects the headless signature ($DISPLAY empty, packages
+  otherwise fine) and answers with the ssh -X remedy + the
+  copy-the-vault alternative — never a raw playwright X11 traceback.
+
+## [5.0.4] — 2026-09-29
+
+### Added
+
+- google-link zero-config: the dedicated Chrome profile defaults to
+  `~/.config/pushframe/chrome-profile` (created on demand); the env var
+  becomes an override. A near-miss env name (e.g. a truncated
+  `USHFRAME_…`) is called out explicitly instead of looking like "unset".
+- google-link preflight: missing prerequisites (playwright package,
+  Chrome/Chromium) fail with the exact remedy instead of a traceback
+  (`ModuleNotFoundError: playwright` was the whole output before).
+
+### Changed
+
+- `PUSHFRAME_PROBE_CHROME_PROFILE` is no longer required to run
+  `google-link`.
+
+### Fixed
+
+- google-link preflight on the uv-tool install path: remedy for a missing
+  playwright now matches every install shape (`uv tool install
+  'pushframe[google-browser]' --force` for uv tools — `pip install
+  --user` targets the wrong interpreter there); stray duplicate quote in
+  the message fixed.
+
+## [5.0.3] — 2026-09-29
+
+### Added
+
+- `CHANGELOG.md` — every release now traced in Keep a Changelog format
+  (Added / Changed / Deprecated / Fixed / Security), exposed as a
+  `Changelog` project URL on PyPI and referenced from the README.
+- `arch=amd64` in the documented APT sources entry: silences apt's
+  i386 notice on multi-arch machines (the repo is amd64-only).
+
 ## [5.0.2] — 2026-09-29
 
 ### Fixed
@@ -105,68 +169,3 @@ Milestone summary — see `.planning/MILESTONES.md` for the full retros.
 - **v1.1 — client transport fixes** (the original author's last tag;
   revived and extended by the current maintainer in 2026).
 - **v1.0 — initial upstream release** by zmanowar (2023).
-
-## [Unreleased]
-
-- (v5.1 work will land here)
-- Headless `google-link` recipe documented (ssh -X); a `--remote-assist`
-  mode is a backlog candidate.
-- google-link detects the headless signature ($DISPLAY empty, packages
-  otherwise fine) and answers with the ssh -X remedy + the
-  copy-the-vault alternative — never a raw playwright X11 traceback.
-
-## [5.0.4] — 2026-09-29
-
-### Fixed
-
-- google-link preflight on the uv-tool install path: remedy for a missing
-  playwright now matches every install shape (`uv tool install
-  'pushframe[google-browser]' --force` for uv tools — `pip install
-  --user` targets the wrong interpreter there); stray duplicate quote in
-  the message fixed.
-
-### Added
-
-- google-link zero-config: dedicated Chrome profile defaults to
-  `~/.config/pushframe/chrome-profile` (created on demand); the env var
-  becomes an override. A near-miss env name (e.g. a truncated
-  `USHFRAME_…`) is called out explicitly instead of looking like "unset".
-- google-link preflight: missing prerequisites (playwright package,
-  Chrome/Chromium) fail with the exact remedy instead of a traceback
-  (`ModuleNotFoundError: playwright` was the whole output before).
-
-### Changed
-
-- `PUSHFRAME_PROBE_CHROME_PROFILE` is no longer required to run
-  `google-link`.
-
-- google-link zero-config: the dedicated Chrome profile defaults to
-  `~/.config/pushframe/chrome-profile` (created on demand); the env var
-  becomes an override. A near-miss env name (e.g. a truncated
-  `USHFRAME_…`) is called out explicitly instead of looking like "unset".
-- google-link preflight: missing prerequisites (playwright package,
-  Chrome/Chromium) now fail with the exact remedy instead of a traceback
-  (`ModuleNotFoundError: playwright` was the whole output before).
-
-### Fixed
-
-- `google-link` preflight on the uv-tool install path: the message for a
-  missing playwright package now matches every install shape (`uv tool
-  install 'pushframe[google-browser]'` for uv tools — `pip install
-  --user` targets the wrong interpreter there), and the leftover
-  duplicate browser-detection line was removed.
-
-### Changed
-
-- `PUSHFRAME_PROBE_CHROME_PROFILE` is no longer required to run
-  `google-link`.
-
-## [5.0.3] — 2026-09-29
-
-### Added
-
-- `CHANGELOG.md` — every release now traced in Keep a Changelog format
-  (Added / Changed / Deprecated / Fixed / Security), exposed as a
-  `Changelog` project URL on PyPI and referenced from the README.
-- `arch=amd64` in the documented APT sources entry: silences apt's
-  i386 notice on multi-arch machines (the repo is amd64-only).

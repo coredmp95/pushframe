@@ -77,6 +77,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     subparsers = parser.add_subparsers(dest='command', required=True)
     subparsers.add_parser('status', help='Check config/auth health and list account frames')
+    config_parser = subparsers.add_parser(
+        'config', help='Interactive setup wizard; subcommands: show, import, set, get, path')
+    config_parser.add_argument('config_args', nargs='*', metavar='args',
+                               help='show | import [--file F] | set <k> <v> | get <k> | path')
     inspect_parser = subparsers.add_parser('inspect', help="Inspect a frame's photos and metadata")
     inspect_parser.add_argument('--frame', required=True, help='Frame name (substring) or id')
     sync_parser = subparsers.add_parser('sync', help='Dry-run diff a local directory against a frame')
@@ -220,6 +224,221 @@ def _configure_cli_logging(debug: bool) -> None:
     logger.add(sys.stderr, level='WARNING')
 
 
+from pushframe import config_store
+from pushframe.utils import settings
+
+
+def _wizard_login(email: str, password: str) -> dict:
+    """Live login for the config wizard (D-03). Returns
+    {email, auth_token, user_id, frames} on success; raises on bad
+    credentials. Module-level seam: tests patch this, never the network.
+
+    Aura.login returns the Aura itself (not the user); the session facts
+    are attached to the instance. Phase 23 fixed this seam — it used to
+    read `user.auth_token` off the returned Aura, which would have crashed
+    the first REAL wizard login (mocks hid it)."""
+    from pushframe.aura import Aura
+    aura = Aura()
+    aura.login(email=email, password=password)
+    frames = []
+    try:
+        frames = [{'name': f.name, 'id': f.id} for f in aura.frame_api.get_frames()]
+    except Exception:
+        pass  # frame listing is optional at setup time
+    return {'email': email, 'auth_token': aura.auth_token,
+            'user_id': aura.user_id, 'frames': frames}
+
+
+def run_config(wizard_args=None, stdin_isatty: bool | None = None) -> int:
+    """pushframe config — the command family (CFG-01..04).
+
+    No args: the interactive wizard (credentials first, login-tested,
+    nothing written on failure — D-03). Subcommands: show, import,
+    set/get/path (CFG-02/03/04). """
+    import getpass
+    import sys as _sys
+
+    args = list(wizard_args if wizard_args is not None else [])
+    is_tty = _sys.stdin.isatty() if stdin_isatty is None else stdin_isatty
+
+    # --- subcommands -------------------------------------------------------
+    if args and args[0] == 'show':
+        return _config_show()
+    if args and args[0] == 'path':
+        print(settings.CONFIG_PATH)
+        return 0
+    if args and args[0] == 'import':
+        return _config_import(args[1:])
+    if args and args[0] == 'set':
+        return _config_set(args[1:])
+    if args and args[0] == 'get':
+        if len(args) < 2:
+            print('usage: pushframe config get <key>')
+            return 1
+        name = args[1]
+        if name not in settings.known_keys() and name not in ('email', 'default_frame', 'debug'):
+            print(f'unknown key {name!r}. Known settings: {", ".join(settings.known_keys())}')
+            return 1
+        value = config_store.setting(name)
+        source = 'file' if value is not None else ('env' if settings.shadowed_keys({name: None}) else 'default')
+        print(f'{name} = {value!r}  (source: {source})')
+        return 0
+
+    # --- the wizard --------------------------------------------------------
+    if not is_tty:
+        print('pushframe config: the wizard needs an interactive terminal '
+              '(use config set / config import for scripts).')
+        return 1
+
+    existing = config_store.load()
+    if existing.get('email'):
+        print(f"configuring pushframe (current email: {existing['email']} — Enter keeps it)")
+    else:
+        print('configuring pushframe — credentials are login-tested now, stored after.')
+    email = input('Aura email: ').strip()
+    if not email:
+        print('no email given — aborting, nothing written.')
+        return 1
+    if existing.get('email') == email and existing.get('auth_token'):
+        keep = input('Keep the stored session token instead of re-entering the password? [Y/n] ')
+        if keep.strip().lower() in ('', 'y', 'yes'):
+            _finish_wizard(existing)
+            return 0
+    password = getpass.getpass('Aura password (input hidden): ')
+
+    # D-03: the live login happens BEFORE anything is written.
+    try:
+        result = _wizard_login(email, password)
+    except Exception as e:
+        print(f'login failed — NOTHING was written: {e}')
+        return 1
+
+    data = {
+        'email': email,
+        'auth_token': result['auth_token'],
+        'debug': existing.get('debug', False),
+    }
+    if result.get('user_id'):
+        data['user_id'] = result['user_id']
+    frames = result.get('frames') or []
+    if frames:
+        print('frames on the account:')
+        for i, f in enumerate(frames, 1):
+            print(f'  {i}. {f["name"]}')
+        choice = input('default frame number (Enter to skip): ').strip()
+        if choice.isdigit() and 1 <= int(choice) <= len(frames):
+            data['default_frame'] = frames[int(choice) - 1]['name']
+    debug = input('enable debug logging by default? [y/N] ').strip().lower()
+    if debug in ('y', 'yes'):
+        data['debug'] = True
+
+    shadowed = settings.shadowed_keys(data)
+    config_store.update(**data)
+    print(f'config saved: {settings.CONFIG_PATH} (0600)')
+    if shadowed:
+        print('WARNING: these keys are currently overridden by environment '
+              f'variables (env > file): {", ".join(shadowed)} — the file '
+              'value will NOT take effect until the env var is unset.')
+    return 0
+
+
+def _finish_wizard(data: dict) -> None:
+    frames_note = data.get('default_frame')
+    print(f'config saved: {settings.CONFIG_PATH} (0600)'
+          + (f' (default frame: {frames_note})' if frames_note else ''))
+
+
+def _config_show() -> int:
+    """CFG-02: the effective config, secrets redacted, sources labeled."""
+    import json as _json
+    data = config_store.load()
+    print('effective pushframe configuration (env var > config file > default):')
+    for name in settings.known_keys():
+        value = getattr(settings, name)
+        env_names = settings.DEFAULTS[name]['env']
+        if any(os.getenv(e) is not None for e in env_names):
+            source = 'env'
+        elif config_store.setting(name) is not None:
+            source = 'file'
+        else:
+            source = 'default'
+        print(f'  {name} = {value!r}  ({source})')
+    for key in ('email', 'default_frame', 'debug'):
+        if data.get(key) is not None:
+            shown = '***' if key == 'auth_token' else data[key]
+            print(f'  {key} = {shown!r}  (file)')
+    if data.get('auth_token'):
+        print('  auth_token = ***  (file)')
+    return 0
+
+
+def _config_import(argv: list[str]) -> int:
+    """CFG-03: migrate an .env into the config file — storing only keys the
+    environment does NOT already resolve (never store what env provides)."""
+    import json as _json
+    file_arg = None
+    if '--file' in argv:
+        i = argv.index('--file')
+        file_arg = argv[i + 1] if i + 1 < len(argv) else None
+    path = Path(file_arg or '.env')
+    if not path.exists():
+        print(f'config import: {path} not found.')
+        return 1
+    mapping = {}
+    for line in path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith('#') or '=' not in line:
+            continue
+        key, _, value = line.partition('=')
+        mapping[key.strip()] = value.strip().strip('"').strip("'")
+    stored, skipped = {}, {}
+    for raw_key, value in mapping.items():
+        name = None
+        stripped = raw_key.removeprefix('PUSHFRAME_').removeprefix('AURA_')
+        for candidate in (raw_key, 'AURA_' + stripped, stripped):
+            if candidate in settings.DEFAULTS:
+                name = candidate
+                break
+        if name is None:
+            # keep the documented settings spelling in the error
+            name = raw_key
+            skipped[raw_key] = 'unknown setting'
+            continue
+            skipped[raw_key] = 'unknown setting'
+            continue
+        if settings.shadowed_keys({name: value}):
+            skipped[raw_key] = 'already resolved from env'
+            continue
+        stored[name] = settings._cast(name, value)
+    if stored:
+        config_store.update(settings=stored)
+    for raw_key, reason in skipped.items():
+        print(f'  skipped {raw_key}: {reason}')
+    for name in stored:
+        print(f'  stored {name} (file)')
+    if not stored and not skipped:
+        print('nothing to import.')
+    return 0
+
+
+def _config_set(argv: list[str]) -> int:
+    if len(argv) < 2:
+        print('usage: pushframe config set <key> <value>')
+        return 1
+    name, value = argv[0], argv[1]
+    if name in ('email', 'auth_token'):
+        print(f'{name!r} is managed by the wizard: run `pushframe config`.')
+        return 1
+    if name not in settings.DEFAULTS:
+        print(f'unknown key {name!r}. Known settings: {", ".join(settings.known_keys())}')
+        return 1
+    data = config_store.load()
+    data.setdefault('settings', {})[name] = value  # stored raw; cast on resolve
+    config_store.save(data)
+    print(f'{name} = {value!r} written to {settings.CONFIG_PATH} (env var still wins if set — {name} shadowing: {bool(settings.shadowed_keys({name: value}))})')
+    return 0
+
+
 def run_status(aura=None, debug: bool = False, google_session=None) -> int:
     """Status command handler. Returns a process exit code (0 success, 1
     failure) — never calls sys.exit directly. Accepts an optional injected
@@ -239,26 +458,51 @@ def run_status(aura=None, debug: bool = False, google_session=None) -> int:
     print(f"PUSHFRAME_EMAIL: {'set' if email_set else 'NOT SET'}")
     print(f"PUSHFRAME_PASSWORD: {'set' if password_set else 'NOT SET'}")
 
-    if not (email_set and password_set):
-        # D-09: stop immediately after the config check — no Aura, no
-        # network call, when either credential is missing.
-        return 1
+    if email_set and password_set:
+        # env path (roadmap §23 criterion 2: env overrides the file) — a
+        # real login with the env credentials.
+        session = ('env', os.getenv('PUSHFRAME_EMAIL') or os.getenv('AURA_EMAIL'))
+    else:
+        # stored-session path (phase 23, criterion 1): no password-bearing
+        # env → resume the session the config wizard established. NO login
+        # call happens on this path (phase 24 generalizes it to all verbs).
+        try:
+            stored = config_store.load()
+        except ValueError as e:
+            print(f'config file is corrupt and no PUSHFRAME_EMAIL/PASSWORD '
+                  f'is set — fix or remove {settings.CONFIG_PATH}: {e}')
+            return 1
+        if not (stored.get('email') and stored.get('auth_token')):
+            # D-09: stop immediately — no Aura, no network call, when
+            # nothing usable is configured.
+            print('no credentials: set PUSHFRAME_EMAIL/PUSHFRAME_PASSWORD '
+                  'or run `pushframe config`')
+            return 1
+        session = ('stored', stored)
 
     aura = aura or Aura()
     # Must run after Aura() construction (which registers the noisy sinks)
     # and before login/get_frames (the HTTP calls that trigger them).
     _configure_cli_logging(debug)
 
-    try:
-        aura.login()
-    except Exception as e:
-        # D-08: bad credentials, network error, or API drift all surface
-        # here — a broad catch at the CLI boundary is correct.
-        print(f'Login failed: {e}')
-        return 1
+    if session[0] == 'env':
+        try:
+            aura.login()
+        except Exception as e:
+            # D-08: bad credentials, network error, or API drift all surface
+            # here — a broad catch at the CLI boundary is correct.
+            print(f'Login failed: {e}')
+            return 1
+        who = session[1]
+    else:
+        stored = session[1]
+        aura.resume_session(email=stored['email'],
+                            auth_token=stored['auth_token'],
+                            user_id=stored.get('user_id'))
+        who = stored['email']
 
     frames = aura.frame_api.get_frames()
-    print(f'Logged in as {os.getenv("PUSHFRAME_EMAIL") or os.getenv("AURA_EMAIL")}')
+    print(f'Logged in as {who}')
     print(f'{len(frames)} frames:')
     for frame in frames:
         print(f'  - {frame.name} (id: {frame.id})')
@@ -1095,6 +1339,8 @@ def main(argv=None) -> int:
         print(_notice)
     args = build_parser().parse_args(argv)
 
+    if args.command == 'config':
+        return run_config(wizard_args=getattr(args, 'config_args', []) or [])
     if args.command == 'status':
         return run_status(debug=args.debug)
     if args.command == 'google-link':

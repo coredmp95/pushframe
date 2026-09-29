@@ -155,14 +155,14 @@ def test_aws_settings_are_env_overridable(monkeypatch):
 
 
 def test_aws_modules_wire_settings_not_literals():
-    # The AWS modules must read through settings (MOD-02's whole point): their
-    # module attributes must track settings values by identity-of-config, and
-    # the module source must contain no hardcoded literal anymore.
+    # The AWS modules must read through settings (MOD-02's whole point):
+    # phase 23 tightens it — access is DYNAMIC (config file overridable),
+    # via accessor functions; the source must contain no hardcoded literal.
     from pushframe.aws import s3client, sqsclient
 
-    assert s3client.BUCKET_KEY == settings.AWS_S3_BUCKET
-    assert s3client.UPLOAD_IDENTITY_POOL_ID == settings.AWS_UPLOAD_IDENTITY_POOL_ID
-    assert sqsclient.SQS_IDENTITY_POOL_ID == settings.AWS_SQS_IDENTITY_POOL_ID
+    assert s3client.bucket_key() == settings.AWS_S3_BUCKET
+    assert s3client.upload_identity_pool_id() == settings.AWS_UPLOAD_IDENTITY_POOL_ID
+    assert sqsclient.sqs_identity_pool_id() == settings.AWS_SQS_IDENTITY_POOL_ID
 
     for path in (s3client.__file__, sqsclient.__file__):
         src = Path(path).read_text()
