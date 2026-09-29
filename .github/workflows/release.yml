@@ -105,11 +105,15 @@ jobs:
           install -d -m 700 "$KEYDIR"
           printf '%s\n' "$PUSHFRAME_APT_SIGNING_KEY" > "$KEYDIR/signing-key.asc"
           chmod 600 "$KEYDIR/signing-key.asc"
-          FP=$(grep -m1 -oE '[A-F0-9]{40}' "$KEYDIR/signing-key.asc")
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq gnupg dpkg-dev >/dev/null
+          # derive the fingerprint with gpg (the ASCII armor does not carry
+          # it as text — a grep-based extraction fails and killed the first
+          # release run)
+          gpg --import "$KEYDIR/signing-key.asc" 2>/dev/null
+          FP=$(gpg --list-secret-keys --with-colons | awk -F: '/^fpr:/ {print $10; exit}')
           printf '%s\n' "$FP" > "$KEYDIR/fingerprint"
           echo "signing key restored: $FP"
-          # publish-apt-repo.sh needs gpg + the standalone python for uv pip
-          sudo apt-get update -qq && sudo apt-get install -y -qq gnupg >/dev/null
       - name: Rebuild + republish the APT repository (gh-pages)
         run: |
           uv python install 3.14
