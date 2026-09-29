@@ -207,6 +207,32 @@ def _probe_landed(asset_probe, local_identifiers: list[str]) -> tuple[set, set, 
     return landed, absent, inconclusive
 
 
+def _classify_auth_failure(last_error: str) -> str | None:
+    """Phase 23.5 discriminator: given the last 401 error string (which — see
+    Client._raise_for_status_with_body — now carries the server's response
+    body), classify the failure for the operator.
+
+    Returns a short verdict for the abort message, or None when the body is
+    absent/uninformative (older servers, HTML errors).
+
+    Heuristic, honestly labeled as such: an EMPTY body / generic envelope
+    reads as the silent plain-401 form of the anti-abuse trip (observed on
+    venus), a body naming the session/token/auth reads as a token problem.
+    """
+    low = (last_error or '').lower()
+    if 'server body:' not in low:
+        return None
+    body = low.split('server body:', 1)[1].strip()
+    if any(w in body for w in ('token', 'session', 'auth', 'credential',
+                               'login', 'x-token')):
+        return ('the server body names the token/session — this looks like a '
+                'TOKEN problem, not anti-abuse: `pushframe status` to re-login, '
+                'then retry once; do NOT wait an hour on a token problem')
+    return ('the 401 body carries no auth complaint (empty/generic envelope) '
+            '— consistent with the silent anti-abuse trip: wait 60+ min from '
+            'the abort and retry once')
+
+
 class ConsecutiveWriteFailureError(AuraError):
     """Raised by `execute_plan` when `max_consecutive_failures` write items
     fail in an unbroken run -- the signature of an account lockout / systemic

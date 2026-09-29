@@ -140,3 +140,50 @@ def test_ordinary_401_still_raises_http_status_error_not_rate_limit():
 
     with pytest.raises(httpx.HTTPStatusError):
         client.post('/frames/f/select_asset.json', data={})
+
+
+def test_401_exception_message_carries_redacted_server_body():
+    """Phase 23.5 (venus): a 401's message must carry the server body (the
+    trip-vs-token discriminator), redacted through the same filter as the
+    request logs."""
+    client = _client(401, body={'error': True,
+                                'auth_token': 'sk-journey-should-not-leak'})
+
+    with pytest.raises(httpx.HTTPStatusError) as exc_info:
+        client.post('/frames/f/select_asset.json', data={'assets': []})
+
+    msg = str(exc_info.value)
+    assert 'server body:' in msg
+    assert 'sk-journey-should-not-leak' not in msg      # redacted
+    assert '***REDACTED***' in msg
+
+
+def test_401_with_non_json_body_names_the_raw_text():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(401, text='<html>blocked</html>')
+
+    client = Client(transport=httpx.MockTransport(handler))
+
+    with pytest.raises(httpx.HTTPStatusError) as exc_info:
+        client.post('/frames/f/select_asset.json')
+
+    assert 'blocked' in str(exc_info.value)
+
+
+def test_401_without_body_keeps_the_plain_message():
+    client = _client(401, body={})
+
+    with pytest.raises(httpx.HTTPStatusError) as exc_info:
+        client.post('/frames/f/select_asset.json')
+
+    # `{}` serializes to '{}' — still present, harmless.
+    assert 'server body:' in str(exc_info.value)
+
+
+def test_non_401_4xx_keep_their_plain_message():
+    client = _client(403, body={'error': 'forbidden'})
+
+    with pytest.raises(httpx.HTTPStatusError) as exc_info:
+        client.get('/frames.json')
+
+    assert 'server body:' not in str(exc_info.value)

@@ -314,6 +314,26 @@ def test_execute_plan_on_error_carries_the_reason(tmp_path):
     assert 'not acknowledged' in reason
 
 
+def test_classify_auth_failure_reads_the_body():
+    """Phase 23.5 discriminator: the abort message adapts to what the 401
+    body said (venus produced silent-envelope 401s = anti-abuse trip)."""
+    from pushframe.sync import _classify_auth_failure
+
+    trip = _classify_auth_failure(
+        "401 Unauthorized for https://api.pushd.com/v5/... "
+        "— server body: {'error': True}")
+    assert trip is not None and 'anti-abuse trip' in trip and '60+ min' in trip
+
+    token = _classify_auth_failure(
+        "401 Unauthorized — server body: {'message': 'invalid session token'}")
+    assert token is not None and 'TOKEN problem' in token and 'status' in token
+
+    # Old-style bare 401 without a body: no verdict (falls back to the
+    # scoped-trip guidance).
+    assert _classify_auth_failure(
+        "Client error '401 Unauthorized' for url '...'") is None
+
+
 def test_execute_plan_reports_progress_per_item(tmp_path):
     path_a = tmp_path / 'a.jpg'
     path_b = tmp_path / 'b.jpg'

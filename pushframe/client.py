@@ -1,4 +1,5 @@
 import copy
+import json
 from collections import deque
 from typing import Optional, Deque
 
@@ -191,7 +192,7 @@ class Client:
 
         self.history.append(response)
         self._raise_if_rate_limited(response)
-        response.raise_for_status()
+        self._raise_for_status_with_body(response)
         logger.debug(f'Response ({response.status_code}), body: {_redact(response.json())}')
 
         self._set_cookies(response)
@@ -204,7 +205,7 @@ class Client:
 
         self.history.append(response)
         self._raise_if_rate_limited(response)
-        response.raise_for_status()
+        self._raise_for_status_with_body(response)
         logger.debug(f'Response ({response.status_code}), body: {_redact(response.json())}')
 
         self._set_cookies(response)
@@ -217,7 +218,7 @@ class Client:
 
         self.history.append(response)
         self._raise_if_rate_limited(response)
-        response.raise_for_status()
+        self._raise_for_status_with_body(response)
         logger.debug(f'Response ({response.status_code}), body: {_redact(response.json())}')
 
         self._set_cookies(response)
@@ -230,12 +231,50 @@ class Client:
 
         self.history.append(response)
         self._raise_if_rate_limited(response)
-        response.raise_for_status()
+        self._raise_for_status_with_body(response)
         logger.debug(f'Response ({response.status_code}), body: {_redact(response.json())}')
 
         self._set_cookies(response)
 
         return response.json()
+
+    def _raise_for_status_with_body(self, response: httpx.Response) -> None:
+        """`raise_for_status()`, except an HTTP 401's exception message carries
+        the server's (redacted, truncated) response body.
+
+        Phase 23.5 venus regression: writes 401'd while login stayed green —
+        the bare "Client error '401 Unauthorized'" told the operator nothing
+        about WHY. The Pushd body is the discriminator (an anti-abuse trip
+        and a session/token rejection carry different payloads), and the
+        exception message is what every failure path (per-item reasons,
+        verify-probe errors, the consecutive-failures abort) already
+        propagates — enrich it once here and every surface diagnoses.
+        """
+        try:
+            response.raise_for_status()
+            return
+        except httpx.HTTPStatusError as e:
+            if response.status_code != 401:
+                raise
+            body_text = self._safe_body_text(response)
+            if not body_text:
+                raise
+            logger.warning(
+                f"HTTP 401 from {response.request.url} — server body: {body_text}")
+            raise httpx.HTTPStatusError(
+                f"401 Unauthorized for {e.request.url} — server body: {body_text}",
+                request=e.request, response=e.response) from e
+
+    @staticmethod
+    def _safe_body_text(response: httpx.Response, limit: int = 300) -> str:
+        """Best-effort readable body: JSON (redacted through the same filter
+        as the request logs) or raw text, always truncated to `limit`."""
+        try:
+            body = _redact(response.json())
+            text = json.dumps(body, default=str)
+        except Exception:
+            text = (response.text or '').strip()
+        return text if len(text) <= limit else text[:limit - 3] + '...'
 
     def _raise_if_rate_limited(self, response: httpx.Response) -> None:
         """Convert a rate-limit / lockout response (HTTP 429 or 475) into a

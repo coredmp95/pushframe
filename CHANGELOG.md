@@ -56,6 +56,14 @@ frames; it is not affiliated with Aura Frames Inc.
   `asset_for_local_identifier` verify-probe read) while login/frames keep
   answering. The abort message no longer suggests status as an all-clear;
   it prescribes 60+ min from the abort and a single, solitary retry call.
+- **401 bodies are captured and classified** (third venus regression): an
+  HTTP 401 exception now carries the server's response body (redacted
+  through the same filter as request logs, truncated to 300 chars, also
+  debug-logged) — so per-item failure reasons, verify-probe errors and the
+  consecutive-failures abort all show WHY the write was refused. The abort
+  classifies the body: a silent/generic envelope reads as the anti-abuse
+  trip (wait 60+ min, single retry); a body naming the token/session reads
+  as a token problem (re-login, retry once, do not wait an hour).
 
 ### Changed
 
