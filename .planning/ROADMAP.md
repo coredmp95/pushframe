@@ -118,7 +118,7 @@ deps.
 |-------|----------------|--------|-----------|
 | 20. pushframe Rename, Migration & Repo Switch | 1/1 | Complete | 2026-09-29 |
 | 21. Debian Package & APT Repo | 2/2 | Complete    | 2026-09-29 |
-| 22. PyPI + Release Engineering | 0/? | Not started | - |
+| 22. PyPI + Release Engineering | 0/2 | Ready to execute (plans 22-01, 22-02) | - |
 
 ## Requirement Coverage (v5.0)
 
