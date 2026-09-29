@@ -109,3 +109,13 @@ Milestone summary — see `.planning/MILESTONES.md` for the full retros.
 ## [Unreleased]
 
 - Nothing staged yet; next changes land here before the next tag.
+
+## [5.0.3] — 2026-09-29
+
+### Added
+
+- `CHANGELOG.md` — every release now traced in Keep a Changelog format
+  (Added / Changed / Deprecated / Fixed / Security), exposed as a
+  `Changelog` project URL on PyPI and referenced from the README.
+- `arch=amd64` in the documented APT sources entry: silences apt's
+  i386 notice on multi-arch machines (the repo is amd64-only).
