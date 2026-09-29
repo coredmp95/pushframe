@@ -14,8 +14,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from auraframes.google.client import GoogleSession, GoogleSessionError  # noqa: E402
-from auraframes.google.parsers import parse_af_initdata  # noqa: E402
+from pushframe.google.client import GoogleSession, GoogleSessionError  # noqa: E402
+from pushframe.google.parsers import parse_af_initdata  # noqa: E402
 
 FIXTURES = Path(__file__).parent / "fixtures"
 SHARE_PAGE = FIXTURES / "google_share_page_sample.html"
@@ -109,7 +109,7 @@ def test_from_vault_reads_through_vault_boundary(tmp_path):
     """from_vault() routes through vault.load() — the denylist stays the
     enforcement point even for the package's own session builder."""
     vault_path = tmp_path / "vault.json"
-    from auraframes.google import vault as google_vault
+    from pushframe.google import vault as google_vault
     google_vault.save(COOKIES, path=vault_path)
     session = GoogleSession.from_vault(path=vault_path)
     assert session.sapisid == "fake-sapisid"

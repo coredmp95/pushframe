@@ -13,8 +13,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from auraframes.aws.s3client import get_md5  # noqa: E402
-from auraframes.google.cache import (  # noqa: E402
+from pushframe.aws.s3client import get_md5  # noqa: E402
+from pushframe.google.cache import (  # noqa: E402
     CacheOutcome,
     download_to_cache,
     prune_cache,
@@ -203,7 +203,7 @@ def test_cache_module_has_no_aura_side_imports():
     sync/apply side — concurrency cannot reach the frame-write seam. Checked
     on the AST import graph, not the raw text (docstrings may discuss it)."""
     import ast
-    src_path = (Path(__file__).resolve().parent.parent / "auraframes" / "google"
+    src_path = (Path(__file__).resolve().parent.parent / "pushframe" / "google"
                 / "cache.py")
     tree = ast.parse(src_path.read_text())
     imported = set()
@@ -212,5 +212,5 @@ def test_cache_module_has_no_aura_side_imports():
             imported.update(a.name for a in node.names)
         elif isinstance(node, ast.ImportFrom) and node.module:
             imported.add(node.module)
-    for banned in ("auraframes.sync", "auraframes.cli", "auraframes.aura"):
+    for banned in ("pushframe.sync", "pushframe.cli", "pushframe.aura"):
         assert not any(m == banned or m.startswith(banned + ".") for m in imported), banned

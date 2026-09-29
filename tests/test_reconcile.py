@@ -1,4 +1,4 @@
-"""Offline tests for `auraframes.reconcile` (Phase 11 Plan 03) -- the pure
+"""Offline tests for `pushframe.reconcile` (Phase 11 Plan 03) -- the pure
 placeholder predicate (`find_placeholders`, Task 1) and the bounded, gated
 removal path (`apply_reconciliation`, Task 3).
 
@@ -15,14 +15,14 @@ import httpx
 import pytest
 from loguru import logger
 
-from auraframes.models.asset import Asset
-from auraframes.reconcile import (
+from pushframe.models.asset import Asset
+from pushframe.reconcile import (
     RECONCILE_PROBE_CANDIDATE_LIMIT,
     ReconcileResult,
     apply_reconciliation,
     find_placeholders,
 )
-from auraframes.utils.dt import format_dt_to_aura
+from pushframe.utils.dt import format_dt_to_aura
 from tests.offline import FIXTURES_DIR, offline_aura
 
 FRAME_ID = 'frame-fake-0001'
@@ -400,7 +400,7 @@ def test_apply_reconciliation_hard_delete_acquires_one_token_per_asset():
 
     # One chunk (both fit under batch_size) -> one acquire() call, but its
     # cost is len(chunk) == 2 -- one token per asset, mirroring
-    # auraframes/sync.py's hard_delete costing.
+    # pushframe/sync.py's hard_delete costing.
     assert budget.acquire_calls == [2]
     assert sorted(result.removed) == ['a', 'b']
 
@@ -437,7 +437,7 @@ def test_apply_reconciliation_candidate_limit_override_is_honored():
 
 def test_apply_reconciliation_source_never_names_the_other_buckets():
     import inspect
-    from auraframes import reconcile as reconcile_module
+    from pushframe import reconcile as reconcile_module
 
     source = inspect.getsource(reconcile_module.apply_reconciliation)
     assert 'recently_created' not in source

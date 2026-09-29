@@ -22,11 +22,11 @@ import pytest
 from loguru import logger
 from PIL import Image
 
-import auraframes.cli as cli
-from auraframes.client import AuraError, AuthenticationError, RateLimitError, WriteEndpointError
-from auraframes.models.asset import Asset, AssetPartial
-from auraframes.ratelimit import BudgetExhausted, WriteBudget
-from auraframes.sync import ConsecutiveWriteFailureError, ExecutionResult, SyncPlan, execute_plan
+import pushframe.cli as cli
+from pushframe.client import AuraError, AuthenticationError, RateLimitError, WriteEndpointError
+from pushframe.models.asset import Asset, AssetPartial
+from pushframe.ratelimit import BudgetExhausted, WriteBudget
+from pushframe.sync import ConsecutiveWriteFailureError, ExecutionResult, SyncPlan, execute_plan
 from tests.offline import offline_aura
 
 # Fixed instant used as `clock()` for real-`WriteBudget` tests below --

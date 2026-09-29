@@ -42,7 +42,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import probes.cookie_vault as cookie_vault  # noqa: E402  (shim over the package vault)
 from probes.common import redact_link, redact_tokens  # noqa: E402
 from probes.shared_link_probe import _walk_items, parse_af_initdata  # noqa: E402
-from auraframes.google.client import GoogleSession  # noqa: E402
+from pushframe.google.client import GoogleSession  # noqa: E402
 
 PHOTOS_HOME = "https://photos.google.com/"
 # batchexecute endpoint for the Photos web frontend (authuser keeps the call

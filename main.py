@@ -3,8 +3,8 @@ import sys
 
 from dotenv import load_dotenv
 
-from auraframes.aura import Aura
-from auraframes import export
+from pushframe.aura import Aura
+from pushframe import export
 
 
 def _is_image_asset(asset) -> bool:

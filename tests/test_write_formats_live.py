@@ -5,10 +5,10 @@ import uuid
 import pytest
 from PIL import Image
 
-from auraframes.aws.s3client import S3Client, get_md5
-from auraframes.aws.sqsclient import SQSClient
-from auraframes.models.asset import AssetPartialId
-from auraframes.sync import SyncPlan, execute_plan
+from pushframe.aws.s3client import S3Client, get_md5
+from pushframe.aws.sqsclient import SQSClient
+from pushframe.models.asset import AssetPartialId
+from pushframe.sync import SyncPlan, execute_plan
 
 
 def _target_frame_id() -> str:

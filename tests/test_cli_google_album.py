@@ -1,4 +1,4 @@
-"""Offline tests for `aura-cli google-album` (plan 17-02 T2, reworked to the
+"""Offline tests for `pushframe google-album` (plan 17-02 T2, reworked to the
 RPC-first live-proven protocol).
 
 Zero network: resolution runs against AlbumSummary fakes (pure function);
@@ -19,13 +19,13 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from auraframes.cli import (  # noqa: E402
+from pushframe.cli import (  # noqa: E402
     AlbumResolution,
     resolve_album,
     run_google_album,
 )
-from auraframes.google.client import GoogleSession  # noqa: E402
-from auraframes.google.parsers import AlbumSummary  # noqa: E402
+from pushframe.google.client import GoogleSession  # noqa: E402
+from pushframe.google.parsers import AlbumSummary  # noqa: E402
 
 ALBUM_ID_1 = "AF1QipFAKEalbumONE" + "0" * 28 + "1"
 ALBUM_ID_2 = "AF1QipFAKEalbumTWO" + "0" * 28 + "2"
@@ -219,9 +219,9 @@ def test_google_album_requires_target_without_list(capsys):
 def test_google_album_without_vault_fails_cleanly(monkeypatch, capsys):
     """No vault (and no injected session) -> clean failure, exit 1, and no
     network reach whatsoever (the vault paths are pointed at nothing)."""
-    monkeypatch.setattr("auraframes.google.vault.DEFAULT_VAULT_PATH",
+    monkeypatch.setattr("pushframe.google.vault.DEFAULT_VAULT_PATH",
                         Path("/nonexistent/prod-vault.json"))
-    monkeypatch.setattr("auraframes.google.vault.LEGACY_VAULT_PATH",
+    monkeypatch.setattr("pushframe.google.vault.LEGACY_VAULT_PATH",
                         Path("/nonexistent/legacy-vault.json"))
     rc = run_google_album("anything")  # no session injected; vault absent
     assert rc == 1

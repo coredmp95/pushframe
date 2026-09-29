@@ -1,6 +1,6 @@
 """Offline tests for the cookie vault (plan 16-02 T1).
 
-Phase 17 (plan 17-01 T3): the vault MOVED to auraframes/google/vault.py —
+Phase 17 (plan 17-01 T3): the vault MOVED to pushframe/google/vault.py —
 imports and monkeypatch targets updated accordingly; test bodies unchanged.
 The package-side vault suite lives in test_google_vault.py (same boundary
 coverage plus the legacy-fallback migration tests).
@@ -15,7 +15,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from auraframes.google.vault import CookieVaultError, cookies_for_httpx, load, save  # noqa: E402
+from pushframe.google.vault import CookieVaultError, cookies_for_httpx, load, save  # noqa: E402
 
 COOKIES = [
     {"name": "SID", "value": "fake-sid-value", "domain": ".google.com"},
@@ -50,7 +50,7 @@ def test_load_from_missing_vault_raises(tmp_path):
 
 
 def test_save_inside_repo_refused(tmp_path, monkeypatch):
-    import auraframes.google.vault as cv
+    import pushframe.google.vault as cv
     fake_root = tmp_path / "repo"
     fake_root.mkdir()
     monkeypatch.setattr(cv, "_REPO_ROOT", fake_root)
@@ -62,19 +62,19 @@ def test_save_inside_repo_refused(tmp_path, monkeypatch):
 def test_sync_path_caller_structurally_refused(tmp_path, monkeypatch):
     """A module named under the sync denylist cannot read the vault — the
     refusal names the offending module (D-06's structural boundary)."""
-    import auraframes.google.vault as cv
+    import pushframe.google.vault as cv
     vault = _vault(tmp_path)
     save(COOKIES, path=vault)
 
     # Simulate the offending caller: a fake module object whose __name__
     # lands under the denylist, placed at the frame load() will inspect.
     import types
-    fake_caller = types.ModuleType("auraframes.sync.engine")
+    fake_caller = types.ModuleType("pushframe.sync.engine")
     monkeypatch.setattr(cv, "_caller_module_name", lambda: fake_caller.__name__)
 
     with pytest.raises(CookieVaultError) as exc:
         load(path=vault)
-    assert "auraframes.sync" in str(exc.value) and "denylist" in str(exc.value)
+    assert "pushframe.sync" in str(exc.value) and "denylist" in str(exc.value)
 
 
 def test_no_playwright_import_in_test_graph():

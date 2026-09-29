@@ -1,7 +1,7 @@
 """Byte-fidelity check (plan 16-03 T1 — LGS-06).
 
 Downloads `=d` originals from the probed shared albums, hashes each with the
-frame's own convention (`auraframes.aws.s3client.get_md5`), and checks
+frame's own convention (`pushframe.aws.s3client.get_md5`), and checks
 membership against the md5_hash set of the frame's standing assets
 (read-only `get_assets` with filter=all — no frame writes).
 
@@ -27,8 +27,8 @@ def main() -> int:
     load_dotenv(".env")
     links = [Path(p).read_text().strip() for p in sys.argv[1:]]
 
-    from auraframes.aura import Aura
-    from auraframes.aws.s3client import get_md5
+    from pushframe.aura import Aura
+    from pushframe.aws.s3client import get_md5
 
     a = Aura()
     a.login()

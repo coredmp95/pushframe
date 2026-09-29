@@ -1,4 +1,4 @@
-"""Offline tests for `aura-cli status`'s Google section (plan 17-02 T1).
+"""Offline tests for `pushframe status`'s Google section (plan 17-02 T1).
 
 Zero network: a real GoogleSession over a MockTransport (fixture home page)
 is injected via the `google_session` DI seam; the never-print-cookie
@@ -15,8 +15,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from auraframes.cli import _google_status_section, run_status  # noqa: E402
-from auraframes.google.client import GoogleSession  # noqa: E402
+from pushframe.cli import _google_status_section, run_status  # noqa: E402
+from pushframe.google.client import GoogleSession  # noqa: E402
 from tests.offline import offline_aura  # noqa: E402
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -77,9 +77,9 @@ def test_status_google_section_never_prints_cookie_values(monkeypatch, capsys):
 def test_google_status_section_no_vault_is_linked_no(monkeypatch):
     """Vault absent -> `linked: no` with ZERO network calls (the vault load
     itself is the only probe; it fails fast)."""
-    monkeypatch.setattr("auraframes.google.vault.DEFAULT_VAULT_PATH",
+    monkeypatch.setattr("pushframe.google.vault.DEFAULT_VAULT_PATH",
                         Path("/nonexistent/prod-vault.json"))
-    monkeypatch.setattr("auraframes.google.vault.LEGACY_VAULT_PATH",
+    monkeypatch.setattr("pushframe.google.vault.LEGACY_VAULT_PATH",
                         Path("/nonexistent/legacy-vault.json"))
     lines = _google_status_section(None)
     assert 'linked: no' in lines[1]

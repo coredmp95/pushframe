@@ -1,4 +1,4 @@
-"""Offline tests for `aura-cli sync` (auraframes.cli.run_sync). Calls
+"""Offline tests for `pushframe sync` (pushframe.cli.run_sync). Calls
 run_sync() directly (never main()) so load_dotenv() is not invoked and a
 filesystem .env cannot interfere.
 
@@ -12,9 +12,9 @@ import httpx
 import pytest
 from loguru import logger
 
-from auraframes.aws.s3client import get_md5
-from auraframes import cli
-from auraframes.cli import run_sync
+from pushframe.aws.s3client import get_md5
+from pushframe import cli
+from pushframe.cli import run_sync
 from tests.offline import FIXTURES_DIR, offline_aura
 
 FRAME_ID = 'frame-fake-0001'

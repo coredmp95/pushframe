@@ -9,8 +9,8 @@ access and no credentials required.
 import httpx
 import pytest
 
-from auraframes.client import WriteEndpointError
-from auraframes.models.asset import Asset, AssetPartial, AssetPartialId
+from pushframe.client import WriteEndpointError
+from pushframe.models.asset import Asset, AssetPartial, AssetPartialId
 from tests.offline import offline_aura
 
 FRAME_ID = 'frame-fake-0001'
@@ -228,7 +228,7 @@ class _FakeSQSClient:
 def test_get_sqs_passes_frame_id_to_sqs_client(monkeypatch):
     aura = offline_aura()
     fake_client = _FakeSQSClient()
-    monkeypatch.setattr('auraframes.aura.SQSClient', lambda: fake_client)
+    monkeypatch.setattr('pushframe.aura.SQSClient', lambda: fake_client)
 
     queue_url = aura.get_sqs('frame-abc-123')
 

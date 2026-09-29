@@ -1,4 +1,4 @@
-"""Offline tests for `auraframes.sync._prep_upload`'s content-derived
+"""Offline tests for `pushframe.sync._prep_upload`'s content-derived
 `data_uti` (Phase 11 Plan 04, FMT-01/FMT-03, D-11/D-12).
 
 `data_uti` is resolved from the DECODED image's real format
@@ -16,7 +16,7 @@ import pytest
 from loguru import logger
 from PIL import Image
 
-from auraframes.sync import SyncPlan, _prep_upload, execute_plan
+from pushframe.sync import SyncPlan, _prep_upload, execute_plan
 from tests.offline import offline_aura
 from tests.test_execute_plan import (
     FRAME_ID,

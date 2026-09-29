@@ -14,13 +14,13 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from auraframes.google.parsers import (  # noqa: E402
+from pushframe.google.parsers import (  # noqa: E402
     ProbeParseError,
     parse_af_initdata,
     parse_batchexecute,
     parse_snackc_payload,
 )
-from auraframes.google.redaction import redact_link, redact_tokens  # noqa: E402
+from pushframe.google.redaction import redact_link, redact_tokens  # noqa: E402
 
 FIXTURES = Path(__file__).parent / "fixtures"
 SHARE_PAGE = FIXTURES / "google_share_page_sample.html"

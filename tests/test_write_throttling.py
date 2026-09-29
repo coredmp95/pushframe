@@ -1,5 +1,5 @@
 """Offline tests for the write-call throttling and rate-limit batch-abort
-behavior in `auraframes.sync.execute_plan` (select-asset-401-unauthorized
+behavior in `pushframe.sync.execute_plan` (select-asset-401-unauthorized
 preventive fix, parts 1 & 3; rewritten for the batched write-path semantics,
 quick task 260708-fyr).
 
@@ -26,9 +26,9 @@ import pytest
 from loguru import logger
 from PIL import Image
 
-from auraframes.client import RateLimitError
-from auraframes.models.asset import Asset
-from auraframes.sync import (
+from pushframe.client import RateLimitError
+from pushframe.models.asset import Asset
+from pushframe.sync import (
     ConsecutiveWriteFailureError,
     MAX_CONSECUTIVE_WRITE_FAILURES,
     SyncPlan,
@@ -100,8 +100,8 @@ def _ack_all_batch_update(aura):
     it is sent -- the batched-mode equivalent of the always-succeeds
     MockTransport override, since a real per-payload echo can't be done via
     MockTransport's path-only routing."""
-    from auraframes.api.assetApi import BatchUpdateResult
-    from auraframes.models.asset import AssetPartialId
+    from pushframe.api.assetApi import BatchUpdateResult
+    from pushframe.models.asset import AssetPartialId
 
     def _fake(assets):
         items = assets if isinstance(assets, list) else [assets]
@@ -333,8 +333,8 @@ def test_interspersed_failures_do_not_trip_the_backstop(tmp_path, monkeypatch):
     plan = SyncPlan(to_upload=paths, to_delete=[])
     aura = offline_aura(overrides=_ok_overrides())
 
-    from auraframes.api.assetApi import BatchUpdateResult
-    from auraframes.models.asset import AssetPartialId
+    from pushframe.api.assetApi import BatchUpdateResult
+    from pushframe.models.asset import AssetPartialId
 
     def _flaky_batch_update(assets):
         items = assets if isinstance(assets, list) else [assets]
@@ -372,8 +372,8 @@ def test_a_success_resets_the_consecutive_run(tmp_path, monkeypatch):
     plan = SyncPlan(to_upload=paths, to_delete=[])
     aura = offline_aura(overrides=_ok_overrides())
 
-    from auraframes.api.assetApi import BatchUpdateResult
-    from auraframes.models.asset import AssetPartialId
+    from pushframe.api.assetApi import BatchUpdateResult
+    from pushframe.models.asset import AssetPartialId
 
     def _flaky_batch_update(assets):
         items = assets if isinstance(assets, list) else [assets]
@@ -415,7 +415,7 @@ def test_all_files_unacknowledged_in_one_chunk_aborts_without_double_counting(tm
     aura = offline_aura(overrides=_ok_overrides())
 
     def _no_one_acknowledged(assets):
-        from auraframes.api.assetApi import BatchUpdateResult
+        from pushframe.api.assetApi import BatchUpdateResult
         items = assets if isinstance(assets, list) else [assets]
         ids = [item.local_identifier for item in items]
         return BatchUpdateResult(ids, [], list(ids))

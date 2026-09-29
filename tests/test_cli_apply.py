@@ -1,10 +1,10 @@
-"""Offline tests for `aura-cli sync --apply` (auraframes.cli.run_sync's
+"""Offline tests for `pushframe sync --apply` (pushframe.cli.run_sync's
 apply/confirm/execute branch, Phase 8 Plan 03). Calls run_sync() directly
 (never main()) so load_dotenv() is not invoked and a filesystem .env cannot
 interfere.
 
 `execute_plan`/`S3Client`/`SQSClient` are all monkeypatched on the
-`auraframes.cli` namespace -- these tests never touch the network or AWS,
+`pushframe.cli` namespace -- these tests never touch the network or AWS,
 matching tests/test_cli_sync.py's offline-only convention.
 """
 import copy
@@ -15,10 +15,10 @@ import httpx
 import pytest
 from loguru import logger
 
-import auraframes.cli as cli
-from auraframes.aws.s3client import get_md5
-from auraframes.client import RateLimitError
-from auraframes.sync import ConsecutiveWriteFailureError, ExecutionResult
+import pushframe.cli as cli
+from pushframe.aws.s3client import get_md5
+from pushframe.client import RateLimitError
+from pushframe.sync import ConsecutiveWriteFailureError, ExecutionResult
 from tests.offline import offline_aura
 
 FIXTURES_DIR = Path(__file__).parent / 'fixtures'
@@ -60,7 +60,7 @@ def _assets_response(*assets):
 
 
 class _FakeS3Client:
-    """Trivial stand-in for auraframes.aws.s3client.S3Client -- constructed
+    """Trivial stand-in for pushframe.aws.s3client.S3Client -- constructed
     but never used since execute_plan itself is monkeypatched below; its
     only job is to prove no real Cognito auth fires."""
 
@@ -69,7 +69,7 @@ class _FakeS3Client:
 
 
 class _FakeSQSClient:
-    """Trivial stand-in for auraframes.aws.sqsclient.SQSClient (see
+    """Trivial stand-in for pushframe.aws.sqsclient.SQSClient (see
     _FakeS3Client)."""
 
     def __init__(self, *args, **kwargs):
@@ -82,7 +82,7 @@ def _patch_aws_clients(monkeypatch):
 
 
 def _patch_execute_plan(monkeypatch, result=None):
-    """Monkeypatch auraframes.cli.execute_plan with a fake that records each
+    """Monkeypatch pushframe.cli.execute_plan with a fake that records each
     call's arguments and returns a controllable ExecutionResult (clean by
     default). Returns the list of recorded calls for assertions."""
     calls = []

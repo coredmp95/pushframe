@@ -18,8 +18,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from auraframes.aws.s3client import get_md5  # noqa: E402
-from auraframes.gsync import (  # noqa: E402
+from pushframe.aws.s3client import get_md5  # noqa: E402
+from pushframe.gsync import (  # noqa: E402
     GOOGLE_SYNC_REMOVAL_THRESHOLD,
     run_google_sync,
 )
@@ -101,7 +101,7 @@ class _GoogleRouter:
 
 
 def _google_session(router: _GoogleRouter):
-    from auraframes.google.client import GoogleSession
+    from pushframe.google.client import GoogleSession
     return GoogleSession(COOKIES, transport=httpx.MockTransport(router.handler))
 
 
@@ -120,7 +120,7 @@ class _FakeAura:
     replaces the network endpoints."""
 
     def __init__(self, assets: list):
-        from auraframes.api.assetApi import BatchUpdateResult
+        from pushframe.api.assetApi import BatchUpdateResult
         self._assets = assets
         self.login_called = False
         self.batch_calls: list = []
@@ -141,7 +141,7 @@ class _FakeAura:
             return 0
 
         def _batch_update(items):
-            from auraframes.models.asset import AssetPartialId
+            from pushframe.models.asset import AssetPartialId
             items = items if isinstance(items, list) else [items]
             self.batch_calls.append(items)
             lids = [item.local_identifier for item in items]
@@ -191,7 +191,7 @@ def _jpeg(n: int) -> bytes:
 
 
 def _assets_for(n: int, *, hidden: bool = False):
-    from auraframes.models.asset import Asset
+    from pushframe.models.asset import Asset
     return [Asset.model_construct(id=f"frame-{i}", md5_hash=get_md5(_jpeg(i)),
                                   taken_at="2024-03-11T12:00:00.000Z", selected=not hidden)
             for i in range(1, n + 1)]
@@ -273,7 +273,7 @@ def test_safe02_threshold_gate_aborts_on_non_yes(tmp_path, capsys):
 
 def test_threshold_env_override_is_honored(tmp_path, capsys, monkeypatch):
     monkeypatch.setenv("AURA_GOOGLE_SYNC_REMOVAL_THRESHOLD", "1.1")
-    from auraframes.gsync import _threshold
+    from pushframe.gsync import _threshold
     assert _threshold() == 1.1
     assert GOOGLE_SYNC_REMOVAL_THRESHOLD == 0.2
 

@@ -1,4 +1,4 @@
-"""Offline tests for `auraframes.sync.execute_plan` (Phase 8 Plan 02, Task 2;
+"""Offline tests for `pushframe.sync.execute_plan` (Phase 8 Plan 02, Task 2;
 rewritten for the batched write-path semantics, quick task 260708-fyr).
 
 `execute_plan` is exercised against the REST layer mocked via
@@ -19,8 +19,8 @@ import pytest
 from loguru import logger
 from PIL import Image
 
-from auraframes.models.asset import Asset
-from auraframes.sync import SyncPlan, execute_plan
+from pushframe.models.asset import Asset
+from pushframe.sync import SyncPlan, execute_plan
 from tests.offline import offline_aura
 
 FRAME_ID = 'frame-fake-0001'
@@ -107,8 +107,8 @@ def _install_ack_all_batch_update(aura):
     back exactly what was sent) requires monkeypatching the wrapper
     directly rather than a canned httpx.Response.
     """
-    from auraframes.api.assetApi import BatchUpdateResult
-    from auraframes.models.asset import AssetPartialId
+    from pushframe.api.assetApi import BatchUpdateResult
+    from pushframe.models.asset import AssetPartialId
 
     calls: list = []
 
@@ -184,8 +184,8 @@ def test_execute_plan_partial_batch_update_splits_upload_succeeded_and_failures(
     aura = offline_aura(overrides=_default_overrides())
 
     def _partial_batch_update(assets):
-        from auraframes.api.assetApi import BatchUpdateResult
-        from auraframes.models.asset import AssetPartialId
+        from pushframe.api.assetApi import BatchUpdateResult
+        from pushframe.models.asset import AssetPartialId
         items = assets if isinstance(assets, list) else [assets]
         ids = [item.local_identifier for item in items]
         # Acknowledge only the FIRST and LAST sent local_identifier --
@@ -289,8 +289,8 @@ def test_execute_plan_reports_progress_per_item(tmp_path):
     aura = offline_aura(overrides=_default_overrides())
 
     def _partial_batch_update(assets):
-        from auraframes.api.assetApi import BatchUpdateResult
-        from auraframes.models.asset import AssetPartialId
+        from pushframe.api.assetApi import BatchUpdateResult
+        from pushframe.models.asset import AssetPartialId
         items = assets if isinstance(assets, list) else [assets]
         # sorted(plan.to_upload) processes a.jpg first -- ack only b.jpg's
         # local_identifier (the second sent item), dropping a.jpg's.

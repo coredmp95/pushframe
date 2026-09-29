@@ -1,4 +1,4 @@
-"""Offline unit tests for `auraframes.ratelimit` -- the standalone,
+"""Offline unit tests for `pushframe.ratelimit` -- the standalone,
 injectable write-rate-budget (`WriteBudget` token bucket) and geo
 pre-flight guard (`check_geo`) introduced in Phase 09
 (ANTI-01, ANTI-02, ANTI-07).
@@ -18,7 +18,7 @@ import httpx
 import pytest
 from loguru import logger
 
-from auraframes.ratelimit import BudgetExhausted, GeoMismatchError, WriteBudget, check_geo
+from pushframe.ratelimit import BudgetExhausted, GeoMismatchError, WriteBudget, check_geo
 
 
 @pytest.fixture(autouse=True)

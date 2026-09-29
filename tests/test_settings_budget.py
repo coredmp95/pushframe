@@ -1,5 +1,5 @@
 """Offline tests for the Phase 09 (proactive-write-rate-limiter-geo-guard)
-additions to `auraframes.utils.settings` -- the write-budget/geo-guard env
+additions to `pushframe.utils.settings` -- the write-budget/geo-guard env
 config plus the new `_bool_env` helper (ANTI-05).
 
 `settings.py` reads all env vars at MODULE IMPORT time (matching the
@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-import auraframes.utils.settings as settings
+import pushframe.utils.settings as settings
 
 
 @pytest.fixture(autouse=True)
@@ -48,7 +48,7 @@ def test_defaults_when_no_env_vars_set(monkeypatch):
     assert settings.AURA_WRITE_BUDGET_MAX_WAIT == 3600.0
     assert settings.AURA_COUNTRY is None
     assert settings.AURA_GEO_FAIL_OPEN is True
-    assert settings.AURA_STATE_DIR == Path('~/.config/auraframes').expanduser()
+    assert settings.AURA_STATE_DIR == Path('~/.config/pushframe').expanduser()
 
 
 def test_numeric_env_vars_are_parsed_as_floats(monkeypatch):
@@ -158,7 +158,7 @@ def test_aws_modules_wire_settings_not_literals():
     # The AWS modules must read through settings (MOD-02's whole point): their
     # module attributes must track settings values by identity-of-config, and
     # the module source must contain no hardcoded literal anymore.
-    from auraframes.aws import s3client, sqsclient
+    from pushframe.aws import s3client, sqsclient
 
     assert s3client.BUCKET_KEY == settings.AWS_S3_BUCKET
     assert s3client.UPLOAD_IDENTITY_POOL_ID == settings.AWS_UPLOAD_IDENTITY_POOL_ID

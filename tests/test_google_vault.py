@@ -15,8 +15,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from auraframes.google import vault as google_vault  # noqa: E402
-from auraframes.google.vault import (  # noqa: E402
+from pushframe.google import vault as google_vault  # noqa: E402
+from pushframe.google.vault import (  # noqa: E402
     CookieVaultError,
     cookies_for_httpx,
     load,
@@ -73,31 +73,31 @@ def test_sync_path_caller_structurally_refused(tmp_path, monkeypatch):
     # Simulate the offending caller: a fake module object whose __name__
     # lands under the denylist, placed at the frame load() will inspect.
     import types
-    fake_caller = types.ModuleType("auraframes.sync.engine")
+    fake_caller = types.ModuleType("pushframe.sync.engine")
     monkeypatch.setattr(google_vault, "_caller_module_name", lambda: fake_caller.__name__)
 
     with pytest.raises(CookieVaultError) as exc:
         load(path=vault)
-    assert "auraframes.sync" in str(exc.value) and "denylist" in str(exc.value)
+    assert "pushframe.sync" in str(exc.value) and "denylist" in str(exc.value)
 
 
 def test_cli_caller_also_denied(tmp_path, monkeypatch):
-    """auraframes.cli is on the denylist too — the CLI must reach the session
-    through auraframes.google (GoogleSession.from_vault), never directly."""
+    """pushframe.cli is on the denylist too — the CLI must reach the session
+    through pushframe.google (GoogleSession.from_vault), never directly."""
     vault = _vault(tmp_path)
     save(COOKIES, path=vault)
     monkeypatch.setattr(google_vault, "_caller_module_name",
-                        lambda: "auraframes.cli.commands")
+                        lambda: "pushframe.cli.commands")
     with pytest.raises(CookieVaultError) as exc:
         load(path=vault)
-    assert "auraframes.cli" in str(exc.value)
+    assert "pushframe.cli" in str(exc.value)
 
 
 def test_denylist_prefixes_carried_over_verbatim():
     """The migration must carry the denylist over byte-for-byte (D-06)."""
-    assert google_vault._DENYLIST_PREFIXES == ("auraframes.sync",
-                                               "auraframes.reconcile",
-                                               "auraframes.cli")
+    assert google_vault._DENYLIST_PREFIXES == ("pushframe.sync",
+                                               "pushframe.reconcile",
+                                               "pushframe.cli")
 
 
 def test_load_falls_back_to_legacy_probe_vault(tmp_path, monkeypatch):

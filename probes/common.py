@@ -7,7 +7,7 @@ wrapper: a non-200 is an exception, never a silent pass, matching the repo's
 convention of honest failures over optimistic defaults.
 
 Phase 17 (plan 17-01 T3): the redaction helpers MOVED to
-auraframes/google/redaction.py — this module re-exports them so the probes'
+pushframe/google/redaction.py — this module re-exports them so the probes'
 import surface stays identical.
 """
 from __future__ import annotations
@@ -17,7 +17,7 @@ import sys
 import httpx
 
 # Single source of truth for redaction lives in the package now.
-from auraframes.google.redaction import redact_link, redact_tokens  # noqa: E402,F401
+from pushframe.google.redaction import redact_link, redact_tokens  # noqa: E402,F401
 
 
 def fetch(url: str, *, timeout: float = 30.0) -> httpx.Response:

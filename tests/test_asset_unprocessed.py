@@ -6,7 +6,7 @@ fully processed: source_id/local_identifier/user/selected are populated, but the
 processed content metadata (data_uti, file_name, dimensions, dates,
 upload_priority) is null and `good_resolution` is omitted from the payload
 entirely. Before the fix those 8 fields were declared required, so building
-`Asset(**data)` raised 8 pydantic ValidationErrors and crashed `aura-cli
+`Asset(**data)` raised 8 pydantic ValidationErrors and crashed `pushframe
 inspect` (see .planning/debug/resolved/inspect-asset-null-fields.md).
 
 The fixture `asset_unprocessed.json` is the exact shape (redacted) that crashed.
@@ -16,7 +16,7 @@ Unmarked (no @pytest.mark.live) — runs in the default offline suite.
 import json
 from pathlib import Path
 
-from auraframes.models.asset import Asset
+from pushframe.models.asset import Asset
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 

@@ -1,4 +1,4 @@
-"""Offline tests for `aura-cli reconcile` (auraframes.cli.run_reconcile) and
+"""Offline tests for `pushframe reconcile` (pushframe.cli.run_reconcile) and
 the placeholder-count line `run_inspect` gained alongside it (Phase 11 Plan
 03, Tasks 2-3). Calls the handlers directly (never main()), copying
 tests/test_cli_inspect.py's conventions exactly.
@@ -13,9 +13,9 @@ import httpx
 import pytest
 from loguru import logger
 
-import auraframes.cli as cli_module
-from auraframes.cli import build_parser, run_inspect, run_reconcile
-from auraframes.reconcile import find_placeholders
+import pushframe.cli as cli_module
+from pushframe.cli import build_parser, run_inspect, run_reconcile
+from pushframe.reconcile import find_placeholders
 from tests.offline import FIXTURES_DIR, offline_aura
 
 FRAME_ID = 'frame-fake-0001'
@@ -123,7 +123,7 @@ def test_run_inspect_placeholder_count_matches_find_placeholders(monkeypatch, ca
     assert rc == 0
     out = capsys.readouterr().out
 
-    from auraframes.models.asset import Asset
+    from pushframe.models.asset import Asset
     assets = [Asset(**a) for a in payload['assets']]
     expected_count = find_placeholders(assets).placeholder_count
 

@@ -71,8 +71,8 @@ def offline_aura(overrides: dict | None = None):
     two-seam composition Plan 01 introduced. Imports are local to avoid a
     module-level import cycle concern, matching the PATTERNS.md sketch.
     """
-    from auraframes.aura import Aura
-    from auraframes.client import Client
+    from pushframe.aura import Aura
+    from pushframe.client import Client
 
     transport = httpx.MockTransport(make_router(overrides))
     return Aura(client=Client(transport=transport))

@@ -25,7 +25,7 @@ def aura():
     if not email or not password:
         pytest.skip("AURA_EMAIL/AURA_PASSWORD not set; skipping live Aura API tests")
 
-    from auraframes.aura import Aura
+    from pushframe.aura import Aura
 
     instance = Aura()
     instance.login()

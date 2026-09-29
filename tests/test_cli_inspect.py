@@ -1,4 +1,4 @@
-"""Offline tests for `aura-cli inspect` (auraframes.cli.run_inspect /
+"""Offline tests for `pushframe inspect` (pushframe.cli.run_inspect /
 resolve_frame). Calls run_inspect() directly (never main()) so
 load_dotenv() is not invoked and a filesystem .env cannot interfere.
 
@@ -12,7 +12,7 @@ import httpx
 import pytest
 from loguru import logger
 
-from auraframes.cli import run_inspect
+from pushframe.cli import run_inspect
 from tests.offline import FIXTURES_DIR, offline_aura
 
 

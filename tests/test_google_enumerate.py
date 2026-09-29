@@ -20,8 +20,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from auraframes.google.client import GoogleSession  # noqa: E402
-from auraframes.google.enumerate import (  # noqa: E402
+from pushframe.google.client import GoogleSession  # noqa: E402
+from pushframe.google.enumerate import (  # noqa: E402
     EnumerateError,
     enumerate_album,
     measure_disk_weight,

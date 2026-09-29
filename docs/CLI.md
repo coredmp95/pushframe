@@ -1,8 +1,8 @@
-# `aura-cli` — Command Reference
+# `pushframe` — Command Reference
 
 Complete reference for every command, flag, and exit code, with real output.
 
-`aura-cli` talks to the Aura **cloud** API (`api.pushd.com/v5`) plus AWS S3/SQS. It never
+`pushframe` talks to the Aura **cloud** API (`api.pushd.com/v5`) plus AWS S3/SQS. It never
 talks to the frame over your local network — everything goes through your Aura account.
 
 > The API is unofficial and reverse-engineered. It is undocumented and can change without
@@ -25,7 +25,7 @@ talks to the frame over your local network — everything goes through your Aura
 ## Global usage
 
 ```
-usage: aura-cli [-h] [--debug] {status,inspect,sync,push} ...
+usage: pushframe [-h] [--debug] {status,inspect,sync,push} ...
 
 options:
   -h, --help  show this help message and exit
@@ -35,8 +35,8 @@ options:
 `--debug` sits on the root parser, so it goes **before** the subcommand:
 
 ```bash
-uv run aura-cli --debug status      # correct
-uv run aura-cli status --debug      # error: unrecognized argument
+uv run pushframe --debug status      # correct
+uv run pushframe status --debug      # error: unrecognized argument
 ```
 
 Without `--debug` the CLI is quiet: normal runs print only the report. With it, every HTTP
@@ -48,8 +48,8 @@ always written to `logs/file_{timestamp}.log` regardless of the flag.
 `--frame` accepts a **case-insensitive substring of the frame name**, or an exact frame id:
 
 ```bash
-uv run aura-cli inspect --frame "living"                                  # substring
-uv run aura-cli inspect --frame "00000000-0000-0000-0000-000000000000"    # exact id
+uv run pushframe inspect --frame "living"                                  # substring
+uv run pushframe inspect --frame "00000000-0000-0000-0000-000000000000"    # exact id
 ```
 
 Resolution rules:
@@ -67,19 +67,19 @@ frame.
 ## `status` — check credentials and list frames
 
 ```
-usage: aura-cli status [-h]
+usage: pushframe status [-h]
 ```
 
 The first command to run. It checks your credentials are present, logs in, and lists your
 frames. Nothing is ever written.
 
 ```bash
-uv run aura-cli status
+uv run pushframe status
 ```
 
 ```
-AURA_EMAIL: set
-AURA_PASSWORD: set
+PUSHFRAME_EMAIL: set
+PUSHFRAME_PASSWORD: set
 Logged in as you@example.com
 1 frames:
   - Living Room (id: 00000000-0000-0000-0000-000000000000)
@@ -89,14 +89,14 @@ The credential check runs **before** any network call, and prints only `set` / `
 never the password itself. If either is missing, it stops there and exits `1`:
 
 ```
-AURA_EMAIL: set
-AURA_PASSWORD: NOT SET
+PUSHFRAME_EMAIL: set
+PUSHFRAME_PASSWORD: NOT SET
 ```
 
 ## `inspect` — look at one frame
 
 ```
-usage: aura-cli inspect [-h] --frame FRAME
+usage: pushframe inspect [-h] --frame FRAME
 
 options:
   --frame FRAME  Frame name (substring) or id
@@ -105,7 +105,7 @@ options:
 Read-only. Shows the frame, its owner, contributors, and the first 10 photos.
 
 ```bash
-uv run aura-cli inspect --frame "Living Room"
+uv run pushframe inspect --frame "Living Room"
 ```
 
 ```
@@ -116,7 +116,7 @@ Assets: 172
 Photos (showing 10 of 154, API order):
   - a1b2c3d4-1111-11f1-8000-0aaaaaaaaaaa | b5c6d7e8-2222-4333-9444-0bbbbbbbbbbb.jpg | 2026-07-04 19:41:13.922000
   - c9d0e1f2-3333-7444-8555-0ccccccccccc | None | None
-Placeholder rows: 58 (run `aura-cli reconcile --frame ...` for detail)
+Placeholder rows: 58 (run `pushframe reconcile --frame ...` for detail)
 ```
 
 Two things in that output are worth understanding, and both are server-side quirks rather
@@ -130,7 +130,7 @@ than bugs in this client — see [Known issues](#known-issues):
 ## `sync` — make a frame match a directory
 
 ```
-usage: aura-cli sync [-h] --frame FRAME [--apply] [--yes] [--delete | --hard-delete] dir
+usage: pushframe sync [-h] --frame FRAME [--apply] [--yes] [--delete | --hard-delete] dir
 
 positional arguments:
   dir            Local directory to scan for photos
@@ -157,7 +157,7 @@ a re-upload.
 Without `--apply`, nothing changes:
 
 ```bash
-uv run aura-cli sync ./photos --frame "Living Room"
+uv run pushframe sync ./photos --frame "Living Room"
 ```
 
 ```
@@ -197,14 +197,14 @@ photos.
 `--delete` and `--hard-delete` are mutually exclusive, enforced at parse time:
 
 ```bash
-uv run aura-cli sync ./photos --frame "Living Room" --delete --hard-delete
-# aura-cli sync: error: argument --hard-delete: not allowed with argument --delete
+uv run pushframe sync ./photos --frame "Living Room" --delete --hard-delete
+# pushframe sync: error: argument --hard-delete: not allowed with argument --delete
 ```
 
 ### Applying a plan
 
 ```bash
-uv run aura-cli sync ./photos --frame "Living Room" --apply
+uv run pushframe sync ./photos --frame "Living Room" --apply
 ```
 
 You get one confirmation covering the whole plan, echoing the resolved frame's name and id
@@ -235,10 +235,10 @@ Without a TTY, `--apply` requires `--yes` and otherwise **fails closed** rather 
 on a prompt:
 
 ```bash
-uv run aura-cli sync ./photos --frame "Living Room" --apply < /dev/null
+uv run pushframe sync ./photos --frame "Living Room" --apply < /dev/null
 # --apply requires --yes when running non-interactively    (exit 1)
 
-uv run aura-cli sync ./photos --frame "Living Room" --apply --yes   # runs
+uv run pushframe sync ./photos --frame "Living Room" --apply --yes   # runs
 ```
 
 ### The `--hard-delete` gate
@@ -272,10 +272,10 @@ round trip is just moving the file:
 
 ```bash
 mv ./photos/sunset.jpg /tmp/                                        # hide it
-uv run aura-cli sync ./photos --frame "Living Room" --apply --yes   # -> To hide: 1
+uv run pushframe sync ./photos --frame "Living Room" --apply --yes   # -> To hide: 1
 
 mv /tmp/sunset.jpg ./photos/                                        # bring it back
-uv run aura-cli sync ./photos --frame "Living Room" --apply --yes   # -> To re-show: 1
+uv run pushframe sync ./photos --frame "Living Room" --apply --yes   # -> To re-show: 1
 ```
 
 The second run reports `To upload: 0` — the photo is re-shown, never uploaded a second time.
@@ -283,7 +283,7 @@ The second run reports `To upload: 0` — the photo is re-shown, never uploaded 
 ## `push` — upload only, never removes
 
 ```
-usage: aura-cli push [-h] --frame FRAME [--apply] [--yes] [--limit LIMIT]
+usage: pushframe push [-h] --frame FRAME [--apply] [--yes] [--limit LIMIT]
                      [--batch-size BATCH_SIZE] [--chunk-delay CHUNK_DELAY]
                      [--max-wait MAX_WAIT] [--no-wait] [--country COUNTRY]
                      [--ignore-budget]
@@ -312,7 +312,7 @@ remove, or re-show anything. It is the safe way to add photos from a supply dire
 the frame being diffed to match it.
 
 ```bash
-uv run aura-cli push ./buffet --frame "Living Room"
+uv run pushframe push ./buffet --frame "Living Room"
 ```
 
 ```
@@ -325,7 +325,7 @@ Unchanged: 0
 ```
 
 ```bash
-uv run aura-cli push ./buffet --frame "Living Room" --apply --yes
+uv run pushframe push ./buffet --frame "Living Room" --apply --yes
 ```
 
 ```
@@ -380,7 +380,7 @@ The geo check only runs if `AURA_COUNTRY` (or `--country`) is set; unset means s
 ## `reconcile` — account for stuck placeholder rows
 
 ```
-usage: aura-cli reconcile [-h] --frame FRAME [--remove] [--yes]
+usage: pushframe reconcile [-h] --frame FRAME [--remove] [--yes]
                           [--mechanism {remove,hard-delete,complete}]
                           [--max-age-hours MAX_AGE_HOURS]
                           [--include-unknown-age]
@@ -420,7 +420,7 @@ row still mid-upload-processing trips at most one of the three and is never coun
 ### Report (the default)
 
 ```bash
-uv run aura-cli reconcile --frame "Living Room"
+uv run pushframe reconcile --frame "Living Room"
 ```
 
 ```
@@ -482,7 +482,7 @@ rows (the latter unless promoted by `--include-unknown-age`) are structurally un
 the removal code path, whatever `--mechanism` or confirmation you give.
 
 ```bash
-uv run aura-cli reconcile --frame "Living Room" --remove --include-unknown-age
+uv run pushframe reconcile --frame "Living Room" --remove --include-unknown-age
 ```
 
 On an account whose `created_at` is genuinely absent from the assets listing (as observed on
@@ -549,8 +549,8 @@ automatically. `.env` is gitignored — never commit real credentials.
 
 | Variable | Purpose |
 |---|---|
-| `AURA_EMAIL` | Account email |
-| `AURA_PASSWORD` | Account password (plaintext) |
+| `PUSHFRAME_EMAIL` (legacy `AURA_EMAIL`) | Account email |
+| `PUSHFRAME_PASSWORD` (legacy `AURA_PASSWORD`) | Account password (plaintext) |
 
 **Optional — write budget and geo guard**
 
@@ -562,7 +562,7 @@ automatically. `.env` is gitignored — never commit real credentials.
 | `AURA_WRITE_BUDGET_REFILL_PER_MIN` | `0.75` | Refill rate per minute |
 | `AURA_WRITE_BUDGET_WAIT` | `true` | Wait for refill instead of stopping |
 | `AURA_WRITE_BUDGET_MAX_WAIT` | `3600` | Max seconds to wait |
-| `AURA_STATE_DIR` | `~/.config/auraframes` | Where the persisted budget lives |
+| `AURA_STATE_DIR` | `~/.config/pushframe` | Where the persisted budget lives |
 
 **Optional — client identity**
 
@@ -606,7 +606,7 @@ An asset registered by a failed or abandoned upload leaves a row with no image, 
 and no hash — visible in `inspect` as `None | None`. They never display on the frame and sync
 ignores them. They also appear to be the cause of the count mismatch above.
 
-Run `aura-cli reconcile --frame ...` to see exactly how many a frame has, split into stuck /
+Run `pushframe reconcile --frame ...` to see exactly how many a frame has, split into stuck /
 recently-created / unknown-age. **`--remove --mechanism remove` (the default) is a confirmed
 working removal mechanism as of 2026-09-03 (plan 11-06)** — see the next paragraph and
 [`reconcile`](#reconcile--account-for-stuck-placeholder-rows) for the command and evidence.

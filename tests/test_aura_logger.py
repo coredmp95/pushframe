@@ -13,8 +13,8 @@ from pathlib import Path
 import pytest
 from loguru import logger
 
-import auraframes.aura as aura_module
-from auraframes.aura import Aura
+import pushframe.aura as aura_module
+from pushframe.aura import Aura
 from tests.offline import offline_aura
 
 
@@ -63,7 +63,7 @@ def test_logging_still_flows_after_guard(tmp_path, monkeypatch):
 
 def test_cli_reconfigure_still_works(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    from auraframes.cli import _configure_cli_logging
+    from pushframe.cli import _configure_cli_logging
 
     offline_aura()
     # cli.py's wholesale reconfigure (logger.remove() + its own sinks) must

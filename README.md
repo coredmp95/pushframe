@@ -42,7 +42,7 @@ This project uses `uv` exclusively (no `pip` / `venv` / `poetry`). From a clean 
 uv sync
 
 # 2. Run the read-path demo (login -> list frames -> fetch assets -> download one image).
-#    With AURA_EMAIL / AURA_PASSWORD unset it prints a helpful message and exits cleanly.
+#    With PUSHFRAME_EMAIL / PUSHFRAME_PASSWORD unset it prints a helpful message and exits cleanly.
 uv run python main.py
 ```
 
@@ -65,45 +65,51 @@ uv run pytest -m "not live"
 
 ## Environment Variables
 
-Credentials are read from environment variables (see `auraframes/utils/settings.py`). Copy
+Credentials are read from environment variables (see `pushframe/utils/settings.py`). Copy
 `.env.sample` to `.env` and fill in your credentials for the live test path (`.env` is
 gitignored — never commit real secrets); shell-exported variables also work and take
 precedence.
 
 **Required:**
-- `AURA_EMAIL`: The email of the account to authenticate with.
+- `PUSHFRAME_EMAIL`: The email of the account to authenticate with.
   - `Aura.login` may optionally be called with an email and password instead of setting env vars.
-- `AURA_PASSWORD`: The password of the account to authenticate with.
+- `PUSHFRAME_PASSWORD`: The password of the account to authenticate with.
 
 **Optional (with defaults):**
-- `AURA_LOCALE`: The locale of the device to mimic. (Default: `en-US`)
-- `AURA_APP_IDENTIFIER`: The identifier of the aura app. (Default: `com.pushd.client`)
+- `PUSHFRAME_LOCALE`: The locale of the device to mimic. (Default: `en-US`)
+- `PUSHFRAME_APP_IDENTIFIER`: The identifier of the aura app. (Default: `com.pushd.client`)
   - This may change between iOS and Android app implementations, untested.
-- `AURA_DEVICE_IDENTIFIER`: The unique identifier of the device to mimic. (Default: `0000000000000000`)
+- `PUSHFRAME_DEVICE_IDENTIFIER`: The unique identifier of the device to mimic. (Default: `0000000000000000`)
   - Ideally this should be set to your unique identifier, though it accepts others.
 
 **Optional — write budget & geo guard** (used by `sync --apply`, `push`, and `google-sync --apply`; see
 [*Write Path*](#write-path-upload--status--anti-abuse-budget) below):
-- `AURA_COUNTRY`: Expected account country for the geo pre-flight check, e.g. `FR`.
+- `PUSHFRAME_COUNTRY`: Expected account country for the geo pre-flight check, e.g. `FR`.
   **Unset disables the check entirely.**
-- `AURA_GEO_FAIL_OPEN`: Continue if the country lookup itself fails. (Default: `true`)
-- `AURA_WRITE_BUDGET_CAPACITY`: Token-bucket capacity, in requests. (Default: `30`)
-- `AURA_WRITE_BUDGET_REFILL_PER_MIN`: Refill rate per minute. (Default: `0.75`)
-- `AURA_WRITE_BUDGET_WAIT`: Wait for a refill rather than stopping. (Default: `true`)
-- `AURA_WRITE_BUDGET_MAX_WAIT`: Max seconds to wait. (Default: `3600`)
-- `AURA_STATE_DIR`: Where the persisted budget lives. (Default: `~/.config/auraframes`)
+- `PUSHFRAME_GEO_FAIL_OPEN`: Continue if the country lookup itself fails. (Default: `true`)
+- `PUSHFRAME_WRITE_BUDGET_CAPACITY`: Token-bucket capacity, in requests. (Default: `30`)
+- `PUSHFRAME_WRITE_BUDGET_REFILL_PER_MIN`: Refill rate per minute. (Default: `0.75`)
+- `PUSHFRAME_WRITE_BUDGET_WAIT`: Wait for a refill rather than stopping. (Default: `true`)
+- `PUSHFRAME_WRITE_BUDGET_MAX_WAIT`: Max seconds to wait. (Default: `3600`)
+- `PUSHFRAME_STATE_DIR`: Where the persisted budget lives. (Default: `~/.config/pushframe`)
 
 **Optional — Google sync:**
-- `AURA_PROBE_CHROME_PROFILE`: Dedicated Chrome profile directory used by `google-link` for
+- `PUSHFRAME_PROBE_CHROME_PROFILE`: Dedicated Chrome profile directory used by `google-link` for
   the one-time cookie harvest (required for that command only).
-- `AURA_GOOGLE_SYNC_REMOVAL_THRESHOLD`: Fraction of the frame's photos above which
+- `PUSHFRAME_GOOGLE_SYNC_REMOVAL_THRESHOLD`: Fraction of the frame's photos above which
   `google-sync` demands explicit confirmation before hiding (Default: `0.2`).
 
 Boolean variables accept `1`, `true`, `yes`, `on` (case-insensitive); anything else is false.
 
-## CLI Usage (`aura-cli`)
+> **Legacy names:** the old `AURA_*` spellings (`AURA_EMAIL`, `AURA_STATE_DIR`,
+> `AURA_WRITE_BUDGET_*`, `AURA_PROBE_CHROME_PROFILE`, …) are still read as
+> fallbacks — one release of grace. The old config directory
+> `~/.config/auraframes/` is migrated automatically to `~/.config/pushframe/`
+> on the first run (the old directory is left untouched).
 
-A CLI wraps the library (installed as the `aura-cli` entry point by `uv sync`). There are
+## CLI Usage (`pushframe`)
+
+A CLI wraps the library (installed as the `pushframe` entry point by `uv sync`). There are
 eight commands:
 
 | Command | What it does | Writes? |
@@ -123,12 +129,12 @@ eight commands:
 
 ```bash
 # Health check: are credentials set, does login work, which frames exist?
-uv run aura-cli status
+uv run pushframe status
 ```
 
 ```
-AURA_EMAIL: set
-AURA_PASSWORD: set
+PUSHFRAME_EMAIL: set
+PUSHFRAME_PASSWORD: set
 Logged in as you@example.com
 1 frames:
   - Living Room (id: 00000000-0000-0000-0000-000000000000)
@@ -138,7 +144,7 @@ Logged in as you@example.com
 ambiguous substring stops the run and lists the matches rather than guessing:
 
 ```bash
-uv run aura-cli inspect --frame "living"
+uv run pushframe inspect --frame "living"
 ```
 
 ### `sync` — match a directory (dry run by default)
@@ -146,7 +152,7 @@ uv run aura-cli inspect --frame "living"
 Nothing changes without `--apply`:
 
 ```bash
-uv run aura-cli sync ./photos/ --frame "Living Room"
+uv run pushframe sync ./photos/ --frame "Living Room"
 ```
 
 ```
@@ -163,10 +169,10 @@ cause a re-upload.
 
 ```bash
 # Apply it. One confirmation covers the whole plan and echoes the frame name + id.
-uv run aura-cli sync ./photos/ --frame "Living Room" --apply
+uv run pushframe sync ./photos/ --frame "Living Room" --apply
 
 # Non-interactive (CI, scripts) — --yes is required, otherwise it fails closed.
-uv run aura-cli sync ./photos/ --frame "Living Room" --apply --yes
+uv run pushframe sync ./photos/ --frame "Living Room" --apply --yes
 ```
 
 ### Removed photos are hidden, not deleted
@@ -178,13 +184,13 @@ photos.
 
 ```bash
 # Default: hide. Reversible.
-uv run aura-cli sync ./photos/ --frame "Living Room" --apply --yes
+uv run pushframe sync ./photos/ --frame "Living Room" --apply --yes
 
 # Remove from this frame (the asset survives in your account).
-uv run aura-cli sync ./photos/ --frame "Living Room" --apply --yes --delete
+uv run pushframe sync ./photos/ --frame "Living Room" --apply --yes --delete
 
 # Destroy account-wide. IRREVERSIBLE.
-uv run aura-cli sync ./photos/ --frame "Living Room" --apply --hard-delete
+uv run pushframe sync ./photos/ --frame "Living Room" --apply --hard-delete
 ```
 
 | Flag | Effect | Reversible |
@@ -215,10 +221,10 @@ Because hiding is reversible and hidden photos still count as present for dedupl
 round trip is just moving the file back:
 
 ```bash
-mv ./photos/sunset.jpg /tmp/ && uv run aura-cli sync ./photos/ --frame "Living Room" --apply --yes
+mv ./photos/sunset.jpg /tmp/ && uv run pushframe sync ./photos/ --frame "Living Room" --apply --yes
 # -> To hide: 1
 
-mv /tmp/sunset.jpg ./photos/ && uv run aura-cli sync ./photos/ --frame "Living Room" --apply --yes
+mv /tmp/sunset.jpg ./photos/ && uv run pushframe sync ./photos/ --frame "Living Room" --apply --yes
 # -> To re-show: 1   (and "To upload: 0" -- it is un-hidden, not uploaded again)
 ```
 
@@ -230,14 +236,14 @@ being diffed to match it.
 
 ```bash
 # Dry run, then apply. Photos already on the frame are skipped by md5.
-uv run aura-cli push ./buffet/ --frame "Living Room"
-uv run aura-cli push ./buffet/ --frame "Living Room" --apply --yes
+uv run pushframe push ./buffet/ --frame "Living Room"
+uv run pushframe push ./buffet/ --frame "Living Room" --apply --yes
 
 # Pacing flags for the anti-abuse write budget (see below):
 #   --limit N         upload at most N photos this run
 #   --batch-size N    assets per select_asset/batch_update call (default 50)
 #   --chunk-delay S   seconds to pause between write chunks (default 5)
-uv run aura-cli push ./buffet/ --frame "Living Room" --apply --yes --limit 40
+uv run pushframe push ./buffet/ --frame "Living Room" --apply --yes --limit 40
 
 # Budget / geo overrides:
 #   --max-wait S      cap the wait for budget refill (default 3600)
@@ -255,16 +261,16 @@ API). The mechanism is the browser-automation one proven in phase 16: a dedicate
 browser harvests the session cookies once, and every later operation is plain authenticated
 HTTP over the internal `batchexecute` API — no browser runs again.
 
-**One-time setup:** point `AURA_PROBE_CHROME_PROFILE` at a **dedicated** Chrome profile
+**One-time setup:** point `PUSHFRAME_PROBE_CHROME_PROFILE` at a **dedicated** Chrome profile
 directory (your daily-driver profile is structurally unreachable), then link:
 
 ```bash
-export AURA_PROBE_CHROME_PROFILE=~/.config/auraframes/chrome-profile
-uv run aura-cli google-link
+export PUSHFRAME_PROBE_CHROME_PROFILE=~/.config/pushframe/chrome-profile
+uv run pushframe google-link
 ```
 
 A browser window opens; log into Google inside it. The command auto-detects the completed
-login, saves the session to `~/.config/auraframes/google-cookies.json` with `0600`
+login, saves the session to `~/.config/pushframe/google-cookies.json` with `0600`
 permissions outside the repository, and prints only identity signals — cookie **names**, a
 count, never values. **Re-linking is the same command**: when a session expires (they do,
 that cadence is an accepted operational cost), run `google-link` again.
@@ -273,13 +279,13 @@ Then select and enumerate an album by name, share link, or id:
 
 ```bash
 # Discover the account's shared albums:
-uv run aura-cli google-album --list
+uv run pushframe google-album --list
 
 # By name substring — ambiguity prints a numbered list and stops (exit 2):
-uv run aura-cli google-album "Corse"
+uv run pushframe google-album "Corse"
 
 # By share link or album id — used exactly as given:
-uv run aura-cli google-album "https://photos.google.com/share/AF1Qip...?key=..."
+uv run pushframe google-album "https://photos.google.com/share/AF1Qip...?key=..."
 ```
 
 The resolved album is walked **completely** (the internal `snAcKc` continuation RPC,
@@ -297,7 +303,7 @@ Per-item (index | id shape | WxH | bytes):
 ```
 
 **Privacy posture:** session cookies live only in the `0600` vault outside the repository
-and are readable solely by the `auraframes.google` package (sync/CLI code paths are
+and are readable solely by the `pushframe.google` package (sync/CLI code paths are
 structurally refused); album capability URLs are secrets-like and are always printed
 redacted (`AF1Qip…<last4>`). `status` reports the Google link state — `linked: yes/no`,
 the account email, session usability — and never a cookie value or token.
@@ -309,16 +315,16 @@ upload it, and mirror removals as **hides**. Start to finish:
 
 ```bash
 # One-time setup (or again whenever the Google session expires):
-export AURA_PROBE_CHROME_PROFILE=~/.config/auraframes/chrome-profile
-uv run aura-cli google-link
+export PUSHFRAME_PROBE_CHROME_PROFILE=~/.config/pushframe/chrome-profile
+uv run pushframe google-link
 
 # Find the album, then mirror it:
-uv run aura-cli google-album --list
-uv run aura-cli google-sync "Cadre" --frame "Cadre de Fabrice"           # dry-run plan (writes nothing)
-uv run aura-cli google-sync "Cadre" --frame "Cadre de Fabrice" --apply   # one y/N, then it mirrors
+uv run pushframe google-album --list
+uv run pushframe google-sync "Cadre" --frame "Cadre de Fabrice"           # dry-run plan (writes nothing)
+uv run pushframe google-sync "Cadre" --frame "Cadre de Fabrice" --apply   # one y/N, then it mirrors
 
 # Non-interactive (CI, scripts) — --yes is required for --apply, otherwise it fails closed:
-uv run aura-cli google-sync "Cadre" --frame "Cadre de Fabrice" --apply --yes
+uv run pushframe google-sync "Cadre" --frame "Cadre de Fabrice" --apply --yes
 ```
 
 A real first run against the live pair (album « Cadre », 24 photos, one of them already on
@@ -343,9 +349,9 @@ Videos skipped: 0 (metadata delta — videos are out of sync scope, never silent
 #### Why the second run is free
 
 Photos download once into a staging cache
-(`~/.config/auraframes/google-cache/<album>/`), are uploaded with the same md5 convention
+(`~/.config/pushframe/google-cache/<album>/`), are uploaded with the same md5 convention
 the frame uses, and the cache is **pruned** after the uploads confirm. What survives is a
-persistent manifest (`~/.config/auraframes/google-manifest.json`, mode `0600`) mapping each
+persistent manifest (`~/.config/pushframe/google-manifest.json`, mode `0600`) mapping each
 Google photo id to its md5. The plan is rebuilt from the **album listing + manifest**, never
 from a walk of the pruned cache — that is what makes disk minimisation safe: "already synced"
 and "removed from the album" stay distinguishable.
@@ -362,7 +368,7 @@ and "removed from the album" stay distinguishable.
   (SAFE-01) — a Google-side glitch can never read as "delete/hide everything".
 - If a plan's removals exceed **20 % of the frame's photos**, an explicit confirmation
   echoes both counts first (SAFE-02; threshold overridable via
-  `AURA_GOOGLE_SYNC_REMOVAL_THRESHOLD`).
+  `PUSHFRAME_GOOGLE_SYNC_REMOVAL_THRESHOLD`).
 - **This verb never deletes.** Removal means hide; the gated `--delete`/`--hard-delete`
   tiers stay with `sync` only (SAFE-03).
 - A failed or partial download is reported as failed and retried next run — never uploaded
@@ -377,7 +383,7 @@ credentials, login failure, an unresolvable `--frame`, any per-item failure, a r
 abort, a geo mismatch, or an exhausted budget.
 
 Add `--debug` **before** the subcommand for verbose request/response logging on stderr
-(`aura-cli --debug status`, not `aura-cli status --debug`). Every run also writes a full log
+(`pushframe --debug status`, not `pushframe status --debug`). Every run also writes a full log
 to `logs/file_{timestamp}.log`.
 
 ### Known issue: writes sometimes 401 on the first try
@@ -416,7 +422,7 @@ Key findings (from live runs + decompiling the official Android app):
   attempts what is still missing. A large first-time import has still not been driven to
   completion in one sitting.
 - A client-side **token-bucket budget and geo pre-flight guard** now run before every write
-  (see the `AURA_WRITE_BUDGET_*` / `AURA_COUNTRY` variables above), so the server-side
+  (see the `PUSHFRAME_WRITE_BUDGET_*` / `PUSHFRAME_COUNTRY` variables above), so the server-side
   lockout is hard to reach by accident.
 
 ## iOS/Android Device's Upload Image Flow
@@ -427,7 +433,7 @@ Key findings (from live runs + decompiling the official Android app):
 > current CLI write path **batches** steps 4–9 across many assets per call (see *Write Path*
 > above); the per-asset sequence below is the original single-asset reference.
 
-[Aura.upload_image](auraframes/aura.py#L101) attempts to implement this flow as closely as possible.
+[Aura.upload_image](pushframe/aura.py#L101) attempts to implement this flow as closely as possible.
 1. A frame is selected and the frame's data is retrieved from the API (`/frames/<frame_id>.json`).
 2. An image on the device is selected for upload.
 3. An Asset object is created for the image and a GUID (`local_identifier`) is generated.
@@ -471,7 +477,7 @@ sequenceDiagram
 1. A frame is selected and the frame's data is retrieved from the API (`/frames/<frame_id>.json`).
 2. A paginated list of assets is retrieved with the `frame_id` (`/frames/{frame_id}/assets.json`).
 3. A URL is built that contains the image proxy URL, the asset's uploaded user id, and the asset's S3 filename.
-   - See [export.py](auraframes/export.py)
+   - See [export.py](pushframe/export.py)
 4. The image is retrieved from the URL.
 5. TODO: Describe rendering
 
@@ -499,5 +505,8 @@ This is an unofficial, reverse-engineered client.
   README. All of the reverse-engineering insight this project builds on is his work; his
   commits are preserved in this repository's git history.
 - **Revive & extend (2026):** Fabrice DIDIERJEAN — modernized the ~3-year-old codebase onto
-  Python 3.14 + `uv`, verified the read path live, and built the `aura-cli`
-  (`status`/`inspect`/`sync`/`push`) CLI plus the batched, anti-abuse-aware write path.
+  Python 3.14 + `uv`, verified the read path live, then built and live-proved the whole
+  current tool: the `pushframe` CLI (`status`/`inspect`/`sync`/`push`/`reconcile`), the
+  batched anti-abuse write path, and the entire local Google Photos → frame mirror
+  (cookie-vault linking, album enumeration, pruned-cache sync with a persistent
+  manifest, hide-by-default semantics). Project renamed `pushframe` in v5.0.

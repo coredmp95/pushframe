@@ -1,4 +1,4 @@
-"""Offline tests for `aura-cli google-link` (plan 17-02 T1).
+"""Offline tests for `pushframe google-link` (plan 17-02 T1).
 
 Zero browser, zero network: the `bootstrap_fn` seam gets a fake, the
 profile env is controlled per-test, and the never-print-cookie guarantee
@@ -13,8 +13,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from auraframes.cli import run_google_link  # noqa: E402
-from auraframes.google.bootstrap import BootstrapError  # noqa: E402
+from pushframe.cli import run_google_link  # noqa: E402
+from pushframe.google.bootstrap import BootstrapError  # noqa: E402
 
 FAKE_COOKIE_VALUE = "FAKE-COOKIE-VALUE-never-print-001"
 
@@ -30,7 +30,7 @@ def _fake_bootstrap(summary=None):
 
 
 def test_google_link_success_with_injected_bootstrap(monkeypatch, capsys):
-    monkeypatch.setenv("AURA_PROBE_CHROME_PROFILE", "/tmp/dedicated-profile")
+    monkeypatch.setenv("PUSHFRAME_PROBE_CHROME_PROFILE", "/tmp/dedicated-profile")
     rc = run_google_link(bootstrap_fn=_fake_bootstrap())
     assert rc == 0
     out = capsys.readouterr().out
@@ -41,19 +41,19 @@ def test_google_link_success_with_injected_bootstrap(monkeypatch, capsys):
 
 
 def test_google_link_missing_profile_fails_loud(monkeypatch, capsys):
-    monkeypatch.delenv("AURA_PROBE_CHROME_PROFILE", raising=False)
+    monkeypatch.delenv("PUSHFRAME_PROBE_CHROME_PROFILE", raising=False)
     rc = run_google_link(bootstrap_fn=_fake_bootstrap())
     assert rc == 1
     out = capsys.readouterr().out
-    assert "AURA_PROBE_CHROME_PROFILE" in out
+    assert "PUSHFRAME_PROBE_CHROME_PROFILE" in out
     assert "structurally unreachable" in out
 
 
 def test_google_link_relink_notice_when_vault_exists(tmp_path, monkeypatch, capsys):
     """Re-link is the same command (LGS-02): with an existing vault present,
     a one-line refresh notice prints before the bootstrap runs."""
-    monkeypatch.setenv("AURA_PROBE_CHROME_PROFILE", "/tmp/dedicated-profile")
-    from auraframes.google import vault as google_vault
+    monkeypatch.setenv("PUSHFRAME_PROBE_CHROME_PROFILE", "/tmp/dedicated-profile")
+    from pushframe.google import vault as google_vault
     vault_path = tmp_path / "v.json"
     google_vault.save([{"name": "SID", "value": "x", "domain": ".google.com",
                         "path": "/"}], path=vault_path)
@@ -65,7 +65,7 @@ def test_google_link_relink_notice_when_vault_exists(tmp_path, monkeypatch, caps
 
 
 def test_google_link_bootstrap_error_exits_nonzero(monkeypatch, capsys):
-    monkeypatch.setenv("AURA_PROBE_CHROME_PROFILE", "/tmp/dedicated-profile")
+    monkeypatch.setenv("PUSHFRAME_PROBE_CHROME_PROFILE", "/tmp/dedicated-profile")
     rc = run_google_link(
         bootstrap_fn=_fake_bootstrap(BootstrapError("no auth cookies detected")))
     assert rc == 1
@@ -75,7 +75,7 @@ def test_google_link_bootstrap_error_exits_nonzero(monkeypatch, capsys):
 def test_google_link_never_prints_cookie_values(monkeypatch, capsys):
     """Even the fake bootstrap's summary dict is value-free; if a cookie
     VALUE ever leaked into the flow, this grep would catch it."""
-    monkeypatch.setenv("AURA_PROBE_CHROME_PROFILE", "/tmp/dedicated-profile")
+    monkeypatch.setenv("PUSHFRAME_PROBE_CHROME_PROFILE", "/tmp/dedicated-profile")
     summary = {"vault_path": "/tmp/v", "cookie_count": 3,
                "auth_markers": ["SID", "SAPISID"]}
     run_google_link(bootstrap_fn=_fake_bootstrap(summary))

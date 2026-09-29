@@ -10,9 +10,9 @@ tests/test_read_path.py and tests/conftest.py are untouched.
 import httpx
 import pytest
 
-from auraframes.api.frameApi import FrameApi
-from auraframes.client import Client
-from auraframes.models.frame import Frame
+from pushframe.api.frameApi import FrameApi
+from pushframe.client import Client
+from pushframe.models.frame import Frame
 from tests.offline import _load as _load_fixture, offline_aura
 
 

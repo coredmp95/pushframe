@@ -4,11 +4,11 @@ Fetches a Google Photos shared-album page with plain HTTP — no cookies, no
 login, no JS — parses the inline `AF_initDataCallback({key: 'ds:1', ...})`
 payload into the album's item list, and optionally downloads originals via
 the `{baseUrl}=d` convention, hashing them with the frame's own base64-MD5
-convention (`auraframes.aws.s3client.get_md5`) for the 16-03 fidelity
+convention (`pushframe.aws.s3client.get_md5`) for the 16-03 fidelity
 comparison.
 
 Phase 17 (plan 17-01 T3): the parsers MOVED into the production package
-`auraframes/google/parsers.py` — this module imports them (single source of
+`pushframe/google/parsers.py` — this module imports them (single source of
 truth, D-03) and keeps its CLI surface unchanged.
 
 Usage:
@@ -37,7 +37,7 @@ from probes.common import fetch, redact_link, redact_tokens  # noqa: E402,F401
 # The proven parsers now live in the package; the probe re-exports them so
 # existing probe-side callers (fidelity_check.py, browser_bootstrap.py) and
 # the probe tests keep working unchanged.
-from auraframes.google.parsers import (  # noqa: E402,F401
+from pushframe.google.parsers import (  # noqa: E402,F401
     ProbeParseError,
     _walk_items,
     extract_ds1_data,
@@ -57,11 +57,11 @@ def resolve_share_url(url: str) -> tuple[str, httpx.Response]:
 def download_original(base_url: str, dest: Path) -> tuple[int, str]:
     """Download the `{baseUrl}=d` original, return (byte_length, base64_md5).
 
-    Hash comes from the repo's own convention — auraframes.aws.s3client.get_md5 —
+    Hash comes from the repo's own convention — pushframe.aws.s3client.get_md5 —
     the exact function the frame's md5_hash provenance rests on (Phase 7).
     Bytes are hashed raw; no re-encoding, no Pillow round-trip.
     """
-    from auraframes.aws.s3client import get_md5
+    from pushframe.aws.s3client import get_md5
 
     url = f"{base_url}=d"
     resp = httpx.get(url, timeout=60.0, follow_redirects=True)
@@ -82,7 +82,7 @@ def measure_sizes(base_urls: list[str]) -> list[int]:
     Google answers `Content-Range: bytes 0-0/TOTAL` — the album's total disk
     weight is measurable without downloading any photo (live-proven 2026-09-28:
     album C, 24 items → 86.6 MiB, every item answered with its exact size).
-    Migrated to the package as auraframes.google.enumerate.measure_disk_weight;
+    Migrated to the package as pushframe.google.enumerate.measure_disk_weight;
     this probe keeps a thin local copy to stay a self-contained diagnostic
     over plain httpx (no vault/session needed for the anonymous flow).
     """

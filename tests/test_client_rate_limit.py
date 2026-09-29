@@ -13,7 +13,7 @@ import httpx
 import pytest
 from loguru import logger
 
-from auraframes.client import Client, RateLimitError, _parse_retry_after
+from pushframe.client import Client, RateLimitError, _parse_retry_after
 
 
 @pytest.fixture(autouse=True)

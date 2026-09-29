@@ -6,7 +6,7 @@ CLI wiring (Plan 09-02, ANTI-06): the four `push`-only override flags
 
 Extends `tests/test_cli_apply.py`'s `_patch_execute_plan` pattern -- calls
 `run_sync()` directly (never `main()`), monkeypatches `execute_plan` on the
-`auraframes.cli` namespace, and never touches the network, AWS, or a real
+`pushframe.cli` namespace, and never touches the network, AWS, or a real
 `~/.config` path (`AURA_STATE_DIR` is monkeypatched to `tmp_path`).
 """
 import json
@@ -15,9 +15,9 @@ from pathlib import Path
 import pytest
 from loguru import logger
 
-import auraframes.cli as cli
-from auraframes.ratelimit import BudgetExhausted, GeoMismatchError, WriteBudget
-from auraframes.sync import ExecutionResult
+import pushframe.cli as cli
+from pushframe.ratelimit import BudgetExhausted, GeoMismatchError, WriteBudget
+from pushframe.sync import ExecutionResult
 from tests.offline import offline_aura
 
 FRAME_ID = 'frame-fake-0001'
@@ -37,7 +37,7 @@ def _reset_loguru(tmp_path_factory, monkeypatch):
 @pytest.fixture(autouse=True)
 def _state_dir(tmp_path, monkeypatch):
     # Never let a test's WriteBudget.load()/save() touch a real
-    # ~/.config/auraframes path.
+    # ~/.config/pushframe path.
     monkeypatch.setattr(cli, 'AURA_STATE_DIR', tmp_path)
     return tmp_path
 

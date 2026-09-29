@@ -1,33 +1,28 @@
 {
   "contract": "1.0.0",
   "flavor": "core",
-  "milestone": "v5.0",
+  "milestone": "v5.0 — Distribution & Rename: pushframe packages",
   "phases": [
     {
-      "number": "16",
-      "name": "Local Mechanism Spike & Decision",
-      "status": "complete"
+      "number": "20",
+      "name": "pushframe Rename, Migration & Repo Switch",
+      "status": "pending"
     },
     {
-      "number": "17",
-      "name": "Google Link & Album Selection",
-      "status": "complete"
+      "number": "21",
+      "name": "Debian Package & APT Repo",
+      "status": "pending"
     },
     {
-      "number": "18",
-      "name": "Album → Frame Mirror Sync (Single Pair)",
-      "status": "complete"
-    },
-    {
-      "number": "19",
-      "name": "Debt Closeout",
-      "status": "complete"
+      "number": "22",
+      "name": "PyPI + Release Engineering",
+      "status": "pending"
     }
   ],
   "next": {
-    "command": "/gsd:discuss-phase",
-    "label": "Discuss the first phase",
-    "reason": "Project initialized — plan your first phase"
+    "command": "/gsd:progress --next",
+    "label": "Advance to the next step",
+    "reason": "Phase 20 of 3 · 0% · executing"
   },
-  "updated_at": "2026-09-29T06:06:53.473Z"
+  "updated_at": "2026-09-29T06:52:23.479Z"
 }

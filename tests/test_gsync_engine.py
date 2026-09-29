@@ -15,18 +15,18 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from auraframes.aws.s3client import get_md5  # noqa: E402
-from auraframes.gsync import (  # noqa: E402
+from pushframe.aws.s3client import get_md5  # noqa: E402
+from pushframe.gsync import (  # noqa: E402
     SENTINEL_SUFFIX,
     SafeSyncError,
     build_demand,
     format_plan_report,
     run_google_sync_plan,
 )
-from auraframes.google.cache import CacheOutcome  # noqa: E402
-from auraframes.google.manifest import GoogleManifest  # noqa: E402
-from auraframes.models.asset import Asset  # noqa: E402
-from auraframes.sync import compute_plan  # noqa: E402
+from pushframe.google.cache import CacheOutcome  # noqa: E402
+from pushframe.google.manifest import GoogleManifest  # noqa: E402
+from pushframe.models.asset import Asset  # noqa: E402
+from pushframe.sync import compute_plan  # noqa: E402
 
 ALBUM = "AF1QipFAKEalbum" + "0" * 30 + "1"
 
@@ -210,7 +210,7 @@ def test_compute_plan_imported_not_forked():
     """CSE-03/05 structural pin: gsync reuses sync.compute_plan — no diff
     logic is copied into the module."""
     import ast
-    src_path = (Path(__file__).resolve().parent.parent / "auraframes" / "gsync.py")
+    src_path = (Path(__file__).resolve().parent.parent / "pushframe" / "gsync.py")
     tree = ast.parse(src_path.read_text())
     calls = [n for n in ast.walk(tree) if isinstance(n, ast.Call)
              and isinstance(n.func, ast.Name)]

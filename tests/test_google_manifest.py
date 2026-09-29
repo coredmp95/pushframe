@@ -11,7 +11,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from auraframes.google.manifest import (  # noqa: E402
+from pushframe.google.manifest import (  # noqa: E402
     GoogleManifest,
     ManifestError,
 )

@@ -15,8 +15,8 @@ import httpx
 import pytest
 from pydantic import ValidationError
 
-from auraframes.api.assetApi import BatchUpdateResult
-from auraframes.models.asset import AssetPartial, AssetPartialId
+from pushframe.api.assetApi import BatchUpdateResult
+from pushframe.models.asset import AssetPartial, AssetPartialId
 from tests.offline import offline_aura
 
 BATCH_UPDATE_PATH = '/v5/assets/batch_update.json'

@@ -1,6 +1,6 @@
 """Offline tests for the Phase 09 (proactive-write-rate-limiter-geo-guard)
 `budget`/`geo_check`/`wait_on_budget`/`max_wait_seconds`/`clock` integration
-in `auraframes.sync.execute_plan` (Plan 09-02, ANTI-03/ANTI-04).
+in `pushframe.sync.execute_plan` (Plan 09-02, ANTI-03/ANTI-04).
 
 Mirrors `tests/test_execute_plan.py`'s harness (`offline_aura`, duck-typed
 S3/SQS fakes) but drives a FAKE budget object (records `acquire`/`save`/
@@ -13,9 +13,9 @@ import pytest
 from loguru import logger
 from PIL import Image
 
-from auraframes.client import RateLimitError
-from auraframes.models.asset import Asset, AssetPartialId
-from auraframes.sync import ConsecutiveWriteFailureError, SyncPlan, execute_plan
+from pushframe.client import RateLimitError
+from pushframe.models.asset import Asset, AssetPartialId
+from pushframe.sync import ConsecutiveWriteFailureError, SyncPlan, execute_plan
 from tests.offline import offline_aura
 
 FRAME_ID = 'frame-fake-0001'
@@ -99,7 +99,7 @@ def _install_ack_all_batch_update(aura):
     calls: list = []
 
     def _fake_batch_update(assets):
-        from auraframes.api.assetApi import BatchUpdateResult
+        from pushframe.api.assetApi import BatchUpdateResult
         items = assets if isinstance(assets, list) else [assets]
         calls.append(items)
         ids = [item.local_identifier for item in items]

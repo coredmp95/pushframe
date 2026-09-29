@@ -3,14 +3,14 @@ import importlib
 import pytest
 
 MODEL_MODULES = [
-    "auraframes",
-    "auraframes.models.user",
-    "auraframes.models.person",
-    "auraframes.models.activity",
-    "auraframes.models.asset",
-    "auraframes.models.frame",
-    "auraframes.models.meta",
-    "auraframes.utils.io",
+    "pushframe",
+    "pushframe.models.user",
+    "pushframe.models.person",
+    "pushframe.models.activity",
+    "pushframe.models.asset",
+    "pushframe.models.frame",
+    "pushframe.models.meta",
+    "pushframe.utils.io",
 ]
 
 
@@ -20,14 +20,14 @@ def test_imports_clean(mod):
 
 
 def test_framepartial_all_optional():
-    from auraframes.models.frame import FramePartial
+    from pushframe.models.frame import FramePartial
 
     # Every field optional (D-07); is_required() is the verified pydantic v2 idiom.
     assert all(not f.is_required() for f in FramePartial.model_fields.values())
 
 
 def test_login_defaults_are_none_sentinels():
-    from auraframes.aura import Aura
+    from pushframe.aura import Aura
 
     # Regression: login() must NOT bind os.getenv(...) as default arg values —
     # those evaluate once at import time (before main.py's load_dotenv()), baking
@@ -38,10 +38,10 @@ def test_login_defaults_are_none_sentinels():
 
 def test_aws_literals_stay_out_of_aws_modules():
     # MOD-02 (Phase 19) regression gate: the bucket name and the two Cognito
-    # pool IDs live in auraframes/utils/settings.py now. If any AWS module
+    # pool IDs live in pushframe/utils/settings.py now. If any AWS module
     # re-creates the old literal-bearing constants, this fails.
-    from auraframes.aws import s3client, sqsclient
-    from auraframes.utils import settings
+    from pushframe.aws import s3client, sqsclient
+    from pushframe.utils import settings
 
     assert settings.AWS_S3_BUCKET == 'images.senseapp.co'  # the shipped default
     for module, attr in (

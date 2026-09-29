@@ -1,4 +1,4 @@
-"""Offline tests for `aura-cli status` (auraframes.cli.run_status). Calls
+"""Offline tests for `pushframe status` (pushframe.cli.run_status). Calls
 run_status() directly (never main()) so load_dotenv() is not invoked and a
 filesystem .env cannot interfere.
 
@@ -9,7 +9,7 @@ import httpx
 import pytest
 from loguru import logger
 
-from auraframes.cli import run_status
+from pushframe.cli import run_status
 from tests.offline import offline_aura
 
 
@@ -22,7 +22,7 @@ def _reset_loguru(monkeypatch):
     # Phase 19 (MOD-04): _init_logger() is now guarded by a process-level
     # flag, so resetting the flag too lets each test's Aura() construction
     # re-register sinks as this file's contract expects.
-    import auraframes.aura as aura_module
+    import pushframe.aura as aura_module
 
     logger.remove()
     monkeypatch.setattr(aura_module, '_LOGGER_READY', False)
@@ -38,8 +38,8 @@ def test_status_missing_creds_exits_nonzero_no_network(monkeypatch, capsys):
 
     assert rc == 1
     out = capsys.readouterr().out
-    assert 'AURA_EMAIL: NOT SET' in out
-    assert 'AURA_PASSWORD: NOT SET' in out
+    assert 'PUSHFRAME_EMAIL: NOT SET' in out
+    assert 'PUSHFRAME_PASSWORD: NOT SET' in out
 
 
 def test_status_success_lists_frames_and_never_prints_password(monkeypatch, capsys):
@@ -50,8 +50,8 @@ def test_status_success_lists_frames_and_never_prints_password(monkeypatch, caps
 
     assert rc == 0
     out = capsys.readouterr().out
-    assert 'AURA_EMAIL: set' in out
-    assert 'AURA_PASSWORD: set' in out
+    assert 'PUSHFRAME_EMAIL: set' in out
+    assert 'PUSHFRAME_PASSWORD: set' in out
     assert 'Logged in as you@example.invalid' in out
     assert '1 frames:' in out
     assert 'Fake Frame' in out

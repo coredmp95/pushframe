@@ -1,9 +1,9 @@
 import json
 from pathlib import Path
 
-from auraframes.models.asset import Asset
-from auraframes.models.frame import Frame
-from auraframes.models.user import User
+from pushframe.models.asset import Asset
+from pushframe.models.frame import Frame
+from pushframe.models.user import User
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 

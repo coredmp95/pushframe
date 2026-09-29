@@ -1,12 +1,12 @@
-"""Offline unit tests for auraframes.sync (the dry-run diff engine's pure
+"""Offline unit tests for pushframe.sync (the dry-run diff engine's pure
 core). Zero network access, zero credentials -- scan_directory only reads
 local bytes under tmp_path, and compute_plan is a pure function.
 """
 from pathlib import Path
 
-from auraframes.aws.s3client import get_md5
-from auraframes.models.asset import Asset
-from auraframes.sync import compute_plan, scan_directory
+from pushframe.aws.s3client import get_md5
+from pushframe.models.asset import Asset
+from pushframe.sync import compute_plan, scan_directory
 
 
 def _asset(id_, md5_hash, taken_at="2024-03-11T12:00:00.000Z", selected=True):

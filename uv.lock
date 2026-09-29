@@ -24,54 +24,6 @@ wheels = [
 ]
 
 [[package]]
-name = "auraframes"
-version = "0.1.0"
-source = { editable = "." }
-dependencies = [
-    { name = "boto3" },
-    { name = "botocore" },
-    { name = "geopy" },
-    { name = "h2" },
-    { name = "httpx", extra = ["http2"] },
-    { name = "loguru" },
-    { name = "piexif" },
-    { name = "pillow" },
-    { name = "pillow-heif" },
-    { name = "pydantic" },
-    { name = "python-dotenv" },
-    { name = "requests" },
-    { name = "tqdm" },
-]
-
-[package.optional-dependencies]
-dev = [
-    { name = "pytest" },
-]
-google-browser = [
-    { name = "playwright" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "boto3", specifier = ">=1.34" },
-    { name = "botocore", specifier = ">=1.34" },
-    { name = "geopy", specifier = ">=2.4" },
-    { name = "h2", specifier = ">=4" },
-    { name = "httpx", extras = ["http2"], specifier = ">=0.27" },
-    { name = "loguru", specifier = ">=0.7" },
-    { name = "piexif", specifier = ">=1.1.3" },
-    { name = "pillow", specifier = ">=10.4" },
-    { name = "pillow-heif", specifier = ">=1.6" },
-    { name = "playwright", marker = "extra == 'google-browser'", specifier = ">=1.63.0" },
-    { name = "pydantic", specifier = ">=2" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8" },
-    { name = "python-dotenv", specifier = ">=1.0" },
-    { name = "requests", specifier = ">=2.31" },
-    { name = "tqdm", specifier = ">=4.66" },
-]
-provides-extras = ["dev", "google-browser"]
-
-[[package]]
 name = "boto3"
 version = "1.43.36"
 source = { registry = "https://pypi.org/simple" }
@@ -460,6 +412,54 @@ sdist = { url = "https://files.pythonhosted.org/packages/f9/e2/3e91f31a7d2b083fe
 wheels = [
     { url = "https://files.pythonhosted.org/packages/54/20/4d324d65cc6d9205fabedc306948156824eb9f0ee1633355a8f7ec5c66bf/pluggy-1.6.0-py3-none-any.whl", hash = "sha256:e920276dd6813095e9377c0bc5566d94c932c33b27a3e3945d8389c374dd4746", size = 20538, upload-time = "2025-05-15T12:30:06.134Z" },
 ]
+
+[[package]]
+name = "pushframe"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "boto3" },
+    { name = "botocore" },
+    { name = "geopy" },
+    { name = "h2" },
+    { name = "httpx", extra = ["http2"] },
+    { name = "loguru" },
+    { name = "piexif" },
+    { name = "pillow" },
+    { name = "pillow-heif" },
+    { name = "pydantic" },
+    { name = "python-dotenv" },
+    { name = "requests" },
+    { name = "tqdm" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "pytest" },
+]
+google-browser = [
+    { name = "playwright" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "boto3", specifier = ">=1.34" },
+    { name = "botocore", specifier = ">=1.34" },
+    { name = "geopy", specifier = ">=2.4" },
+    { name = "h2", specifier = ">=4" },
+    { name = "httpx", extras = ["http2"], specifier = ">=0.27" },
+    { name = "loguru", specifier = ">=0.7" },
+    { name = "piexif", specifier = ">=1.1.3" },
+    { name = "pillow", specifier = ">=10.4" },
+    { name = "pillow-heif", specifier = ">=1.6" },
+    { name = "playwright", marker = "extra == 'google-browser'", specifier = ">=1.63.0" },
+    { name = "pydantic", specifier = ">=2" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8" },
+    { name = "python-dotenv", specifier = ">=1.0" },
+    { name = "requests", specifier = ">=2.31" },
+    { name = "tqdm", specifier = ">=4.66" },
+]
+provides-extras = ["dev", "google-browser"]
 
 [[package]]
 name = "pydantic"

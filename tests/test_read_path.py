@@ -2,9 +2,9 @@ import os
 
 import pytest
 
-from auraframes import export
-from auraframes.exif import get_readable_exif
-from auraframes.models.frame import Frame
+from pushframe import export
+from pushframe.exif import get_readable_exif
+from pushframe.models.frame import Frame
 
 
 def _is_image_asset(asset) -> bool:

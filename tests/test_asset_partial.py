@@ -1,4 +1,4 @@
-"""Offline tests for `AssetPartial` (auraframes.models.asset), the
+"""Offline tests for `AssetPartial` (pushframe.models.asset), the
 all-Optional variant of `Asset` used to send new-upload metadata through
 `AssetApi.batch_update` before every field of a real `Asset` is known
 (Phase 8 Plan 01, Task 1).
@@ -7,22 +7,22 @@ Unmarked (no @pytest.mark.live) — pure model-construction tests, zero
 network access and no credentials required.
 
 REL-06 finding (Phase 11 Plan 02, Task 2): `AssetPartialId`'s
-`model_validator(mode='after')` (`auraframes/models/asset.py`) already fires
+`model_validator(mode='after')` (`pushframe/models/asset.py`) already fires
 on the ordinary construction path under the installed pydantic v2 -- both on
 `AssetPartialId()` (no args) and on keyword-expanded construction
 (`AssetPartialId(**entry)`, the shape `AssetApi.batch_update` uses to parse
 an inbound `successes` entry). REL-06 is therefore closed by the proving
 tests below plus `batch_update`'s inbound tolerance (Task 1's
 try/except ValidationError around each entry), not by rewriting the
-validator. `auraframes/models/asset.py` is unmodified by this plan.
+validator. `pushframe/models/asset.py` is unmodified by this plan.
 """
 import pytest
 from pydantic import ValidationError
 
-from auraframes.models.asset import Asset, AssetPartial, AssetPartialId
+from pushframe.models.asset import Asset, AssetPartial, AssetPartialId
 
 # The exact allowlist AssetApi.batch_update uses for its `.dict(include=...)`
-# call (auraframes/api/assetApi.py:19-38) -- AssetPartial must serialize to
+# call (pushframe/api/assetApi.py:19-38) -- AssetPartial must serialize to
 # precisely this shape.
 BATCH_UPDATE_ALLOWLIST = {
     'data_uti': True,
