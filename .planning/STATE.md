@@ -32,9 +32,9 @@ reliable.
 
 ## Current Position
 
-Phase: 20 — EXECUTING
-Plan: 1 of ?
-Status: Executing Phase 20
+Phase: 20 — COMPLETE (rename shipped; phases 21-22 remain in v5.0)
+Plan: 1 of 1
+Status: Phase 20 complete
 Last activity: 2026-09-29 — Phase 20 execution started
 
 ## Milestone Roadmap (v4.0, Phases 16-19)

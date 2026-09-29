@@ -23,12 +23,12 @@ on PyPI, already taken.
 <!-- The rename is mechanical but blast-radius-wide: imports, entry points, config
      paths, docs, tests. The offline suite is the safety net (401 tests). -->
 
-- [ ] **IDN-01**: The Python package is renamed `auraframes` → `pushframe` everywhere (every module path, every import, entry points, pyproject name) and the full offline suite passes green after the rename with no import of the old name left anywhere (`grep -r "auraframes" --include="*.py" .` outside migrations/tests-of-migration matches nothing)
-- [ ] **IDN-02**: The single console-script binary is `pushframe` (no `aura-cli` alias shipped); every user-facing string, help text, and doc references `pushframe`
-- [ ] **IDN-03**: First run migrates `~/.config/auraframes/` → `~/.config/pushframe/` automatically (Google cookie vault incl. legacy probes path, Google manifest, write budget) and prints a one-line notice; a fresh machine creates `~/.config/pushframe/` directly; the migration is idempotent and never loses the 0600 vault
-- [ ] **IDN-04**: Environment variables gain the `PUSHFRAME_` spelling as the documented primary form (`PUSHFRAME_EMAIL`/`PUSHFRAME_PASSWORD`/`PUSHFRAME_COUNTRY`/`PUSHFRAME_STATE_DIR`/`AURA_AWS_*` → `PUSHFRAME_AWS_*` etc.) with the `AURA_*` spellings still read as fallbacks (one release of grace), documented in README and `--help`
-- [ ] **IDN-05**: README, docs/CLI.md, VERIFICATION-REPORT.md and all planning-visible surfaces say the tool is `pushframe`, with an up-front "unofficial community client for Aura Frames hardware — not affiliated with or endorsed by Aura Frames Inc." disclaimer (nominative use of the mark only to identify compatibility)
-- [ ] **IDN-06**: The project leaves the fork: a new standalone GitHub repository `coredmp95/pushframe` (created as a normal repo, **not** a fork) receives the full history (337 commits, preserving upstream attribution in the log), the local `origin` remote switches to it, and the README's first line carries a provenance note crediting the upstream author (zmanowar) with the link to the original repository — the old `coredmp95/auraframes` fork stays in place untouched as an archive. *(Operator decision 2026-09-29: the repo switch happens in Phase 20, in the same movement as the code rename, so the first tagged release lands in the new repo.)*
+- [x] **IDN-01**: The Python package is renamed `auraframes` → `pushframe` everywhere (every module path, every import, entry points, pyproject name) and the full offline suite passes green after the rename with no import of the old name left anywhere (`grep -r "auraframes" --include="*.py" .` outside migrations/tests-of-migration matches nothing)
+- [x] **IDN-02**: The single console-script binary is `pushframe` (no `aura-cli` alias shipped); every user-facing string, help text, and doc references `pushframe`
+- [x] **IDN-03**: First run migrates `~/.config/auraframes/` → `~/.config/pushframe/` automatically (Google cookie vault incl. legacy probes path, Google manifest, write budget) and prints a one-line notice; a fresh machine creates `~/.config/pushframe/` directly; the migration is idempotent and never loses the 0600 vault
+- [x] **IDN-04**: Environment variables gain the `PUSHFRAME_` spelling as the documented primary form (`PUSHFRAME_EMAIL`/`PUSHFRAME_PASSWORD`/`PUSHFRAME_COUNTRY`/`PUSHFRAME_STATE_DIR`/`AURA_AWS_*` → `PUSHFRAME_AWS_*` etc.) with the `AURA_*` spellings still read as fallbacks (one release of grace), documented in README and `--help`
+- [x] **IDN-05**: README, docs/CLI.md, VERIFICATION-REPORT.md and all planning-visible surfaces say the tool is `pushframe`, with an up-front "unofficial community client for Aura Frames hardware — not affiliated with or endorsed by Aura Frames Inc." disclaimer (nominative use of the mark only to identify compatibility)
+- [x] **IDN-06**: The project leaves the fork: a new standalone GitHub repository `coredmp95/pushframe` (created as a normal repo, **not** a fork) receives the full history (337 commits, preserving upstream attribution in the log), the local `origin` remote switches to it, and the README's first line carries a provenance note crediting the upstream author (zmanowar) with the link to the original repository — the old `coredmp95/auraframes` fork stays in place untouched as an archive. *(Operator decision 2026-09-29: the repo switch happens in Phase 20, in the same movement as the code rename, so the first tagged release lands in the new repo.)*
 
 ### Debian Packaging (DEB)
 
@@ -85,7 +85,7 @@ phase numbering continues from v4.0's Phase 19.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| IDN-01..06 | Phase 20 | Pending |
+| IDN-01..06 | Phase 20 | Complete |
 | DEB-01..05 | Phase 21 | Pending |
 | PYI-01..02 | Phase 22 | Pending |
 | REL-01..03 | Phase 22 | Pending |

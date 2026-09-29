@@ -27,7 +27,7 @@ on PyPI with no Debian collision. The rename covers **binary + module + config d
 not-affiliated disclaimer (nominative use to identify compatibility). Distributable means
 **one release action** (a tag) producing `.deb` + APT repo update + PyPI upload.
 
-- [ ] **Phase 20: pushframe Rename, Migration & Repo Switch** - Rename binary+module to `pushframe`, migrate config, move the repo out of the fork
+- [x] **Phase 20: pushframe Rename, Migration & Repo Switch** - Rename binary+module to `pushframe`, migrate config, move the repo out of the fork — completed 2026-09-29
 - [ ] **Phase 21: Debian Package & APT Repo** - Build a policy-clean `.deb` by script, publish a signed APT repo on GitHub Pages
 - [ ] **Phase 22: PyPI + Release Engineering** - Publish to PyPI, make one tag produce every artifact
 
@@ -46,7 +46,12 @@ not-affiliated disclaimer (nominative use to identify compatibility). Distributa
   4. `PUSHFRAME_*` env vars work as primary (`PUSHFRAME_EMAIL` authenticates) with `AURA_*` still honored as documented fallbacks, stated in `--help` and README.
   5. The new standalone repo `coredmp95/pushframe` exists (not a fork), holds the full history, `git remote -v` points `origin` at it, master is pushed, and the README's provenance note credits zmanowar with a link to the original repo; the old fork is untouched.
 
-**Plans**: TBD
+**Plans**: 1/1 complete (executed inline 2026-09-29 — see `phases/20-pushframe-rename-migration-repo-switch/20-SUMMARY.md`)
+
+Plans:
+**Wave 1**
+
+- [x] 20-SUMMARY.md — single inline plan-of-record: rename + migration + env + docs + repo-switch verification (IDN-01..06)
 
 **Notes**: The rename is mechanical; the safety net is the 401-test offline suite plus
 grep gates. Keep the migration strictly additive on disk: create the new directory,
@@ -100,7 +105,7 @@ deps.
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 20. pushframe Rename, Migration & Repo Switch | 0/? | Not started | - |
+| 20. pushframe Rename, Migration & Repo Switch | 1/1 | Complete | 2026-09-29 |
 | 21. Debian Package & APT Repo | 0/? | Not started | - |
 | 22. PyPI + Release Engineering | 0/? | Not started | - |
 
