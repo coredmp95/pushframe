@@ -12,6 +12,7 @@ talks to the frame over your local network — everything goes through your Aura
 ## Contents
 
 - [Global usage](#global-usage)
+- [`config`](#config--set-up-credentials-and-settings-once)
 - [`status`](#status--check-credentials-and-list-frames)
 - [`inspect`](#inspect--look-at-one-frame)
 - [`sync`](#sync--make-a-frame-match-a-directory)
@@ -68,6 +69,44 @@ Resolution rules:
 
 Ambiguity is never resolved silently, so a loose substring can't quietly target the wrong
 frame.
+
+## `config` — set up credentials and settings once
+
+The conversational alternative to hand-managed environment variables. Every value
+still resolves live with the precedence **environment → config file → default**;
+the file is `~/.config/pushframe/config.json`, mode `0600`, written atomically.
+
+### The wizard (`pushframe config`)
+
+Asks for your email, then your password (**hidden input**), then **verifies the
+login against the real Aura API before writing anything** — a failed login writes
+nothing. On success it stores the email plus the session `auth_token` (not the
+password; a stored token is silently refreshed at re-login), then offers the
+optional questions (country for the geo guard, budget tuning) with current
+effective values as defaults.
+
+Refuses to run when stdin is not a terminal — scheduled jobs have nothing to
+interact with; feed them the environment or the config file instead.
+
+### `config show`
+
+Prints every known setting: its **effective value** (secrets masked as `***`),
+and **where it came from** (`env`, `file`, or `default`). Lists the keys an
+environment variable is currently shadowing, so a stale export never silently
+beats what you put in the file.
+
+### `config import FILE`
+
+Adopts an existing `.env` (or any file of `KEY=VALUE` lines). Values that the
+environment already provides are **skipped** (env would shadow them anyway) and
+reported as such; the rest is validated against the known-key whitelist and
+stored. Nothing is stored that would be ignored at resolve time.
+
+### `config path` / `config set KEY VALUE` / `config get KEY`
+
+Direct access: print the config file path; set one key (validated, whitelist,
+atomic save); print one resolved value (`get` reflects the true precedence —
+it is the value a command would actually use).
 
 ## `status` — check credentials and list frames
 
@@ -547,8 +586,12 @@ If you are not sure, use `push`. It cannot take anything away.
 
 ## Environment variables
 
-Read at import time from the environment; a `.env` file at the project root is loaded
-automatically. `.env` is gitignored — never commit real credentials.
+Every setting resolves **at use time** with the precedence **environment →
+config file → default**; environment variables therefore override anything
+stored by `pushframe config` (and `config show` tells you when that happens).
+A `.env` file at the project root is loaded automatically for dev runs; `.env`
+is gitignored — never commit real credentials. Prefer `pushframe config import`
+to adopt one.
 
 **Required**
 

@@ -125,12 +125,27 @@ uv run pytest -m "not live"
 > Documenting a bare `uv run pytest -m live` **without** `--extra dev` (or a prior
 > `uv sync --extra dev`) will fail on a clean checkout — `pytest` is an opt-in extra.
 
-## Environment Variables
+## Configuration
 
-Credentials are read from environment variables (see `pushframe/utils/settings.py`). Copy
-`.env.sample` to `.env` and fill in your credentials for the live test path (`.env` is
-gitignored — never commit real secrets); shell-exported variables also work and take
-precedence.
+The easy path is the wizard — it asks once, verifies the login against the real API
+before writing anything, and stores the result in `~/.config/pushframe/config.json`
+(mode `0600`):
+
+```bash
+pushframe config          # interactive wizard: email → password (hidden) → live login test
+pushframe config show     # every setting: effective value (secrets ***), and where it comes from
+pushframe config import .env   # adopt an existing .env without retyping it
+pushframe config set KEY VALUE / get KEY / path
+```
+
+Every value resolves at use time with the precedence **environment variable → config
+file → built-in default**. Environment variables keep working exactly as before (all
+names below); `config show` warns when an env var shadows what you put in the file.
+Credentials never touch the config file unless you put them there (or run the wizard,
+which stores only the email plus the session token — never the password).
+
+<details>
+<summary>Environment variables (override the config file)</summary>
 
 **Required:**
 - `PUSHFRAME_EMAIL`: The email of the account to authenticate with.
@@ -168,6 +183,7 @@ Boolean variables accept `1`, `true`, `yes`, `on` (case-insensitive); anything e
 > fallbacks — one release of grace. The old config directory
 > `~/.config/auraframes/` is migrated automatically to `~/.config/pushframe/`
 > on the first run (the old directory is left untouched).
+</details>
 
 ## CLI Usage (`pushframe`)
 
