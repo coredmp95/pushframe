@@ -25,12 +25,17 @@ talks to the frame over your local network — everything goes through your Aura
 ## Global usage
 
 ```
-usage: pushframe [-h] [--debug] {status,inspect,sync,push} ...
+usage: pushframe [-h] [--version] [--debug] {status,inspect,sync,push} ...
 
 options:
   -h, --help  show this help message and exit
+  --version   show the program version ("pushframe 5.0.0") and exit
   --debug     Show verbose loguru request/response logging on stderr
 ```
+
+`--version` prints the running release and exits 0 — the first
+distribution release is 5.0.0; every install channel (deb / APT /
+uv tool) ships the same version.
 
 `--debug` sits on the root parser, so it goes **before** the subcommand:
 

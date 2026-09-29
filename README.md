@@ -45,6 +45,22 @@ into the system tree at run time).
 sudo apt install ./pushframe_<version>_amd64.deb
 ```
 
+### uv tool (or pip) — any Linux distro, per-user
+
+The PyPI package is pure Python and self-contained — no system Python is
+touched either; `uv` manages an isolated environment for the tool:
+
+```bash
+uv tool install pushframe      # or: pipx install pushframe
+pushframe --version
+```
+
+**Which path when?** deb/APT = system-wide install on Ubuntu/Debian
+servers (root-owned, autoremove-friendly). `uv tool install` = per-user,
+no sudo, any distro with uv (or pipx) installed. Same CLI, same config
+(`~/.config/pushframe/`), same version story: every channel ships the
+same release, and `pushframe --version` tells you what runs.
+
 ### APT repository
 
 A signed APT repository is served from this project's GitHub Pages. Three
