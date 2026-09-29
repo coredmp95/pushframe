@@ -207,6 +207,32 @@ def _probe_landed(asset_probe, local_identifiers: list[str]) -> tuple[set, set, 
     return landed, absent, inconclusive
 
 
+def _is_write_trip_body(last_error: str) -> bool:
+    """The PROVEN trip signature (venus 2026-09-29): a 401 whose captured
+    body is {"error": true, "message": "Request Unauthenticated",
+    "logout": true} — arrived on a FRESH token, one request after a doctor
+    probe wrote fine. Pushd refuses writes under this disguise; a re-login
+    is noise and retrying feeds the trip. One occurrence = stop the run."""
+    low = (last_error or '').lower()
+    return 'request unauthenticated' in low and '"logout": true' in low
+
+
+class TripDetectedError(AuraError):
+    """Raised on the FIRST write 401 whose captured body matches the proven
+    anti-abuse trip signature. Deliberately NOT a ConsecutiveWriteFailure:
+    waiting for 5 consecutive failures iterates 4 pointless refusals at the
+    account's expense when the trip is already certain. Carries the same
+    partial result so callers report what (if anything) succeeded."""
+
+    def __init__(self, last_error: str, result: "ExecutionResult"):
+        self.last_error = last_error
+        self.result = result
+        super().__init__(
+            f'Write refused with the trip\'s signature on the FIRST '
+            f'occurrence — stopping immediately (no retry, no re-login): '
+            f'{last_error}')
+
+
 def _classify_auth_failure(last_error: str) -> str | None:
     """Phase 23.5 discriminator: given the last 401 error string (which — see
     Client._raise_for_status_with_body — now carries the server's response
@@ -807,6 +833,16 @@ def execute_plan(plan: SyncPlan, aura, frame_id: str, *, s3_client, sqs_client,
                         note_failure(reason)
             except httpx.HTTPStatusError as e:
                 # REL-01/REL-02/REL-04, D-01/D-02/D-04: a plain HTTP 401 on
+                # Phase 23.5 (venus): the PROVEN trip body aborts the run on
+                # its FIRST occurrence — no re-login (it feeds the trip), no
+                # resend, no iterating to the 5-failure backstop at the
+                # account's expense. Budget force-reconciled like the
+                # backstop (ANTI-04 lineage).
+                if _is_http_401(e) and _is_write_trip_body(str(e)):
+                    if budget is not None:
+                        budget.reconcile_tripped(clock())
+                        budget.save()
+                    raise TripDetectedError(str(e), result) from e
                 # this chunk's write(s). Re-raise (falling through to the
                 # generic Pushd-failure branch below, unchanged) whenever
                 # this branch is not the tool for the job -- the feature is
@@ -917,7 +953,8 @@ def execute_plan(plan: SyncPlan, aura, frame_id: str, *, s3_client, sqs_client,
                                 progress('upload', path, False)
                                 on_error('upload', path, False, reason)
                                 note_failure(reason)
-                    except (RateLimitError, ConsecutiveWriteFailureError):
+                    except (RateLimitError, ConsecutiveWriteFailureError,
+                            TripDetectedError):
                         raise
                     except Exception as resend_exc:
                         # No third attempt (D-04) -- attribute every
@@ -952,7 +989,7 @@ def execute_plan(plan: SyncPlan, aura, frame_id: str, *, s3_client, sqs_client,
             # re-labelled a per-file write failure by the generic branch
             # below.
             raise
-        except ConsecutiveWriteFailureError:
+        except (ConsecutiveWriteFailureError, TripDetectedError):
             # note_failure() above can raise this from WITHIN the per-file
             # attribution loop (all prepped files already individually
             # appended/reported there) -- it must propagate as-is, NOT be
@@ -1060,7 +1097,7 @@ def execute_plan(plan: SyncPlan, aura, frame_id: str, *, s3_client, sqs_client,
             raise
         except BudgetExhausted:
             raise
-        except ConsecutiveWriteFailureError:
+        except (ConsecutiveWriteFailureError, TripDetectedError):
             raise
         except Exception as e:
             # select_asset returns only a count, never per-item -- a raised
@@ -1159,7 +1196,7 @@ def execute_plan(plan: SyncPlan, aura, frame_id: str, *, s3_client, sqs_client,
             raise
         except BudgetExhausted:
             raise
-        except ConsecutiveWriteFailureError:
+        except (ConsecutiveWriteFailureError, TripDetectedError):
             raise
         except Exception as e:
             # remove_asset returns only a count, never per-item -- a raised

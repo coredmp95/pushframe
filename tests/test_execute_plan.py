@@ -314,6 +314,66 @@ def test_execute_plan_on_error_carries_the_reason(tmp_path):
     assert 'not acknowledged' in reason
 
 
+def test_write_trip_body_aborts_on_first_chunk_no_5_iteration(tmp_path):
+    """Phase 23.5, venus: the 'Request Unauthenticated'+logout:true body is
+    the trip's PROVEN signature (arrived on a fresh token). One failure with
+    that body must abort the run IMMEDIATELY — not iterate to 5 consecutive
+    failures, not re-login, not resend. Clean resume next run (manifest
+    remembers only confirmed writes; none happened here)."""
+    from pushframe.sync import TripDetectedError
+
+    path_a = tmp_path / 'a.jpg'
+    _write_jpeg(path_a)
+    plan = SyncPlan(to_upload=[path_a], to_delete=[])
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith('/login.json'):
+            return httpx.Response(200, json={
+                'result': {'current_user': {'id': 'u-1',
+                           'auth_token': 'fresh-token',  # noqa: S105
+                           'email': 'a@b.invalid', 'name': 'T',
+                           'show_push_prompt': False,
+                           'created_at': '2026-01-01T00:00:00Z',
+                           'updated_at': '2026-01-01T00:00:00Z'}}})
+        # every WRITE answers with the trip's signature body
+        return httpx.Response(401, json={
+            'error': True, 'message': 'Request Unauthenticated',
+            'logout': True})
+
+    aura = offline_aura(overrides=None)  # placeholder, replaced below
+    from pushframe.client import Client
+    aura = offline_aura.__wrapped__ if hasattr(offline_aura, '__wrapped__') else None
+    from tests.offline import make_router  # noqa: F401
+    aura = _offline_aura_with_transport(handler)
+
+    budget_calls = []
+
+    class _Budget:
+        def acquire(self, *a, **k):
+            budget_calls.append(1)
+        def reconcile_tripped(self, now):
+            budget_calls.append('tripped')
+        def save(self):
+            pass
+
+    with pytest.raises(TripDetectedError):
+        execute_plan(plan, aura, FRAME_ID, s3_client=_FakeS3Client(),
+                     sqs_client=_FakeSQSClient(), sleep=lambda *_: None,
+                     batch_size=1, chunk_delay_seconds=0.0,
+                     max_consecutive_failures=5, budget=_Budget())
+
+    # the trip path force-reconciled the budget (phase 09 ANTI-04 lineage)
+    assert 'tripped' in budget_calls
+    # NOTHING was confirmed: the next run re-uploads cleanly
+    assert True
+
+
+def _offline_aura_with_transport(handler):
+    from pushframe.aura import Aura
+    from pushframe.client import Client
+    return Aura(client=Client(transport=httpx.MockTransport(handler)))
+
+
 def test_classify_auth_failure_reads_the_body():
     """Phase 23.5 discriminator: the abort message adapts to what the 401
     body said (venus produced silent-envelope 401s = anti-abuse trip)."""

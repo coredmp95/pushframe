@@ -404,7 +404,7 @@ def run_google_sync(album_target: str, frame_arg: str, *, apply: bool = False,
 
     from pushframe.aws.s3client import S3Client
     from pushframe.aws.sqsclient import SQSClient
-    from pushframe.sync import execute_plan
+    from pushframe.sync import execute_plan, TripDetectedError
 
     s3 = s3_client if s3_client is not None else S3Client()
     sqs = sqs_client if sqs_client is not None else SQSClient()
@@ -484,6 +484,18 @@ def run_google_sync(album_target: str, frame_arg: str, *, apply: bool = False,
                                   sqs_client=sqs, removal_mode='hide',
                                   progress=_progress_factory(_progress),
                                   on_wait=_wait, on_error=_on_error, **exec_kwargs)
+        except TripDetectedError as e:
+            # Phase 23.5: the trip's proven signature — stopped on the FIRST
+            # refusal (no 5-failure iteration). Clean resume next run.
+            bar.close()
+            print(f'google-sync stopped: {e}')
+            print(f'{len(confirmed_paths)} item(s) confirmed written and ARE '
+                  f'on the frame; the rest will be attempted next run (the '
+                  f'manifest remembers only confirmed writes — nothing gets '
+                  f'uploaded twice).')
+            print('This is the anti-abuse trip (proven body signature). Wait '
+                  '60+ min, then `pushframe doctor` before the next attempt.')
+            return 1
         except Exception as e:
             from pushframe.sync import _classify_auth_failure
             bar.close()

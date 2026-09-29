@@ -97,6 +97,13 @@ frames; it is not affiliated with Aura Frames Inc.
   here means "we refuse your writes (trip)", not "your token is bad". The
   classifier now pins this exact body to the wait-60+-min verdict and
   warns against a pointless re-login.
+- **First-occurrence trip stop**: a write 401 carrying that proven body
+  aborts the run IMMEDIATELY (`TripDetectedError`) — no iterating to the
+  5-failure backstop, no re-login, no resend (all feed the trip). Budget
+  force-reconciled; the message states what is confirmed on the frame and
+  that the next run resumes cleanly. (Also fixed en route: TripDetected
+  propagates through every chunk-level handler — the generic per-chunk
+  attribution branch would otherwise swallow it as ordinary failures.)
 - **401 bodies are captured and classified** (third venus regression): an
   HTTP 401 exception now carries the server's response body (redacted
   through the same filter as request logs, truncated to 300 chars, also
