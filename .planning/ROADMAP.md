@@ -29,7 +29,7 @@ not-affiliated disclaimer (nominative use to identify compatibility). Distributa
 
 - [x] **Phase 20: pushframe Rename, Migration & Repo Switch** - Rename binary+module to `pushframe`, migrate config, move the repo out of the fork — completed 2026-09-29
 - [x] **Phase 21: Debian Package & APT Repo** - Build a policy-clean `.deb` by script, publish a signed APT repo on GitHub Pages (completed 2026-09-29)
-- [ ] **Phase 22: PyPI + Release Engineering** - Publish to PyPI, make one tag produce every artifact
+- [x] **Phase 22: PyPI + Release Engineering** - Publish to PyPI, make one tag produce every artifact (completed 2026-09-29)
 
 ## Phase Details
 
@@ -118,7 +118,7 @@ deps.
 |-------|----------------|--------|-----------|
 | 20. pushframe Rename, Migration & Repo Switch | 1/1 | Complete | 2026-09-29 |
 | 21. Debian Package & APT Repo | 2/2 | Complete    | 2026-09-29 |
-| 22. PyPI + Release Engineering | 0/2 | Ready to execute (plans 22-01, 22-02) | - |
+| 22. PyPI + Release Engineering | 2/2 | Complete    | 2026-09-29 |
 
 ## Requirement Coverage (v5.0)
 

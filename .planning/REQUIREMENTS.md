@@ -48,16 +48,16 @@ on PyPI, already taken.
 <!-- The second distribution channel: uv tool install / pipx for non-Debian systems
      and for users who prefer Python tooling. -->
 
-- [ ] **PYI-01**: `pip install pushframe` (or `uv tool install pushframe`) yields the same working `pushframe` binary; the sdist/wheel build is driven from the same pyproject metadata (name `pushframe`, version single-sourced) — verified against TestPyPI first, then PyPI
-- [ ] **PYI-02**: Publishing is automated and non-interactive from CI/release (trusted publishing or token in secrets), tagged releases only, with a documented manual fallback; the PyPI project description is the README (with the disclaimer visible on the project page)
+- [x] **PYI-01**: `pip install pushframe` (or `uv tool install pushframe`) yields the same working `pushframe` binary; the sdist/wheel build is driven from the same pyproject metadata (name `pushframe`, version single-sourced) — verified against TestPyPI first, then PyPI
+- [x] **PYI-02**: Publishing is automated and non-interactive from CI/release (trusted publishing or token in secrets), tagged releases only, with a documented manual fallback; the PyPI project description is the README (with the disclaimer visible on the project page)
 
 ### Release Engineering (REL)
 
 <!-- "Distributable easily" means a repeatable release: one tag → all artifacts. -->
 
-- [ ] **REL-01**: A release is one action (git tag or workflow dispatch) producing: versioned `.deb` artifact(s), an updated APT repo commit/branch for GitHub Pages, and a PyPI upload — no hand-built artifacts, version numbers never edited by hand in more than one place
-- [ ] **REL-02**: The version scheme is set and documented (project moves off `0.1.0`; first distribution release is `5.0.0` to align with the milestone), and `pushframe --version` reports it
-- [ ] **REL-03**: The release docs (README "Install" section + docs/CLI.md) show all three install paths end-to-end: `.deb` file, APT repo one-liner, and `uv tool install pushframe` — each verified on a clean environment during the phase that ships it
+- [x] **REL-01**: A release is one action (git tag or workflow dispatch) producing: versioned `.deb` artifact(s), an updated APT repo commit/branch for GitHub Pages, and a PyPI upload — no hand-built artifacts, version numbers never edited by hand in more than one place
+- [x] **REL-02**: The version scheme is set and documented (project moves off `0.1.0`; first distribution release is `5.0.0` to align with the milestone), and `pushframe --version` reports it
+- [x] **REL-03**: The release docs (README "Install" section + docs/CLI.md) show all three install paths end-to-end: `.deb` file, APT repo one-liner, and `uv tool install pushframe` — each verified on a clean environment during the phase that ships it
 
 ## Future Requirements
 
@@ -87,8 +87,8 @@ phase numbering continues from v4.0's Phase 19.
 |-------------|-------|--------|
 | IDN-01..06 | Phase 20 | Complete |
 | DEB-01..05 | Phase 21 | Complete |
-| PYI-01..02 | Phase 22 | Pending |
-| REL-01..03 | Phase 22 | Pending |
+| PYI-01..02 | Phase 22 | Complete |
+| REL-01..03 | Phase 22 | Complete |
 
 **Coverage:**
 

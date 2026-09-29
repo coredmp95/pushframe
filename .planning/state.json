@@ -16,13 +16,13 @@
     {
       "number": "22",
       "name": "PyPI + Release Engineering",
-      "status": "pending"
+      "status": "complete"
     }
   ],
   "next": {
-    "command": "/gsd:progress --next",
-    "label": "Advance to the next step (plan phase 22)",
-    "reason": "Phase 22 of 3 — needs a plan"
+    "command": "/gsd:new-milestone",
+    "label": "Start a new milestone",
+    "reason": "All phases complete — start a new milestone"
   },
-  "updated_at": "2026-09-29T10:27:40.371Z"
+  "updated_at": "2026-09-29T12:07:17.945Z"
 }
