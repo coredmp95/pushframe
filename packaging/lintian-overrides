@@ -37,3 +37,10 @@ pushframe: no-manual-page [usr/bin/pushframe]
 # python-build-standalone ships the interpreter without PIE hardening flags;
 # it is a prebuilt upstream binary and not rebuilt here.
 pushframe: hardening-no-pie [usr/lib/pushframe/python/bin/python3.14]
+
+# Bytecode is shipped pre-compiled and dpkg-owned ON PURPOSE: a runtime that
+# compiles its own .pyc would leave root-owned __pycache__ dirs inside the
+# package tree, and dpkg then abandons /usr/lib/pushframe on removal (clean-
+# room finding 2026-09-29). dh_python does not manage this private tree, so
+# the Debian convention the tag enforces does not apply here.
+pushframe: package-installs-python-pycache-dir *

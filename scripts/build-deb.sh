@@ -91,10 +91,23 @@ for f in "$SITE_DIR"/bin/*; do
     fi
 done
 
+# --- 2.5 pre-compile bytecode (package-owned .pyc) --------------------------
+# Ships the .pyc inside the deb: faster startup AND every bytecode file is
+# dpkg-owned -> removed cleanly. Pairs with PYTHONDONTWRITEBYTECODE in the
+# wrapper so nothing new is ever written into the system tree.
+echo "== pre-compiling bytecode (package-owned) =="
+"$PYROOT/bin/python3.14" -m compileall -q \
+    "$PYROOT/lib/python3.14" 2>&1 | grep -v "^Compiling" || true
+find "$PYROOT" -type d -name "__pycache__" -exec chmod 755 {} +
+
 # --- 3. /usr/bin/pushframe wrapper (D-06) -----------------------------------
 cat > "$STAGE/usr/bin/pushframe" <<'EOF'
 #!/bin/sh
-exec /usr/lib/pushframe/python/bin/python3.14 -m pushframe.cli "$@"
+# PYTHONDONTWRITEBYTECODE: the system tree must never gain runtime-owned
+# files — a stray __pycache__ would make dpkg leave /usr/lib/pushframe
+# behind on removal (clean-room finding 2026-09-29). Bytecode is shipped
+# pre-compiled and package-owned instead.
+exec env PYTHONDONTWRITEBYTECODE=1 /usr/lib/pushframe/python/bin/python3.14 -m pushframe.cli "$@"
 EOF
 
 # --- 4. DEBIAN control files (D-07) + doc/lintian trees ---------------------

@@ -32,7 +32,25 @@ Any advice or issues are welcome.
   environment, dependency, and interpreter management.
 - A live Aura account (email + password) for any command that actually hits the API.
 
-## Setup & Run (uv)
+## Install (Ubuntu/Debian)
+
+Pre-built `.deb` packages embed their own Python 3.14 runtime under
+`/usr/lib/pushframe/` — **no system Python is used or modified**, and the
+package needs only `ca-certificates` and `libc6`. Removal is clean (the
+package owns every file it ships, including bytecode; nothing is written
+into the system tree at run time).
+
+```bash
+# from a release artifact:
+sudo apt install ./pushframe_<version>_amd64.deb
+```
+
+### APT repository
+
+> **(landing with the rest of this phase)** signed APT repo — the real
+> three-command journey will appear here as part of the same phase.
+
+## Setup & Run (uv, from source)
 
 This project uses `uv` exclusively (no `pip` / `venv` / `poetry`). From a clean checkout:
 
