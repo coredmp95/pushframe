@@ -126,6 +126,54 @@ retry, no re-login — both feed the trip). The drill:
 Progress is never lost: only confirmed writes are remembered, and the next
 run uploads the remainder once — never twice.
 
+## Pairs — one album → several frames (and back)
+
+Named album↔frame mappings live in the config (phase 25):
+
+```bash
+pushframe config pair add cadre-venus --album Cadre --frame "Cadre de Fabrice"
+pushframe config pair list          # name → album → frame (+ state paths)
+pushframe config pair remove cadre-venus
+```
+
+Run one pair or every pair:
+
+```bash
+pushframe google-sync "Album X" --pair cadre-venus --apply --yes
+pushframe google-sync "Album X" --all --apply --yes
+```
+
+`--all` runs every pair in sorted-name order with **one shared write
+budget** capping the total (account-level SAFE-02). A failing pair is
+reported and never blocks the others; exit 1 if any pair failed. Mirror
+state is **per pair** (manifest under `~/.config/pushframe/pairs/<name>/`,
+cache under `~/.local/state/pushframe/pairs/<name>/cache/`) — two pairs
+never share dedupe memory.
+
+## Scheduling — systemd USER timers (no root)
+
+```bash
+pushframe schedule add nightly --pair cadre-venus --every 1d
+pushframe schedule list
+pushframe schedule remove nightly
+```
+
+Installs `pushframe-<job>.service/.timer` under `~/.config/systemd/user/`.
+Everything comes from stored config (token session, pair spec) — a timed
+run NEVER prompts. `Restart=no` on purpose: on failure (including the
+anti-abuse trip, which pushframe detects and stops at the first refusal)
+the unit just ends; the next tick is the retry. Logs land in
+`~/.local/state/pushframe/<job>.log`.
+
+Two safety properties in scheduled mode:
+
+- **SAFE-02 flips to skip-and-log**: a plan that would mass-hide over the
+  threshold is NOT applied — the run logs `SKIPPED (--scheduled)` and exits
+  0 (review manually; the unit must not fail over a safety decision).
+- **Headless hosts** (venus & co): timers fire without an active session
+  only if you enable lingering once:
+  `loginctl enable-linger $USER` (run it yourself; the tool never does).
+
 ## `config` — set up credentials and settings once
 
 The conversational alternative to hand-managed environment variables. Every value

@@ -446,6 +446,14 @@ def run_google_sync(album_target: str, frame_arg: str, *, apply: bool = False,
         print(f'⚠ {removal_count} of {len(hash_bearing)} photos on '
               f'"{frame.name}" (id: {frame.id}) would be hidden — over the '
               f'{effective_threshold:.0%} safety threshold (SAFE-02).')
+        if scheduled:
+            # TMR-03: a timed run NEVER proceeds over the threshold — it
+            # skips (exit 0 so the unit doesn't fail) and logs the reason;
+            # the operator reads the job log and acts deliberately.
+            print(f'SKIPPED (--scheduled): SAFE-02 threshold breach — no '
+                  f'photos were hidden. Run google-sync manually to review '
+                  f'and confirm this plan.')
+            return 0
         if not yes:
             answer = input_fn('Proceed with this plan? [y/N] ')
             if answer.strip().lower() not in ('y', 'yes'):

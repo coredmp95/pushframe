@@ -208,6 +208,12 @@ def build_parser() -> argparse.ArgumentParser:
         '--scheduled', action='store_true', default=False,
         help='Timed-run semantics: SAFE-02 threshold breach SKIPS AND LOGS '
              'instead of proceeding (used by pushframe schedule units)')
+    sched_parser = subparsers.add_parser(
+        'schedule', help='Install/list/remove systemd USER timers '
+                         '(no root; runs from stored config, never prompts)')
+    sched_parser.add_argument('schedule_args', nargs='*', metavar='args',
+                              help='add <job> --pair <name> --every Nmin|Nh|Nd | '
+                                   'list | remove <job>')
     gsync_parser.add_argument(
         '--apply', action='store_true', default=False,
         help='Execute the plan (uploads + hides). Without it, only print the plan')
@@ -1469,6 +1475,27 @@ def main(argv=None) -> int:
         from pushframe.doctor import run_doctor
         return run_doctor(args.frame, do_write=not args.no_write,
                           debug=args.debug)
+    if args.command == 'schedule':
+        from pushframe import schedule as sch
+        sub = list(args.schedule_args or [])
+        if not sub or sub[0] == 'list':
+            return sch.schedule_list()
+        if sub[0] == 'add' and len(sub) >= 2:
+            job = sub[1]
+            def _opt(flag, default=None):
+                return sub[sub.index(flag) + 1] if flag in sub else default
+            return sch.schedule_add(job, pair=_opt('--pair'),
+                                    album=_opt('--album'),
+                                    frame=_opt('--frame'),
+                                    sync_dir=_opt('--sync-dir'),
+                                    every=_opt('--every'), at=_opt('--at'),
+                                    batch_size=int(_opt('--batch-size'))
+                                    if _opt('--batch-size') else None)
+        if sub[0] == 'remove' and len(sub) >= 2:
+            return sch.schedule_remove(sub[1])
+        print('usage: pushframe schedule add <job> --pair <name> --every Nmin|Nh|Nd '
+              '| schedule list | schedule remove <job>')
+        return 1
     if args.command == 'logout':
         return run_logout()
     if args.command == 'status':
