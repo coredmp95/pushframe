@@ -433,6 +433,17 @@ and "removed from the album" stay distinguishable.
   `PUSHFRAME_GOOGLE_SYNC_REMOVAL_THRESHOLD`).
 - **This verb never deletes.** Removal means hide; the gated `--delete`/`--hard-delete`
   tiers stay with `sync` only (SAFE-03).
+
+#### Headless servers (google-link without a screen)
+
+The one command that needs a visible browser is `google-link` (anti-bot
+posture: Chrome runs visible, never headless). On a server, connect with
+X11 forwarding — `ssh -X user@host` (needs `X11Forwarding yes` and
+`xauth` on the server) — then run `pushframe google-link`: Chrome opens
+on YOUR screen while executing on the server. The 0600 cookie vault it
+writes survives logout, and every other command (`google-sync`,
+`schedule`) is headless by nature — the display is needed once, at
+link time.
 - A failed or partial download is reported as failed and retried next run — never uploaded
   as junk bytes (SAFE-04).
 - Google-side downloads run concurrently (bounded pool); every frame write stays sequential

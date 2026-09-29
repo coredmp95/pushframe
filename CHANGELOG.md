@@ -109,6 +109,8 @@ Milestone summary — see `.planning/MILESTONES.md` for the full retros.
 ## [Unreleased]
 
 - (v5.1 work will land here)
+- Headless `google-link` recipe documented (ssh -X); a `--remote-assist`
+  mode is a backlog candidate.
 
 ## [5.0.4] — 2026-09-29
 
