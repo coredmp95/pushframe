@@ -90,6 +90,13 @@ frames; it is not affiliated with Aura Frames Inc.
   `asset_for_local_identifier` verify-probe read) while login/frames keep
   answering. The abort message no longer suggests status as an all-clear;
   it prescribes 60+ min from the abort and a single, solitary retry call.
+- **"Request Unauthenticated" + logout:true identified as the trip's
+  disguise** (fourth venus regression, decisive capture): the body arrived
+  on a FRESH token immediately after a successful re-login, one item after
+  a doctor probe had WRITTEN fine — so Pushd's "Request Unauthenticated"
+  here means "we refuse your writes (trip)", not "your token is bad". The
+  classifier now pins this exact body to the wait-60+-min verdict and
+  warns against a pointless re-login.
 - **401 bodies are captured and classified** (third venus regression): an
   HTTP 401 exception now carries the server's response body (redacted
   through the same filter as request logs, truncated to 300 chars, also

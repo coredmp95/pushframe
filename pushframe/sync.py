@@ -223,6 +223,19 @@ def _classify_auth_failure(last_error: str) -> str | None:
     if 'server body:' not in low:
         return None
     body = low.split('server body:', 1)[1].strip()
+    if '"logout": true' in body or 'request unauthenticated' in body:
+        # VENUS 2026-09-29, decisive capture: this exact body arrived with a
+        # FRESH token (the retry's re-login had just succeeded) and reads
+        # 1-request-after a doctor probe that WROTE fine. It is the anti-abuse
+        # trip's disguise — 'Request Unauthenticated' + logout:true means "we
+        # are refusing your writes", not "your token is bad". A re-login right
+        # now feeds the trip; only waiting defuses it.
+        return ('"Request Unauthenticated" + logout:true arrived on a FRESH '
+                'token — this is the anti-abuse trip refusing writes, NOT a '
+                'token problem: do NOT re-login and do NOT retry now; wait '
+                '60+ min, then `pushframe doctor --no-write`… no — doctor '
+                'writes too; wait 60+ min and probe with `pushframe doctor` '
+                'again before any sync')
     if any(w in body for w in ('token', 'session', 'auth', 'credential',
                                'login', 'x-token')):
         return ('the server body names the token/session — this looks like a '
