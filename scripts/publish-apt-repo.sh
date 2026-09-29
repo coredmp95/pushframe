@@ -138,6 +138,13 @@ git -C "$WT" rm -rf --quiet . 2>/dev/null || true
 cp -a "$TREE"/. "$WT"/
 touch "$WT/.nojekyll"
 git -C "$WT" add -A
+# CI runners have no git identity (empty ident -> exit 128); honor the
+# workflow-provided author, fall back to a repo-agnostic one locally.
+GIT_AUTHOR_NAME="${APT_GIT_AUTHOR%% <*}"
+GIT_AUTHOR_EMAIL="$(printf '%s' "${APT_GIT_AUTHOR#*<}" | tr -d '>')"
+GIT_COMMITTER_NAME="$GIT_AUTHOR_NAME"
+GIT_COMMITTER_EMAIL="$GIT_AUTHOR_EMAIL"
+export GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL
 git -C "$WT" commit -q -m "APT repository publish $(date -u +%Y-%m-%dT%H:%M:%SZ)
 
 Published by scripts/publish-apt-repo.sh from the packaging milestone v5.0.

@@ -115,6 +115,8 @@ jobs:
           printf '%s\n' "$FP" > "$KEYDIR/fingerprint"
           echo "signing key restored: $FP"
       - name: Rebuild + republish the APT repository (gh-pages)
+        env:
+          APT_GIT_AUTHOR: pushframe-release-bot <coredmp95@gmail.com>
         run: |
           uv python install 3.14
           ./scripts/publish-apt-repo.sh
