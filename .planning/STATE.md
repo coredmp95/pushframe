@@ -5,10 +5,10 @@
 
 ## Current Position
 
-Phase: 24 — VERIFIED (passed)
-Current Plan: 24-01 complete
-Total Plans in Phase: 1 (phase 24)
-Status: Verified — next: phase 25 (Multi-frame + systemd)
+Phase: 25 — PLANNED (25-01 ready)
+Current Plan: 25-01 (not started)
+Total Plans in Phase: 1 (phase 25)
+Status: Planned — execute 25-01 next (inline séquentiel)
 
 ## Milestone Roadmap (v5.1, Phases 23-25)
 
