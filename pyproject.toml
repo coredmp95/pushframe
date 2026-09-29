@@ -2,6 +2,7 @@
 name = "auraframes"
 version = "0.1.0"
 requires-python = ">=3.14"
+license = { file = "LICENSE" }
 dependencies = [
     "pydantic>=2",
     "httpx[http2]>=0.27",
