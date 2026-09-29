@@ -63,6 +63,12 @@ def build_parser() -> argparse.ArgumentParser:
     quiet-by-default logging convention for free.
     """
     parser = argparse.ArgumentParser(prog='pushframe')
+    # REL-02 (phase 22): version reporting from the single __init__ constant
+    # (pyproject is asserted equal by tests/test_version.py + the release
+    # workflow against the git tag).
+    from pushframe import __version__
+    parser.add_argument('--version', action='version',
+                        version=f'pushframe {__version__}')
     parser.add_argument(
         '--debug',
         action='store_true',

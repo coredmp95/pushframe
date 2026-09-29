@@ -30,12 +30,17 @@ cd "$(git rev-parse --show-toplevel)"
 
 VERSION=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
 STAGE="build/deb"
-OUT="dist/pushframe_${VERSION}_amd64.deb"
+# Output dir override (phase 22 D-06): the release workflow builds python
+# artifacts (uv build -> dist/) and the deb in the SAME run; without this
+# the deb build's `rm -rf dist` would clobber the wheel/sdist. Default
+# unchanged for local use.
+OUT_DIR="${PUSHFRAME_DEB_OUT_DIR:-dist}"
+OUT="$OUT_DIR/pushframe_${VERSION}_amd64.deb"
 
 echo "== pushframe deb build: version ${VERSION} =="
 
-rm -rf "$STAGE" dist
-mkdir -p "$STAGE/usr/lib/pushframe" "$STAGE/usr/bin" "$STAGE/DEBIAN" dist
+rm -rf "$STAGE" "$OUT_DIR"
+mkdir -p "$STAGE/usr/lib/pushframe" "$STAGE/usr/bin" "$STAGE/DEBIAN" "$OUT_DIR"
 
 # --- 1. standalone CPython 3.14 into the staging tree (D-03) ---------------
 # NB: `uv python find` resolves the PROJECT .venv first — we must target the
