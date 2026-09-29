@@ -200,3 +200,4 @@ fabric.properties
 # Data
 data/
 buffet/
+.planning/milestone.lock
