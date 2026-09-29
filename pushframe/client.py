@@ -6,8 +6,15 @@ import httpx
 from httpx import Response, Timeout
 from loguru import logger
 
-AURA_API_BASE_URL = 'https://api.pushd.com'
-AURA_API_VERSION = 'v5'
+# Phase 23: the API endpoint is now resolved at CONSTRUCTION time through
+# settings (env → config file → default), so PUSHFRAME_API_BASE_URL — long
+# declared in DEFAULTS but never consumed — finally takes effect (the
+# config-wizard container journey points it at a fake API). Module aliases
+# kept for any legacy reader; defaults are byte-identical to 5.0.x.
+from pushframe.utils import settings as _settings
+
+AURA_API_BASE_URL = _settings.AURA_API_BASE_URL
+AURA_API_VERSION = _settings.AURA_API_VERSION
 USER_AGENT = 'Aura/4.7.790 (Android 30; Client)'
 
 # Keys whose values are secrets and must never reach the on-disk logs (D-07).
@@ -163,7 +170,11 @@ class Client:
                  base_url: str | None = None):
         # TEST-01 candidate #4 (Phase 19): base_url is injectable for offline
         # tests; None keeps the historical composition byte-identical.
-        resolved_base_url = base_url or f'{AURA_API_BASE_URL}/{AURA_API_VERSION}'
+        # settings.AURA_API_BASE_URL is the FULL API root — its default is
+        # 'https://api.pushd.com/v5' (version suffix baked in, as declared in
+        # the settings table since the AWS closeout). PUSHFRAME_API_BASE_URL
+        # therefore overrides the whole root, version included.
+        resolved_base_url = base_url or str(_settings.AURA_API_BASE_URL)
         self.http2_client = httpx.Client(http2=True, base_url=resolved_base_url, headers={
             'accept-language': 'en-US',
             'cache-control': 'no-cache',

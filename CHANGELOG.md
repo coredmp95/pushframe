@@ -23,6 +23,9 @@ frames; it is not affiliated with Aura Frames Inc.
   writes, schema-versioned). Subcommands: `show` (effective value + source
   per key, secrets masked, env-shadow warnings), `import FILE` (adopts an
   existing `.env`, skipping what env already provides), `set/get/path`.
+  With a stored session, `status` runs with **zero environment variables**
+  (resumes the session — no login call, no password traffic; proven by a
+  pristine-container journey, `scripts/test-config-journey-container.sh`).
 - Headless `google-link` recipe documented (ssh -X); a `--remote-assist`
   mode is a backlog candidate.
 
@@ -31,7 +34,9 @@ frames; it is not affiliated with Aura Frames Inc.
 - Settings now resolve **at use time** with the precedence
   **environment → config file → default** (previously environment → default
   only, frozen at import time). Every `settings.X` reader keeps working
-  unchanged; long-running processes now see updated values.
+  unchanged; long-running processes now see updated values. This also makes
+  `PUSHFRAME_API_BASE_URL` effective for real — it sat in the settings table
+  but `client.py` still read its own frozen constant.
 - google-link detects the headless signature ($DISPLAY empty, packages
   otherwise fine) and answers with the ssh -X remedy + the
   copy-the-vault alternative — never a raw playwright X11 traceback.

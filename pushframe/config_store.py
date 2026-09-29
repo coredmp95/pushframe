@@ -22,7 +22,7 @@ def _path() -> Path:
     settings.CONFIG_PATH elsewhere and the store must follow — a
     from-import would freeze the path at first import."""
     return Path(settings.CONFIG_PATH)
-KEY_WHITELIST = {'version', 'email', 'auth_token', 'default_frame',
+KEY_WHITELIST = {'version', 'email', 'auth_token', 'user_id', 'default_frame',
                  'debug', 'settings', 'pairs'}
 
 

@@ -48,6 +48,21 @@ def test_env_beats_config_file(config_file, monkeypatch):
     assert settings.LOCALE == "de-DE"
 
 
+def test_precedence_flip_env_always_wins(config_file, monkeypatch):
+    """Roadmap §23 criterion 2: flip BOTH sources and env still wins.
+
+    Same value never travels with the same source: round one env=de-DE /
+    file=fr-FR, round two env=fr-FR / file=de-DE — the resolved value
+    follows the environment both times.
+    """
+    monkeypatch.setenv("PUSHFRAME_LOCALE", "de-DE")
+    _write(config_file, {"version": 1, "settings": {"LOCALE": "fr-FR"}})
+    assert settings.LOCALE == "de-DE"          # env wins round 1
+    monkeypatch.setenv("PUSHFRAME_LOCALE", "fr-FR")
+    _write(config_file, {"version": 1, "settings": {"LOCALE": "de-DE"}})
+    assert settings.LOCALE == "fr-FR"          # env STILL wins, values swapped
+
+
 def test_legacy_aura_env_still_read(config_file, monkeypatch):
     _write(config_file, {"version": 1, "settings": {"LOCALE": "fr-FR"}})
     monkeypatch.delenv("PUSHFRAME_LOCALE", raising=False)

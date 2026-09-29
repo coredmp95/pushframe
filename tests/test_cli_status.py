@@ -73,6 +73,45 @@ def test_status_login_failure_exits_nonzero(monkeypatch, capsys):
     assert 'Login failed' in out
 
 
+def test_status_works_from_stored_session_without_env(tmp_path, monkeypatch, capsys):
+    """Roadmap §23 criterion 1 (hermetic half): after `pushframe config`
+    stored email+token, `status` must work with NO env vars — resuming the
+    stored session, never calling login, never printing the token."""
+    from pushframe.utils import settings
+    monkeypatch.setattr(settings, 'CONFIG_PATH', tmp_path / 'config.json')
+    from pushframe import config_store
+    config_store.update(email='vaulted@example.invalid', auth_token='tok-123',
+                        user_id='user-1')
+    for var in ('PUSHFRAME_EMAIL', 'AURA_EMAIL', 'PUSHFRAME_PASSWORD', 'AURA_PASSWORD'):
+        monkeypatch.delenv(var, raising=False)
+
+    # A login endpoint hit would 500 and fail the command: proves the stored
+    # session path never logs in.
+    aura = offline_aura(overrides={
+        '/v5/login.json': httpx.Response(500, json={'error': 'login must not be called'})})
+
+    rc = run_status(aura=aura)
+
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert 'Logged in as vaulted@example.invalid' in out
+    assert '1 frames:' in out and 'Fake Frame' in out
+    assert 'tok-123' not in out
+
+
+def test_status_with_corrupt_config_fails_loud_without_env(tmp_path, monkeypatch, capsys):
+    from pushframe.utils import settings
+    monkeypatch.setattr(settings, 'CONFIG_PATH', tmp_path / 'config.json')
+    (tmp_path / 'config.json').write_text('{not json')
+    for var in ('PUSHFRAME_EMAIL', 'AURA_EMAIL', 'PUSHFRAME_PASSWORD', 'AURA_PASSWORD'):
+        monkeypatch.delenv(var, raising=False)
+
+    rc = run_status()
+
+    assert rc == 1
+    assert 'corrupt' in capsys.readouterr().out
+
+
 def test_status_quiet_by_default_suppresses_verbose_stderr(monkeypatch, capsys):
     monkeypatch.setenv('AURA_EMAIL', 'you@example.invalid')
     monkeypatch.setenv('AURA_PASSWORD', 'super-secret-pw')

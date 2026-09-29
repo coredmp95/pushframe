@@ -88,6 +88,13 @@ effective values as defaults.
 Refuses to run when stdin is not a terminal — scheduled jobs have nothing to
 interact with; feed them the environment or the config file instead.
 
+After a successful wizard run, `status` works with **no environment variables
+at all**: with no `PUSHFRAME_EMAIL`/`PUSHFRAME_PASSWORD` set it resumes the
+stored session (auth headers only — **no login call**, no password traffic).
+Proof: `scripts/test-config-journey-container.sh` runs the whole wizard →
+status flow in a pristine container against a fake API and asserts the API
+saw exactly one login.
+
 ### `config show`
 
 Prints every known setting: its **effective value** (secrets masked as `***`),
