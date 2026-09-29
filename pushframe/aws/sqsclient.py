@@ -1,12 +1,12 @@
 import boto3
 
 from pushframe.aws.awsclient import AWSClient
-from pushframe.utils.settings import AWS_SQS_IDENTITY_POOL_ID
+from pushframe.utils import settings
 
-# MOD-02 (Phase 19): the pool ID moved to settings.py (env-overridable,
-# unchanged default). Kept as an alias so existing references keep working;
-# no literal remains in this module.
-SQS_IDENTITY_POOL_ID = AWS_SQS_IDENTITY_POOL_ID
+# MOD-02 (Phase 19) + phase 23: read dynamically (config file can change
+# it) — a module-level alias would freeze the import-time value.
+def sqs_identity_pool_id() -> str:
+    return settings.AWS_SQS_IDENTITY_POOL_ID
 
 
 # TODO: Might want to thread this out, as the wait time could be an issue
@@ -14,7 +14,7 @@ class SQSClient(AWSClient):
     sqs_client: None
 
     def __init__(self, pool_id=None, region_name='us-east-1'):
-        super().__init__(pool_id if pool_id else SQS_IDENTITY_POOL_ID, region_name)
+        super().__init__(pool_id if pool_id else sqs_identity_pool_id(), region_name)
 
     def auth(self, pool_id):
         super().auth(pool_id)
