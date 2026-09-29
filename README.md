@@ -4,6 +4,12 @@ Implements most of the AuraFrames APIs in Python.
 
 Any advice or issues are welcome.
 
+> **Provenance:** this project is a renamed, heavily extended fork of
+> [zmanowar/auraframes](https://github.com/zmanowar/auraframes) — the original
+> 2023 reverse-engineering of the Aura/Pushd API is his work (see
+> [Credits](#credits) and [LICENSE](LICENSE)). Unofficial community tool:
+> **not affiliated with or endorsed by Aura Frames Inc.**
+
 > **Read path: VERIFIED end-to-end** against `api.pushd.com/v5` (login → list → fetch →
 > download). See [`VERIFICATION-REPORT.md`](VERIFICATION-REPORT.md) for the per-step status
 > and the live API drift repaired.
@@ -482,10 +488,12 @@ sequenceDiagram
 
 This is an unofficial, reverse-engineered client.
 
-- **Original author:** [zmanowar](https://github.com/zmanowar) (`zach@codehooker.com`) — created
-  the original Aura/Pushd Python client in 2023, including the reverse-engineered API models,
-  the auth/read/upload flows, and the first version of this README. All of the reverse-
-  engineering insight this project builds on is his work.
+- **Original author:** [zmanowar](https://github.com/zmanowar) (`zach@codehooker.com`) —
+  created the original Aura/Pushd Python client in 2023
+  ([zmanowar/auraframes](https://github.com/zmanowar/auraframes)), including the
+  reverse-engineered API models, the auth/read/upload flows, and the first version of this
+  README. All of the reverse-engineering insight this project builds on is his work; his
+  commits are preserved in this repository's git history.
 - **Revive & extend (2026):** Fabrice DIDIERJEAN — modernized the ~3-year-old codebase onto
   Python 3.14 + `uv`, verified the read path live, and built the `aura-cli`
   (`status`/`inspect`/`sync`/`push`) CLI plus the batched, anti-abuse-aware write path.
