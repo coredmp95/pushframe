@@ -114,6 +114,22 @@ def run_bootstrap(*, auto: bool = False) -> dict:
             "(recommended; channel=chrome avoids bot flags), or run "
             "'playwright install chromium' after installing the package"
         )
+    if not missing:
+        # X11 display check (headless UX): playwright needs a display to
+        # open a VISIBLE browser. Missing DISPLAY + missing bundled-chromium
+        # headless shell is the ssh-without--X signature (venus, 2026-09-29).
+        if not os.environ.get("DISPLAY", "").strip():
+            raise BootstrapError(
+                "no X display detected ($DISPLAY is empty) — google-link "
+                "opens a VISIBLE Chrome (anti-bot posture), so it needs a "
+                "screen. On a headless server, connect with X11 forwarding: "
+                "ssh -X user@host  (requires 'X11Forwarding yes' and xauth "
+                "on the server) and re-run pushframe google-link; the 0600 "
+                "cookie vault it writes survives logout. Alternatives: run "
+                "google-link on a desktop machine and copy "
+                "~/.config/pushframe/google-cookies.json to this host."
+            )
+
     if missing:
         remedy = "\n  - ".join(missing)
         raise BootstrapError(

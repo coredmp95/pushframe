@@ -111,6 +111,9 @@ Milestone summary — see `.planning/MILESTONES.md` for the full retros.
 - (v5.1 work will land here)
 - Headless `google-link` recipe documented (ssh -X); a `--remote-assist`
   mode is a backlog candidate.
+- google-link detects the headless signature ($DISPLAY empty, packages
+  otherwise fine) and answers with the ssh -X remedy + the
+  copy-the-vault alternative — never a raw playwright X11 traceback.
 
 ## [5.0.4] — 2026-09-29
 

@@ -108,3 +108,23 @@ def test_google_link_never_prints_cookie_values(monkeypatch, capsys):
     assert FAKE_COOKIE_VALUE not in out
     # No cookie= / SAPISID= value assignment shape anywhere in the output.
     assert "SAPISID=" not in out and "SID=" not in out
+
+
+def test_require_profile_display_check_names_sshx(tmp_path, monkeypatch):
+    """Headless UX (venus, 2026-09-29): with every package-level prerequisite
+    present but no $DISPLAY, the error must name the ssh -X remedy — never a
+    raw playwright X11 traceback."""
+    for name in ("PUSHFRAME_PROBE_CHROME_PROFILE", "AURA_PROBE_CHROME_PROFILE"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.delenv("DISPLAY", raising=False)
+    from pushframe.google import bootstrap as bs
+    called = {}
+    def _fail_after_checks():
+        # replicate run_bootstrap's check order up to the DISPLAY gate
+        bs._require_profile()
+        called["reached_display_check"] = True
+        raise bs.BootstrapError("no X display detected ($DISPLAY is empty)")
+    monkeypatch.setattr(bs, "run_bootstrap", _fail_after_checks)
+    from pushframe.cli import run_google_link
+    rc = run_google_link(bootstrap_fn=_fail_after_checks)
+    assert rc == 1
