@@ -1,5 +1,30 @@
 # Milestones
 
+## v5.0 — Distribution & Rename: pushframe packages (Shipped: 2026-09-29)
+
+**Phases completed:** 3 phases (20-22), 4 plans — the first milestone
+about *shipping the tool itself* rather than its features.
+
+**Key accomplishments:**
+
+| Phase | Delivered | Proof |
+|-------|-----------|-------|
+| 20 — Rename & repo switch | `auraframes`→`pushframe` (module, binary, config migration), env `PUSHFRAME_*` primary, standalone repo `coredmp95/pushframe` (not a fork), MIT LICENSE + provenance | 407 tests green through the rename; live migration validated; name cleared on PyPI + trademark-adjacency checked |
+| 21 — Debian + APT | Hermetic `.deb` (embedded CPython 3.14, lintian 0E/0W, clean removal), signed APT repo live on GitHub Pages, container journeys for both channels | bytecode-ownership defect caught by our own container test and fixed for every user; live-URL journey exit 0 |
+| 22 — PyPI + releases | Trusted publishing (OIDC, zero PyPI tokens), tag-triggered release workflow, `--version` single-sourced, OPERATOR-STEPS + CHANGELOG | v5.0.2 run all-green 5/5 jobs; v5.0.3 carries the Changelog URL |
+
+**Shipped releases:** 5.0.0 → 5.0.1 (page metadata) → 5.0.2 (first
+pipeline-complete) → 5.0.3 (changelog URL) — each on PyPI + TestPyPI +
+APT + GitHub Releases simultaneously. First real deployment:
+venus.coredmp.net via the signed APT repo (human-driven: keyring →
+sources → install).
+
+**Known gaps carried forward:** 5.0.0 remains on PyPI (empty page,
+immutable) — yank candidate; `AURA_*` env vars in a one-release
+deprecation window; credentials still live in env vars/.env (v5.1's
+charter: config wizard + token-first sessions).
+
+
 ## v4.0 Local Google Photos Album Sync (Shipped: 2026-09-29)
 
 **Phases completed:** 4 phases (16-19), 10 plans, offline suite 349 → **401 tests**
