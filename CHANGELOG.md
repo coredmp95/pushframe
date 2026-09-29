@@ -14,6 +14,10 @@ frames; it is not affiliated with Aura Frames Inc.
 
 ## [Unreleased]
 
+- (v5.1 work will land here)
+
+## [5.0.7] — 2026-09-29
+
 ### Added (phase 24: Token-First Sessions & Preflight Sweep)
 
 - **One session path for every command** (SEC-01/02): `inspect`,
