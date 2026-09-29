@@ -1,6 +1,8 @@
 [project]
 name = "pushframe"
-version = "5.0.0"
+version = "5.0.1"
+description = "Unofficial community CLI for Aura Frames digital photo frames (sync a local folder or a Google Photos album; not affiliated with Aura Frames Inc.)"
+readme = "README.md"
 requires-python = ">=3.14"
 license = { file = "LICENSE" }
 dependencies = [
@@ -24,6 +26,11 @@ dependencies = [
     "tqdm>=4.66",
     "python-dotenv>=1.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/coredmp95/pushframe"
+Repository = "https://github.com/coredmp95/pushframe"
+Issues = "https://github.com/coredmp95/pushframe/issues"
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]
