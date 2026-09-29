@@ -15,6 +15,8 @@ frames; it is not affiliated with Aura Frames Inc.
 ## [Unreleased]
 
 - (v5.1 work will land here)
+
+## [5.0.6] — 2026-09-29
 - **`pushframe doctor`** — the field write-probe the venus regressions
   demanded: one 4×4 test image through the REAL write path (S3 +
   select_asset + batch_update), verify + cleanup, then a GO/NO-GO verdict
