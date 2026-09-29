@@ -57,7 +57,7 @@ jobs:
     environment: release
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
       - name: Build sdist + wheel
@@ -71,7 +71,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
       - name: Install uv-managed standalone python (the deb's runtime)
@@ -95,7 +95,7 @@ jobs:
     environment: release
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v6
       - name: Restore the APT signing key from the secret
         env:
           PUSHFRAME_APT_SIGNING_KEY: ${{ secrets.PUSHFRAME_APT_SIGNING_KEY }}
@@ -127,7 +127,7 @@ jobs:
     environment: release
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
       - name: Build sdist + wheel
