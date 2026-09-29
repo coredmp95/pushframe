@@ -101,9 +101,10 @@ def run_bootstrap(*, auto: bool = False) -> dict:
         import playwright  # noqa: F401
     except ImportError:
         missing.append(
-            "the 'playwright' python package (this .deb/wheel ships without it;"
-            " install with: pip install --user playwright  — or "
-            "pip install 'pushframe[google-browser]')"
+            "the 'playwright' python package — install it into the SAME"
+            " interpreter as pushframe: uv-tool users: "
+            "uv tool install 'pushframe[google-browser]' --force; "
+            ".deb users: pip install --user playwright"
         )
     has_chrome = shutil.which("google-chrome") is not None
     has_chromium = shutil.which("chromium") is not None or shutil.which("chromium-browser") is not None

@@ -108,7 +108,32 @@ Milestone summary — see `.planning/MILESTONES.md` for the full retros.
 
 ## [Unreleased]
 
+- (v5.1 work will land here)
+
+## [5.0.4] — 2026-09-29
+
+### Fixed
+
+- google-link preflight on the uv-tool install path: remedy for a missing
+  playwright now matches every install shape (`uv tool install
+  'pushframe[google-browser]' --force` for uv tools — `pip install
+  --user` targets the wrong interpreter there); stray duplicate quote in
+  the message fixed.
+
 ### Added
+
+- google-link zero-config: dedicated Chrome profile defaults to
+  `~/.config/pushframe/chrome-profile` (created on demand); the env var
+  becomes an override. A near-miss env name (e.g. a truncated
+  `USHFRAME_…`) is called out explicitly instead of looking like "unset".
+- google-link preflight: missing prerequisites (playwright package,
+  Chrome/Chromium) fail with the exact remedy instead of a traceback
+  (`ModuleNotFoundError: playwright` was the whole output before).
+
+### Changed
+
+- `PUSHFRAME_PROBE_CHROME_PROFILE` is no longer required to run
+  `google-link`.
 
 - google-link zero-config: the dedicated Chrome profile defaults to
   `~/.config/pushframe/chrome-profile` (created on demand); the env var
@@ -117,6 +142,14 @@ Milestone summary — see `.planning/MILESTONES.md` for the full retros.
 - google-link preflight: missing prerequisites (playwright package,
   Chrome/Chromium) now fail with the exact remedy instead of a traceback
   (`ModuleNotFoundError: playwright` was the whole output before).
+
+### Fixed
+
+- `google-link` preflight on the uv-tool install path: the message for a
+  missing playwright package now matches every install shape (`uv tool
+  install 'pushframe[google-browser]'` for uv tools — `pip install
+  --user` targets the wrong interpreter there), and the leftover
+  duplicate browser-detection line was removed.
 
 ### Changed
 

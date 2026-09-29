@@ -18,8 +18,8 @@ PYPROJECT = Path(__file__).resolve().parent.parent / "pyproject.toml"
 
 def test_version_is_first_distribution_release():
     """The current distribution release (moved off 0.1.0 at 5.0.0; page
-    metadata fix shipped in 5.0.3)."""
-    assert __version__ == "5.0.3"
+    metadata fix shipped in 5.0.4)."""
+    assert __version__ == "5.0.4"
 
 
 def test_version_matches_pyproject_single_source():
