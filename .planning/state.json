@@ -1,28 +1,32 @@
 {
   "contract": "1.0.0",
   "flavor": "core",
-  "milestone": "v5.0 — Distribution & Rename: pushframe packages",
+  "milestone": {
+    "version": "v5.1",
+    "name": "Operations: Config, Sessions, Multi-frame & Scheduling",
+    "started": "2026-09-29"
+  },
   "phases": [
     {
-      "number": "20",
-      "name": "pushframe Rename, Migration & Repo Switch",
-      "status": "complete"
+      "number": "23",
+      "name": "Config Wizard & Precedence",
+      "status": "pending"
     },
     {
-      "number": "21",
-      "name": "Debian Package & APT Repo",
-      "status": "complete"
+      "number": "24",
+      "name": "Token-First Sessions & Preflight Sweep",
+      "status": "pending"
     },
     {
-      "number": "22",
-      "name": "PyPI + Release Engineering",
-      "status": "complete"
+      "number": "25",
+      "name": "Multi-frame & systemd User Scheduling",
+      "status": "pending"
     }
   ],
   "next": {
-    "command": "/gsd:progress",
-    "label": "Show progress",
-    "reason": "Unsure of state — showing progress"
+    "command": "/gsd:progress --next",
+    "label": "Advance to the next step",
+    "reason": "Phase 23 of 3 \u00b7 0% \u00b7 ready to plan"
   },
   "updated_at": "2026-09-29T13:27:41.229Z"
 }

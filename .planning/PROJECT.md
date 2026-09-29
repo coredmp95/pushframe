@@ -364,3 +364,5 @@ sequences write-path reliability first, then Google account linking → album di
 album-to-frame mirroring via a pruned local cache, then the carried debt. Biggest open
 unknown: whether Google's post-March-2025 Photos API still permits enumerating a user's own
 albums, or whether album selection has to go through the Picker API.*
+
+**Current Milestone:** v5.1 — Operations: Config, Sessions, Multi-frame & Scheduling (started 2026-09-29)

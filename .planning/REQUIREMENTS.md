@@ -1,105 +1,118 @@
-# Requirements: Aura Frames Python Client — v5.0 Distribution & Rename: pushframe packages
+# Requirements: pushframe — v5.1 Operations: Config, Sessions, Multi-frame & Scheduling
 
 **Defined:** 2026-09-29
-**Core Value:** Anyone on Ubuntu/Debian can install a working `pushframe` with one
-`apt install` (or one `pip install`), from a cleanly renamed, self-distributed package —
-and the project stops shipping under a name that is both someone else's trademark and,
-on PyPI, already taken.
+**Core Value:** `pushframe` becomes *operable unattended*: configuration is a
+conversation (`pushframe config`) instead of env-var archaeology, the Aura
+password never touches disk (token-first sessions), mirrors run on a schedule
+without root (systemd user timers), one album can mirror to every frame
+(named mappings), and every command that needs a machine prerequisite fails
+with the remedy instead of a traceback.
 
-> **v5.0 context:** v4.0 shipped the full Google-album→frame mirror as the fork's own
-> local pipeline (phases 16-19). The code still carries the original author's
-> `auraframes` module name and `aura-cli` binary. `aura-cli` is **taken on PyPI**
-> (Neo4j Aura's CLI, `pip install aura-cli` exists since 2023), and "Aura Frames" is a
-> real company (Aura Frames Inc., pushd/AUFR) with an apparently trademarked consumer
-> brand. Research on 2026-09-29 confirmed: `pushframe` is free on PyPI (404 on the
-> simple index) and matches no Debian package. Operator decisions 2026-09-29:
-> rename **binary + module** (no `aura-cli` compatibility alias), migrate the user
-> config directory with a first-run migration, numbering continues (phases 20+).
+## Requirements
 
-## v5.0 Requirements
+### Config wizard (CFG)
 
-### Identity & Rename (IDN)
+- [ ] **CFG-01**: `pushframe config` (interactive) asks for and stores: Aura
+  email, Aura secret, default frame name, and the tool's non-secret settings
+  (default album, write-budget override, debug) — prompts are masked for
+  secrets (getpass-style), values are validated (email shape; login test on
+  request), and the result is written to `~/.config/pushframe/config.json`
+  with mode `0600`. Re-running edits in place (existing values shown
+  redacted, Enter keeps).
+- [ ] **CFG-02**: precedence is `env var > config file > built-in default`
+  everywhere the CLI reads configuration; the env vars keep working exactly
+  as today (deprecation window opened in 5.0.0 stays honored); `pushframe
+  config show` prints the *effective* configuration with secrets redacted
+  and the source of each value (env/file/default).
+- [ ] **CFG-03**: `pushframe config import` migrates an existing `.env`
+  (or exported `PUSHFRAME_*`/`AURA_*` set) into `config.json` without
+  retyping; the command reports what it took from where and never stores
+  what it could resolve from the environment instead.
+- [ ] **CFG-04**: `pushframe config path` prints the config file location;
+  `pushframe config set <key> <value>` / `get <key>` exist for scripts;
+  unknown keys fail with the list of known keys.
 
-<!-- The rename is mechanical but blast-radius-wide: imports, entry points, config
-     paths, docs, tests. The offline suite is the safety net (401 tests). -->
+### Credential handling (SEC — token-first)
 
-- [x] **IDN-01**: The Python package is renamed `auraframes` → `pushframe` everywhere (every module path, every import, entry points, pyproject name) and the full offline suite passes green after the rename with no import of the old name left anywhere (`grep -r "auraframes" --include="*.py" .` outside migrations/tests-of-migration matches nothing)
-- [x] **IDN-02**: The single console-script binary is `pushframe` (no `aura-cli` alias shipped); every user-facing string, help text, and doc references `pushframe`
-- [x] **IDN-03**: First run migrates `~/.config/auraframes/` → `~/.config/pushframe/` automatically (Google cookie vault incl. legacy probes path, Google manifest, write budget) and prints a one-line notice; a fresh machine creates `~/.config/pushframe/` directly; the migration is idempotent and never loses the 0600 vault
-- [x] **IDN-04**: Environment variables gain the `PUSHFRAME_` spelling as the documented primary form (`PUSHFRAME_EMAIL`/`PUSHFRAME_PASSWORD`/`PUSHFRAME_COUNTRY`/`PUSHFRAME_STATE_DIR`/`AURA_AWS_*` → `PUSHFRAME_AWS_*` etc.) with the `AURA_*` spellings still read as fallbacks (one release of grace), documented in README and `--help`
-- [x] **IDN-05**: README, docs/CLI.md, VERIFICATION-REPORT.md and all planning-visible surfaces say the tool is `pushframe`, with an up-front "unofficial community client for Aura Frames hardware — not affiliated with or endorsed by Aura Frames Inc." disclaimer (nominative use of the mark only to identify compatibility)
-- [x] **IDN-06**: The project leaves the fork: a new standalone GitHub repository `coredmp95/pushframe` (created as a normal repo, **not** a fork) receives the full history (337 commits, preserving upstream attribution in the log), the local `origin` remote switches to it, and the README's first line carries a provenance note crediting the upstream author (zmanowar) with the link to the original repository — the old `coredmp95/auraframes` fork stays in place untouched as an archive. *(Operator decision 2026-09-29: the repo switch happens in Phase 20, in the same movement as the code rename, so the first tagged release lands in the new repo.)*
+- [ ] **SEC-01**: the Aura password is **never persisted** — not in
+  `config.json`, not in env files the tool writes. `pushframe config`
+  authenticates once, stores the returned `auth_token` (0600) plus the
+  account email, and discards the password when the process exits.
+- [ ] **SEC-02**: every command that needs the API uses the stored token
+  (header auth) and falls back to interactive password login **only** when
+  the token is absent/expired/revoked, after which the new token is
+  persisted; a `--password` / `PUSHFRAME_PASSWORD` override still wins
+  (CI/script path) but is documented as discouraged for humans.
+- [ ] **SEC-03**: `pushframe logout` deletes the stored token (and only the
+  token); token material never appears in logs, output, or the history
+  ledger (existing redaction stays enforced by tests).
 
-### Debian Packaging (DEB)
+### Scheduling (TMR — systemd user)
 
-<!-- Build native .deb artifacts a user can install without knowing Python exists.
-     Python 3.14 is the pin; Ubuntu 26.04 (resolute) ships python3.14. The package
-     carries its own venv (opt-in layout /opt or /usr/lib) rather than fighting
-     distutils — the modern, hermetic, upstream-recommended pattern for apps. -->
+- [ ] **TMR-01**: `pushframe schedule add <job>` installs a systemd **user**
+  timer + service unit under `~/.config/systemd/user/` for the supported
+  jobs (`google-sync --apply` for a named pair, directory `sync`) with a
+  prompted or `--every` schedule; no root anywhere; `pushframe schedule
+  list` shows installed jobs with next-run times (from `systemctl list-timers`).
+- [ ] **TMR-02**: `pushframe schedule remove <job>` uninstalls cleanly
+  (units + timer state); installed units are named `pushframe-<job>.service/.timer`
+  and never collide with system units.
+- [ ] **TMR-03**: unattended correctness: a scheduled run uses only
+  stored configuration (no prompts), honors SAFE-02's removal threshold
+  (a run that would exceed it **skips and logs** rather than fails the unit),
+  writes a per-job log (`~/.local/state/pushframe/<job>.log`), and the
+  docs cover `loginctl enable-linger` for headless machines (venus).
 
-- [x] **DEB-01**: `dpkg -i pushframe_<version>_amd64.deb` (or `apt install ./pushframe_….deb`) installs a working `pushframe` on Ubuntu 26.04: binary on PATH, `pushframe status --help` runs, dependencies satisfied — verified in a clean container/schroot, not just the dev machine
-- [x] **DEB-02**: The package is built reproducibly by a repo script (e.g. `scripts/build-deb.sh` or `fpm`/`dpkg-deb` via pyproject metadata — version read from the single source of truth) and emits the `.deb` as a CI/release artifact; building requires no Debian packaging expertise
-- [x] **DEB-03**: Correct Debian metadata: Package `pushframe`, Section `utils`, Maintainer, Description (with the unofficial disclaimer), License, Depends expressing the interpreter requirement (e.g. `python3 (>= 3.14)` or the bundled-runtime equivalent), and Conflicts/Replaces/Provides for the never-shipped `aura-cli` name avoided (no conflict needed — the name was never packaged; documented decision)
-- [x] **DEB-04**: Install/uninstall is clean per Debian policy as observed by `lintian` (no errors): files under `/usr/lib/pushframe/` (private venv) + `/usr/bin/pushframe` symlink, config strictly under `$HOME` at runtime (no root-owned files in `~`), postrm removes nothing from `$HOME`
-- [x] **DEB-05**: An APT repository layout is published for distribution: `dists/`+`pool/` structure (reprepro or dpkg-scanpackages based), Release/InRelease signing key documented, and the repo served from GitHub Pages with the one-line user instructions (`curl … | apt` sources entry + `apt install pushframe`)
+### Multi-frame (MTF — GSF-01 closed)
 
-### PyPI Publishing (PYI)
+- [ ] **MTF-01**: named **album↔frame mappings** live in config: one album
+  may mirror to N frames and one frame may receive from N albums
+  (`pushframe config` manages them; `--pair <name>` selects one,
+  `--all` selects every pair).
+- [ ] **MTF-02**: `google-sync` resolves a pair the same way it resolves the
+  current single pair today (dry-run default, `--apply` gated, SAFE-01..04
+  per pair); **state is per-pair** — the manifest and staging cache are
+  sharded by pair so two pairs never share dedupe memory.
+- [ ] **MTF-03**: the write budget is **account-wide and shared** across
+  pairs within one run (`--all`), preserving SAFE-02 semantics at account
+  level; per-pair reports stay exact (pairs list what they did, and a
+  skipped pair never blocks the others).
 
-<!-- The second distribution channel: uv tool install / pipx for non-Debian systems
-     and for users who prefer Python tooling. -->
+### Preflights & error quality (PRF)
 
-- [x] **PYI-01**: `pip install pushframe` (or `uv tool install pushframe`) yields the same working `pushframe` binary; the sdist/wheel build is driven from the same pyproject metadata (name `pushframe`, version single-sourced) — verified against TestPyPI first, then PyPI
-- [x] **PYI-02**: Publishing is automated and non-interactive from CI/release (trusted publishing or token in secrets), tagged releases only, with a documented manual fallback; the PyPI project description is the README (with the disclaimer visible on the project page)
+- [ ] **PRF-01**: commands with machine prerequisites check them up front
+  and fail with per-item remedies — `google-link` (playwright package,
+  Chrome/Chromium, profile dir) ships in 5.1's first cut (already
+  implemented on master), extended to: `google-sync` (vault present),
+  `schedule` (systemd user session available, `loginctl` linger status),
+  and `sync`/`push` (target dir exists/contains images).
+- [ ] **PRF-02**: no user-facing command may end in an unhandled traceback
+  for a foreseeable condition (missing module, missing browser, missing
+  vault, ambiguous frame, multi-arch notice): each maps to a named,
+  one-screen error with the next action. A test sweep asserts the
+  traceback-free contract for the documented failure modes.
 
-### Release Engineering (REL)
-
-<!-- "Distributable easily" means a repeatable release: one tag → all artifacts. -->
-
-- [x] **REL-01**: A release is one action (git tag or workflow dispatch) producing: versioned `.deb` artifact(s), an updated APT repo commit/branch for GitHub Pages, and a PyPI upload — no hand-built artifacts, version numbers never edited by hand in more than one place
-- [x] **REL-02**: The version scheme is set and documented (project moves off `0.1.0`; first distribution release is `5.0.0` to align with the milestone), and `pushframe --version` reports it
-- [x] **REL-03**: The release docs (README "Install" section + docs/CLI.md) show all three install paths end-to-end: `.deb` file, APT repo one-liner, and `uv tool install pushframe` — each verified on a clean environment during the phase that ships it
-
-## Future Requirements
-
-Deferred, tracked, not in this roadmap.
-
-- **RPM/openSUSE/Fedora packaging** — same tooling could emit `.rpm`; deferred until someone asks
-- **Homebrew formula** — macOS distribution; the client is Linux-focused today
-- **Docker image** — useful for servers/unattended sync; folds naturally into GSF-02 (scheduled sync)
-- **PPA (Launchpad) publication** — the APT repo on GitHub Pages covers distribution; a PPA adds review overhead without adding reach
-
-## Out of Scope
+## Non-Goals
 
 | Feature | Reason |
 |---------|--------|
-| An `aura-cli` compatibility alias binary | Operator decision 2026-09-29: single `pushframe` binary; the old name is trademark-adjacent and PyPI-taken |
-| Renaming upstream's API client behavior or Pushd endpoints | The rename is identity-level only; behavior is frozen this milestone |
-| Debian archive (packages.debian.org) inclusion | Requires a Debian maintainer + ITP process; the self-hosted APT repo + PyPI cover distribution now |
-| Windows/macOS native packages | No operator demand; the client targets the user's Ubuntu host today |
-| Breaking config format changes during migration | Migration moves files as-is; formats unchanged (IDN-03) |
+| OS keyring storage (gnome-keyring/Secret Service) | headless servers (venus) lack a keyring session; file-0600 token is the contract, keyring is a later nicety |
+| Encrypting config.json with a user passphrase | circularity (where does the passphrase live?); token-first removes the high-value secret anyway |
+| Cron support | systemd user timers are the modern path; cron adds a second code path for no new capability |
+| Real deletion exposure on the Google verb | unchanged posture from v2.0/v4.0; hide-not-delete stays |
+| Many-to-many with per-pair schedules | each pair is its own scheduled job — same capability, simpler model |
 
 ## Traceability
 
-Populated during roadmap creation. Every v5.0 requirement maps to exactly one phase;
-phase numbering continues from v4.0's Phase 19.
+Every v5.1 requirement maps to exactly one phase; numbering continues from
+Phase 22.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| IDN-01..06 | Phase 20 | Complete |
-| DEB-01..05 | Phase 21 | Complete |
-| PYI-01..02 | Phase 22 | Complete |
-| REL-01..03 | Phase 22 | Complete |
+| CFG-01..04 | Phase 23 | Pending |
+| SEC-01..03 | Phase 24 | Pending |
+| PRF-01..02 | Phase 24 | Pending |
+| MTF-01..03 | Phase 25 | Pending |
+| TMR-01..03 | Phase 25 | Pending |
 
-**Coverage:**
-
-- v5.0 requirements: 16 total
-- Mapped to phases: 15 ✓ (100% — no orphans, no duplicates)
-
-| Phase | Requirements | Count |
-|-------|--------------|-------|
-| Phase 20 — pushframe Rename, Migration & Repo Switch | IDN-01..06 | 6 |
-| Phase 21 — Debian Package & APT Repo | DEB-01..05 | 5 |
-| Phase 22 — PyPI + Release Engineering | PYI-01..02, REL-01..03 | 5 |
-
----
-*Requirements defined: 2026-09-29 — name research: aura-cli taken on PyPI (Neo4j Aura CLI); Aura Frames Inc. trademark risk; `pushframe` verified free on PyPI, no Debian collision; operator chose rename binary+module with config migration.*
+**Coverage:** v5.1 requirements: 14 total — no orphans, no double-mapping.
