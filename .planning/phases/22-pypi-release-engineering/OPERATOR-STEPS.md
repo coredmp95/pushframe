@@ -19,15 +19,20 @@ publish the `pushframe` project. PyPI calls this a "pending publisher"
 (the project doesn't exist until the first OIDC upload).
 
 - Go to https://test.pypi.org/manage/account/publishing/
+- ⚠️ **The form's "Owner" field is the GITHUB account that owns the repo
+  (`coredmp95`) — NOT your PyPI username (`coredmp`).** Your PyPI username
+  never appears in this form; it only identifies the account where you
+  create the declaration. A declaration with Owner `coredmp` would point
+  at a nonexistent repo and every upload would 403.
 - Fill the form with EXACTLY:
 
-| Field | Value |
-|---|---|
-| PyPI project name | `pushframe` |
-| Owner | `coredmp95` |
-| Repository | `pushframe` |
-| Workflow name | `release.yml` |
-| Environment name | `release` |
+| Field | Value | What it means |
+|---|---|---|
+| PyPI project name | `pushframe` | the package being published |
+| Owner | `coredmp95` | **GitHub** account owning the repo |
+| Repository | `pushframe` | GitHub repo name |
+| Workflow name | `release.yml` | the file in `.github/workflows/` |
+| Environment name | `release` | the GitHub environment the jobs pin |
 
 - Save. A mismatch in ANY field = 403 at upload time.
 
@@ -40,7 +45,8 @@ publish the `pushframe` project. PyPI calls this a "pending publisher"
 ## 4. PyPI trusted-publisher declaration
 
 - https://pypi.org/manage/account/publishing/ — same table as step 2,
-  exactly the same five values.
+  exactly the same five values (Owner stays `coredmp95` — GitHub account,
+  not your PyPI username `coredmp`).
 - Also claim the project name now if PyPI offers "project name
   reservation" — protects `pushframe` on real PyPI before the first upload.
 
