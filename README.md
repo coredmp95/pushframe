@@ -47,8 +47,32 @@ sudo apt install ./pushframe_<version>_amd64.deb
 
 ### APT repository
 
-> **(landing with the rest of this phase)** signed APT repo — the real
-> three-command journey will appear here as part of the same phase.
+A signed APT repository is served from this project's GitHub Pages. Three
+commands, exactly as verified in a clean container:
+
+```bash
+# 0. the apt keyring dir (already present on recent systems)
+sudo install -d -m 0755 /etc/apt/keyrings
+
+# 1. trust the repository key
+#    (dedicated signing key, fingerprint
+#     0EE2DB2DB1360C58C4B2E0BF2EC06828F722F391)
+curl -fsSL https://coredmp95.github.io/pushframe/dists/pushframe.asc \
+  | sudo gpg --dearmor -o /etc/apt/keyrings/pushframe.gpg
+
+# 2. add the sources entry
+echo "deb [signed-by=/etc/apt/keyrings/pushframe.gpg] https://coredmp95.github.io/pushframe stable main" \
+  | sudo tee /etc/apt/sources.list.d/pushframe.list
+
+# 3. install
+sudo apt update && sudo apt install pushframe
+```
+
+`apt update` must stay free of signature warnings — if it is not, compare the
+key fingerprint above with `gpg --show-keys /etc/apt/keyrings/pushframe.gpg`.
+The repository and the `.deb` are produced by `scripts/publish-apt-repo.sh`
+and `scripts/build-deb.sh`; the signature chain (InRelease/Release.gpg) is
+verified end-to-end by `scripts/test-apt-journey-container.sh`.
 
 ## Setup & Run (uv, from source)
 
