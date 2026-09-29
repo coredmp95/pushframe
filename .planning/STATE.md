@@ -5,10 +5,10 @@
 
 ## Current Position
 
-Phase: 23 — VERIFIED (passed)
-Current Plan: 23-01 complete
-Total Plans in Phase: 1
-Status: Verified — next: phase 24 (Token-First Sessions & Preflight Sweep)
+Phase: 24 — PLANNED (24-01 ready)
+Current Plan: 24-01 (not started)
+Total Plans in Phase: 1 (phase 24)
+Status: Planned — execute 24-01 next (inline séquentiel)
 
 ## Milestone Roadmap (v5.1, Phases 23-25)
 
