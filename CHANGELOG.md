@@ -50,6 +50,12 @@ frames; it is not affiliated with Aura Frames Inc.
 - The abort message on the 5-consecutive-failures breaker now states what
   to expect: confirmed items ARE on the frame, the next run recognizes
   them and will not upload them twice, wait ~30 min before retrying.
+- **Scoped-trip honesty** (second venus regression): `pushframe status`
+  staying green does NOT mean writes will work — the anti-abuse trip can
+  be scoped to the assets surface (write endpoints AND the
+  `asset_for_local_identifier` verify-probe read) while login/frames keep
+  answering. The abort message no longer suggests status as an all-clear;
+  it prescribes 60+ min from the abort and a single, solitary retry call.
 
 ### Changed
 

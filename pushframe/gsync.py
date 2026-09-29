@@ -473,9 +473,14 @@ def run_google_sync(album_target: str, frame_arg: str, *, apply: bool = False,
             print(f'What happened: the run stopped early to protect the account. '
                   f'{len(confirmed_paths)} item(s) were confirmed written before '
                   f'the stop and ARE on the frame — the next run recognizes them '
-                  f'(verify probe) and will NOT upload them twice. Wait ~30 min '
-                  f'before retrying; if `pushframe status` says 475/lockout, wait '
-                  f'longer.')
+                  f'(verify probe) and will NOT upload them twice.')
+            print('About the wait: the anti-abuse trip can be SCOPED to the '
+                  'assets surface — `pushframe status` may keep working '
+                  '(login/frames reads are a different surface) even while '
+                  'writes still 401. Do NOT trust a green status as an '
+                  'all-clear: wait 60+ min from the abort before the next '
+                  'attempt, and make the retry the ONLY call (extra logins '
+                  'can extend a login-scope trip).')
             return 1
 
     # Persist manifest entries for every staged item whose bytes are PROVEN
