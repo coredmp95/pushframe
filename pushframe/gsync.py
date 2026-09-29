@@ -216,7 +216,7 @@ def run_google_sync(album_target: str, frame_arg: str, *, apply: bool = False,
                     workers: int = 4, threshold: float | None = None,
                     input_fn=None, is_interactive: bool | None = None,
                     list_shared=None, cache_dir=None,
-                    manifest_path=None) -> int:
+                    manifest_path=None, batch_size: int | None = None) -> int:
     """The mutating half: album → frame mirror end to end (plan 18-03).
 
     DI seams mirror run_sync/run_google_album conventions: session/aura/s3/
@@ -479,6 +479,13 @@ def run_google_sync(album_target: str, frame_arg: str, *, apply: bool = False,
         exec_kwargs: dict = {}
         if budget is not None:
             exec_kwargs['budget'] = budget
+        # Phase 23.5 (venus): the trip keys on per-batch VOLUME (doctor's
+        # 1-item write passed seconds before a 50-item chunk 401'd). A
+        # smaller --batch-size stays under the detection threshold. Forwarded
+        # ONLY when supplied — execute_plan's own default (50) otherwise
+        # rules, preserving the phase-08 no-override contract.
+        if batch_size is not None:
+            exec_kwargs['batch_size'] = batch_size
         try:
             result = execute_plan(plan, aura, frame.id, s3_client=s3,
                                   sqs_client=sqs, removal_mode='hide',

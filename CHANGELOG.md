@@ -104,6 +104,12 @@ frames; it is not affiliated with Aura Frames Inc.
   that the next run resumes cleanly. (Also fixed en route: TripDetected
   propagates through every chunk-level handler — the generic per-chunk
   attribution branch would otherwise swallow it as ordinary failures.)
+- **`google-sync --batch-size N`**: the trip keys on per-batch volume (a
+  1-item doctor write passed seconds before a 50-item chunk was refused),
+  so an operator can stay under the detection threshold (e.g. 10).
+  Forwarded only when supplied — the historical default (50) otherwise
+  rules. The anti-trip drill (doctor → wait → batch-size) is documented in
+  docs/CLI.md.
 - **401 bodies are captured and classified** (third venus regression): an
   HTTP 401 exception now carries the server's response body (redacted
   through the same filter as request logs, truncated to 300 chars, also

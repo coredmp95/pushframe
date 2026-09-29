@@ -272,6 +272,69 @@ def test_failed_download_never_reaches_manifest(tmp_path, capsys):
     # means the FAILURE is recorded, so the next run re-attempts item 3
 
 
+def test_apply_batch_size_flows_to_execute_plan(tmp_path, capsys):
+    """Phase 23.5 (venus): the trip trips on per-batch volume (doctor's 1-item
+    write PASSED seconds before a 50-item chunk 401'd). --batch-size lets an
+    operator stay under the detection threshold; the value must reach
+    execute_plan, not stop at the CLI."""
+    bodies = {2: _jpeg(2), 3: _jpeg(3)}
+    router = _GoogleRouter(item_bodies=bodies)
+    aura = _FakeAura(_assets_for(1))
+
+    seen = {}
+    import pushframe.sync as sync_mod
+
+    def spy_execute(plan, aura_, frame_id, **kwargs):
+        seen['batch_size'] = kwargs.get('batch_size')
+        from pushframe.sync import ExecutionResult
+        return ExecutionResult(upload_succeeded=len(plan.to_upload))
+
+    mp = pytest.MonkeyPatch()
+    mp.setattr(sync_mod, 'execute_plan', spy_execute)
+    try:
+        rc = run_google_sync("Cadre", "Fabrice", apply=True, yes=True,
+                             session=_google_session(router), aura=aura,
+                             s3_client=_FakeS3(), sqs_client=_FakeSQS(),
+                             cache_dir=tmp_path / "cache",
+                             manifest_path=tmp_path / "manifest.json",
+                             batch_size=10)
+    finally:
+        mp.undo()
+
+    assert rc == 0
+    assert seen['batch_size'] == 10
+
+
+def test_apply_default_batch_size_stays_execute_plan_default(tmp_path, capsys):
+    """No --batch-size → nothing forwarded → execute_plan's own default (50)
+    rules (the phase-08 'defaults don't override' contract)."""
+    bodies = {2: _jpeg(2), 3: _jpeg(3)}
+    router = _GoogleRouter(item_bodies=bodies)
+    aura = _FakeAura(_assets_for(1))
+
+    seen = {}
+    import pushframe.sync as sync_mod
+
+    def spy_execute(plan, aura_, frame_id, **kwargs):
+        seen['batch_size'] = kwargs.get('batch_size')
+        from pushframe.sync import ExecutionResult
+        return ExecutionResult(upload_succeeded=len(plan.to_upload))
+
+    mp = pytest.MonkeyPatch()
+    mp.setattr(sync_mod, 'execute_plan', spy_execute)
+    try:
+        rc = run_google_sync("Cadre", "Fabrice", apply=True, yes=True,
+                             session=_google_session(router), aura=aura,
+                             s3_client=_FakeS3(), sqs_client=_FakeSQS(),
+                             cache_dir=tmp_path / "cache",
+                             manifest_path=tmp_path / "manifest.json")
+    finally:
+        mp.undo()
+
+    assert rc == 0
+    assert seen.get('batch_size') is None   # not forwarded — default rules
+
+
 def test_apply_wires_budget_wait_into_the_progress_bar(tmp_path, capsys):
     """Venus regression, phase 23.5: the 252 s/item the operator saw was the
     WRITE BUDGET waiting (bucket dry, 0.75/min refill) — and gsync never

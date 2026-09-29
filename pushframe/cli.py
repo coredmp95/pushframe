@@ -201,6 +201,11 @@ def build_parser() -> argparse.ArgumentParser:
     gsync_parser.add_argument(
         '--debug', action='store_true', default=False,
         help='Verbose logging')
+    gsync_parser.add_argument(
+        '--batch-size', type=int, default=None, dest='batch_size',
+        help='Assets per select_asset/batch_update call (default 50). '
+             'Lower it (e.g. 10) if the anti-abuse layer trips on batch volume '
+             '— a 1-item write may pass where a 50-item chunk is refused')
     return parser
 
 
@@ -1412,7 +1417,8 @@ def main(argv=None) -> int:
     if args.command == 'google-sync':
         from pushframe.gsync import run_google_sync
         return run_google_sync(args.album, args.frame, apply=args.apply,
-                               yes=args.yes, debug=args.debug)
+                               yes=args.yes, debug=args.debug,
+                               batch_size=args.batch_size)
     if args.command == 'inspect':
         return run_inspect(args.frame, debug=args.debug)
     if args.command == 'sync':

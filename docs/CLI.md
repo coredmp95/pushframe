@@ -106,6 +106,26 @@ launch the sync) or **NO-GO** with the captured 401 server body and its
 classification (anti-abuse trip vs token problem). Charges ~6 write-budget
 tokens; safe to repeat; never run it in CI.
 
+### When the anti-abuse layer refuses your writes
+
+Pushd's anti-abuse layer can refuse writes while reads and login keep
+working (proven venus, 2026-09). The refusal body says
+`"Request Unauthenticated"` — **that is the trip's disguise, not a token
+problem**. pushframe recognizes it and stops on the FIRST refusal (no
+retry, no re-login — both feed the trip). The drill:
+
+1. `pushframe doctor` before any sync (GO = the write surface is open NOW)
+2. Trip detected → wait **60+ min** from the stop, then `pushframe doctor` again
+3. If doctor passes but a sync still trips immediately, lower the per-batch
+   volume — the trip keys on batch size (a 1-item write may pass where a
+   50-item chunk is refused):
+   ```bash
+   pushframe google-sync Cadre --frame "Cadre de Fabrice" --apply --yes --batch-size 10
+   ```
+
+Progress is never lost: only confirmed writes are remembered, and the next
+run uploads the remainder once — never twice.
+
 ## `config` — set up credentials and settings once
 
 The conversational alternative to hand-managed environment variables. Every value
