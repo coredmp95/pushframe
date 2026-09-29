@@ -288,14 +288,19 @@ def test_apply_consecutive_failures_aborts_with_distinct_message(tmp_path, monke
 
 def test_login_rate_limited_reports_clear_message(tmp_path, monkeypatch, capsys):
     # The 475 login lockout escalation must surface as a back-off message,
-    # not a generic "Login failed".
+    # not a generic "Login failed". Phase 24: the escalation is exercised at
+    # the establish_session env-override path (no aura injected — the DI
+    # contract means an injected aura is never re-authenticated), and the
+    # RateLimitError passthrough at the run_sync boundary is preserved.
     _env(monkeypatch)
 
     class _LockedOutAura:
-        def login(self):
+        def login(self, email=None, password=None):
             raise RateLimitError(475, server_message='The email or password was incorrect.')
 
-    rc = cli.run_sync(str(tmp_path), 'Fake', apply=True, yes=True, aura=_LockedOutAura())
+    monkeypatch.setattr(cli, 'Aura', lambda: _LockedOutAura())
+
+    rc = cli.run_sync(str(tmp_path), 'Fake', apply=True, yes=True)
 
     assert rc == 1
     out = capsys.readouterr().out

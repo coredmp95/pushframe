@@ -77,6 +77,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     subparsers = parser.add_subparsers(dest='command', required=True)
     subparsers.add_parser('status', help='Check config/auth health and list account frames')
+    subparsers.add_parser('logout', help='Delete the stored session token (email and settings are kept)')
     doctor_parser = subparsers.add_parser(
         'doctor', help='Field write-probe: 1 tiny test image through the real '
                        'write path, then GO/NO-GO for a sync from this machine')
@@ -447,6 +448,22 @@ def _config_set(argv: list[str]) -> int:
     return 0
 
 
+def run_logout() -> int:
+    """pushframe logout (phase 24, SEC-03, D-02): delete the stored TOKEN
+    and only the token. Email, settings, default_frame (and future pairs)
+    survive; the file stays 0600; idempotent; token material never printed."""
+    from pushframe import config_store
+    stored = config_store.load()
+    if not (stored.get('auth_token') or stored.get('user_id')):  # noqa: S105
+        print('no stored session — nothing to remove.')
+        return 0
+    config_store.update(auth_token=None, user_id=None)
+    who = stored.get('email') or 'the account'
+    print(f'logged out: the stored session for {who} was deleted.')
+    print('kept: your email and settings. To sign back in: pushframe config')
+    return 0
+
+
 def run_status(aura=None, debug: bool = False, google_session=None) -> int:
     """Status command handler. Returns a process exit code (0 success, 1
     failure) — never calls sys.exit directly. Accepts an optional injected
@@ -809,13 +826,16 @@ def run_inspect(frame_arg: str, aura=None, debug: bool = False) -> int:
     `run_status`) there's no config-precheck step before constructing
     `Aura()`.
     """
-    aura = aura or Aura()
     # Must run after Aura() construction (which registers the noisy sinks)
     # and before login/get_frames (the HTTP calls that trigger them).
     _configure_cli_logging(debug)
-
+    from pushframe.session import establish_session, SessionError
     try:
-        aura.login()
+        if aura is None:  # DI contract: an injected Aura manages its own auth
+            aura = establish_session(aura=aura)
+    except SessionError as e:
+        print(f'not authenticated: {e}')
+        return 1
     except Exception as e:
         # D-05: bad credentials, network error, or API drift all surface
         # here — a broad catch at the CLI boundary is correct.
@@ -885,13 +905,16 @@ def run_reconcile(frame_arg: str, *, remove: bool = False, yes: bool = False, me
     default `False` reproduces today's behaviour exactly (an unresolvable
     creation time stays in `unknown_age`, never a removal candidate).
     """
-    aura = aura or Aura()
     # Must run after Aura() construction (which registers the noisy sinks)
     # and before login/get_frames (the HTTP calls that trigger them).
     _configure_cli_logging(debug)
-
+    from pushframe.session import establish_session, SessionError
     try:
-        aura.login()
+        if aura is None:  # DI contract: an injected Aura manages its own auth
+            aura = establish_session(aura=aura)
+    except SessionError as e:
+        print(f'not authenticated: {e}')
+        return 1
     except Exception as e:
         print(f'Login failed: {e}')
         return 1
@@ -1068,7 +1091,6 @@ def run_sync(dir_arg: str, frame_arg: str, apply: bool = False, yes: bool = Fals
     sys.exit directly. Accepts an optional injected `Aura` (dependency-
     injection seam) so this is testable offline, mirroring `run_inspect`.
     """
-    aura = aura or Aura()
     # Must run after Aura() construction (which registers the noisy sinks)
     # and before login/get_frames (the HTTP calls that trigger them).
     _configure_cli_logging(debug)
@@ -1076,8 +1098,22 @@ def run_sync(dir_arg: str, frame_arg: str, apply: bool = False, yes: bool = Fals
     verb_present = _REMOVAL_VERB_PRESENT[removal_mode]
     verb_past = _REMOVAL_VERB_PAST[removal_mode]
 
+    # PRF-01/02, D-03 (phase 24): machine prerequisites BEFORE any network —
+    # a nonexistent source dir is a named error without touching the API.
+    from pushframe.preflight import require_source_dir, PreflightError
     try:
-        aura.login()
+        require_source_dir(dir_arg)
+    except PreflightError as e:
+        print(f'sync failed: {e}')
+        return 1
+
+    from pushframe.session import establish_session, SessionError
+    try:
+        if aura is None:  # DI contract: an injected Aura manages its own auth
+            aura = establish_session(aura=aura)
+    except SessionError as e:
+        print(f'not authenticated: {e}')
+        return 1
     except RateLimitError as e:
         # Anti-abuse throttle/lockout escalated to reject login (the HTTP 475
         # seen in the select-asset-401-unauthorized session). Surface the
@@ -1113,7 +1149,6 @@ def run_sync(dir_arg: str, frame_arg: str, apply: bool = False, yes: bool = Fals
         # local filesystem error (missing/invalid `dir_arg`, permission
         # error reading a file) is reported distinctly from a remote
         # API/auth failure instead of being collapsed into the same
-        # generic "Failed to sync frame" message below.
         try:
             scan = scan_directory(Path(dir_arg))
         except OSError as e:
@@ -1366,6 +1401,8 @@ def main(argv=None) -> int:
         from pushframe.doctor import run_doctor
         return run_doctor(args.frame, do_write=not args.no_write,
                           debug=args.debug)
+    if args.command == 'logout':
+        return run_logout()
     if args.command == 'status':
         return run_status(debug=args.debug)
     if args.command == 'google-link':

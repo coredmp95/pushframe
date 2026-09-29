@@ -87,9 +87,15 @@ def save(data: dict, path: Path | None = None) -> Path:
 
 
 def update(**kwargs) -> Path:
-    """Merge keys into the existing config and save."""
+    """Merge keys into the existing config and save. A None VALUE removes
+    the key (phase 24 logout semantics: deleting the token is an update
+    whose result is the key's ABSENCE, not a stored null)."""
     data = load()
-    data.update(kwargs)
+    for key, value in kwargs.items():
+        if value is None:
+            data.pop(key, None)
+        else:
+            data[key] = value
     return save(data)
 
 

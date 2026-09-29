@@ -14,7 +14,33 @@ frames; it is not affiliated with Aura Frames Inc.
 
 ## [Unreleased]
 
-- (v5.1 work will land here)
+### Added (phase 24: Token-First Sessions & Preflight Sweep)
+
+- **One session path for every command** (SEC-01/02): `inspect`,
+  `reconcile`, `sync`, `push` and `google-sync` now run from the stored
+  token session (0600) with no password and no login call; env vars stay
+  the override; a terminal session gets ONE password prompt whose token is
+  persisted (SEC-01: the password is never written anywhere — file-content
+  tested); non-interactive runs without credentials fail named.
+- **Token expiry** (D-01): a 401 while resuming the stored session prompts
+  once in a terminal (new token persisted, command continues) and raises
+  `SessionExpiredError` with the remedy in scheduled runs. `execute_plan`'s
+  401-retry relogin is token-aware (it previously assumed a password).
+- **`pushframe logout`** (SEC-03, D-02): deletes the stored token (and only
+  the token) — email and settings survive, mode stays 0600, idempotent.
+- **Preflights** (PRF-01, D-03): `google-sync` checks the vault up front
+  (remedy: `google-link` + the headless ssh -X recipe); `sync`/`push` fail
+  named on a nonexistent source directory BEFORE any network call (an
+  empty directory remains a friendly "nothing to do").
+- **The traceback-free sweep** (PRF-02): a parametrized test over the
+  failure-mode inventory proves every foreseeable mode ends named, with a
+  remedy, and never a traceback.
+
+### Changed
+
+- DI contract, now enforced everywhere: a call site NEVER re-authenticates
+  an injected Aura (tests, `doctor`, pipelines). Login-failure shapes are
+  owned by the session path.
 
 ## [5.0.6] — 2026-09-29
 - **`pushframe doctor`** — the field write-probe the venus regressions

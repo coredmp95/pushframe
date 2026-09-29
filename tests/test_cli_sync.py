@@ -185,18 +185,21 @@ def test_sync_not_found_returns_1(tmp_path, monkeypatch, capsys):
     assert 'To upload' not in out
 
 
-def test_sync_login_failure_returns_1(tmp_path, monkeypatch, capsys):
-    _env(monkeypatch)
+def test_sync_no_credentials_returns_1_named(tmp_path, monkeypatch, capsys):
+    """Phase 24: no aura injected + no credentials anywhere = named failure
+    with the remedy (DI contract: call sites never re-authenticate an
+    injected aura; the source-dir preflight precedes any network anyway)."""
+    from pushframe.utils import settings
+    monkeypatch.setattr(settings, 'CONFIG_PATH', tmp_path / 'config.json')
+    for var in ('AURA_EMAIL', 'AURA_PASSWORD', 'PUSHFRAME_EMAIL', 'PUSHFRAME_PASSWORD'):
+        monkeypatch.delenv(var, raising=False)
 
-    aura = offline_aura(overrides={
-        '/v5/login.json': httpx.Response(200, json={'error': 'invalid_credentials', 'message': 'Bad login'})
-    })
-
-    rc = run_sync(str(tmp_path), 'Fake', aura=aura)
+    rc = run_sync(str(tmp_path), 'Fake')
 
     assert rc == 1
     out = capsys.readouterr().out
-    assert 'Login failed' in out
+    assert 'not authenticated' in out
+    assert 'pushframe config' in out
 
 
 # --- removal-mode flags (HIDE-05, D-02/D-03) --------------------------------

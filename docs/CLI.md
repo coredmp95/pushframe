@@ -26,6 +26,22 @@ talks to the frame over your local network — everything goes through your Aura
 
 ## Global usage
 
+One session path (phase 24): every command authenticates the same way —
+`PUSHFRAME_EMAIL`/`PUSHFRAME_PASSWORD` env (override; discouraged for
+humans), else the **stored token session** from `pushframe config` (no
+login call, no password), else ONE interactive password prompt whose token
+is persisted (the password is never written anywhere). Non-interactive runs
+never prompt: without any credential they fail named with the remedy.
+
+On an expired token: a terminal session prompts once and continues; a
+scheduled run reports `SessionExpiredError` with the remedy.
+
+### `pushframe logout`
+
+Deletes the stored session token — and only the token. Your email and
+settings stay (the next `pushframe config` proposes your email). Idempotent;
+token material is never printed.
+
 ```
 usage: pushframe [-h] [--version] [--debug] {status,inspect,sync,push} ...
 
