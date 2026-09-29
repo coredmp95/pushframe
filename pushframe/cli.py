@@ -1220,13 +1220,25 @@ def run_sync(dir_arg: str, frame_arg: str, apply: bool = False, yes: bool = Fals
         with tqdm(total=total, desc='Applying', unit='item') as bar:
             def _report_progress(kind, identifier, ok):
                 bar.update(1)
+                name = Path(identifier).name if kind == 'upload' else str(identifier)
                 status = 'ok' if ok else 'FAIL'
-                bar.set_postfix_str(f'{kind} {status} {identifier}')
+                bar.set_postfix_str(f'{kind} {status} {name}')
+
+            def _report_error(kind, identifier, ok, reason):
+                # Phase 23.5 (venus): failures escalate WITH the cause and the
+                # lockout remedy, live in the bar — not a bare FAIL.
+                name = Path(identifier).name if kind == 'upload' else str(identifier)
+                short = reason if len(reason) <= 120 else reason[:117] + '...'
+                remedy = (' — likely account lockout: STOP, wait ~30 min, '
+                          'then `pushframe status` to re-login') if '401' in short else ''
+                bar.set_postfix_str(f'{kind} FAIL {name}: {short}{remedy}')
 
             def _report_wait(remaining):
-                # Inter-chunk cooldown -- the bar doesn't advance, so surface
-                # the countdown in the postfix rather than looking frozen.
-                bar.set_postfix_str(f'cooldown {remaining:.0f}s before next batch')
+                # Inter-chunk cooldown AND write-budget waits both arrive here
+                # (execute_plan routes budget.acquire's on_wait through the
+                # same callback) — one honest label: pacing is normal, the
+                # bar is alive.
+                bar.set_postfix_str(f'pacing {remaining:.0f}s — budget refill/cooldown, normal')
 
             # Only forward batch_size/chunk_delay when explicitly supplied so
             # execute_plan keeps its own defaults (WRITE_BATCH_SIZE /
@@ -1268,7 +1280,8 @@ def run_sync(dir_arg: str, frame_arg: str, apply: bool = False, yes: bool = Fals
 
             result = execute_plan(
                 plan, aura, frame.id, s3_client=s3_client, sqs_client=sqs_client,
-                progress=_report_progress, on_wait=_report_wait, **exec_kwargs,
+                progress=_report_progress, on_wait=_report_wait,
+                on_error=_report_error, **exec_kwargs,
             )
 
         # D-10: separated success/failure summary, each failed item named.

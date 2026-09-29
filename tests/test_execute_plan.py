@@ -279,6 +279,41 @@ def test_execute_plan_delete_chunk_failure_records_whole_chunk(monkeypatch):
     assert all('simulated remove_asset chunk failure' in msg for _, msg in result.delete_failures)
 
 
+def test_execute_plan_on_error_carries_the_reason(tmp_path):
+    """Phase 23.5 (venus): failure sites feed on_error(kind, id, False, reason)
+    so a CLI bar can escalate the CAUSE live. Here the batch_update ack-drop
+    path must carry its known reason string."""
+    path_a = tmp_path / 'a.jpg'
+    path_b = tmp_path / 'b.jpg'
+    _write_jpeg(path_a)
+    _write_jpeg(path_b)
+    plan = SyncPlan(to_upload=[path_a, path_b], to_delete=[])
+
+    aura = offline_aura(overrides=_default_overrides())
+
+    def _partial_batch_update(assets):
+        from pushframe.api.assetApi import BatchUpdateResult
+        from pushframe.models.asset import AssetPartialId
+        items = assets if isinstance(assets, list) else [assets]
+        acked = items[-1].local_identifier
+        unacked = [i.local_identifier for i in items if i.local_identifier != acked]
+        return BatchUpdateResult([i.local_identifier for i in items],
+                                 [AssetPartialId(id='new', local_identifier=acked)], unacked)
+
+    aura.asset_api.batch_update = _partial_batch_update
+
+    errors: list = []
+    execute_plan(
+        plan, aura, FRAME_ID, s3_client=_FakeS3Client(), sqs_client=_FakeSQSClient(), sleep=lambda *_: None,
+        on_error=lambda kind, ident, ok, reason: errors.append((kind, ident, reason)),
+    )
+
+    assert len(errors) == 1
+    kind, ident, reason = errors[0]
+    assert kind == 'upload' and ident == path_a
+    assert 'not acknowledged' in reason
+
+
 def test_execute_plan_reports_progress_per_item(tmp_path):
     path_a = tmp_path / 'a.jpg'
     path_b = tmp_path / 'b.jpg'

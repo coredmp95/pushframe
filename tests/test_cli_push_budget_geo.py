@@ -75,7 +75,7 @@ def _patch_execute_plan(monkeypatch, result=None, raises=None):
     given exception instead of returning)."""
     calls = []
 
-    def fake_execute_plan(plan, aura, frame_id, *, s3_client, sqs_client, progress=None, on_wait=None,
+    def fake_execute_plan(plan, aura, frame_id, *, s3_client, sqs_client, progress=None, on_wait=None, on_error=None,
                           batch_size=None, chunk_delay_seconds=None, budget=None, geo_check=None,
                           wait_on_budget=None, max_wait_seconds=None, removal_mode=None):
         calls.append({
@@ -266,7 +266,7 @@ def test_state_file_path_derives_from_sha1_email_and_body_has_no_email(tmp_path,
     # Drive the fake execute_plan to actually call budget.save() (the real
     # execute_plan does this after every normally-returning chunk) so the
     # state file lands on disk under the monkeypatched AURA_STATE_DIR.
-    def fake_execute_plan(plan, aura, frame_id, *, s3_client, sqs_client, progress=None, on_wait=None,
+    def fake_execute_plan(plan, aura, frame_id, *, s3_client, sqs_client, progress=None, on_wait=None, on_error=None,
                           batch_size=None, chunk_delay_seconds=None, budget=None, geo_check=None,
                           wait_on_budget=None, max_wait_seconds=None, removal_mode=None):
         if budget is not None:

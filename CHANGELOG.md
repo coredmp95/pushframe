@@ -29,6 +29,24 @@ frames; it is not affiliated with Aura Frames Inc.
 - Headless `google-link` recipe documented (ssh -X); a `--remote-assist`
   mode is a backlog candidate.
 
+### Fixed
+
+- **`google-sync`/`sync`/`push` apply feedback was opaque** (venus
+  regression): the progress bar sat silent for minutes at a time — budget
+  waits and inter-chunk cooldowns never reached the bar — and failures
+  showed a bare `upload FAIL` with no cause. The bar now shows a live
+  `pacing Ns — budget refill/cooldown, normal` countdown for every wait,
+  names the file on each item, escalates failures WITH their cause plus
+  the lockout remedy (401 → stop, wait, `pushframe status`), and the run
+  announces the pacing contract up front (long waits are normal after the
+  30-request burst; interrupts are safe, confirmed items are kept).
+  `execute_plan` gained an `on_error(kind, id, ok, reason)` seam so every
+  failure site (upload/reshow/delete, including the 401-retry paths)
+  reports its reason live.
+- The abort message on the 5-consecutive-failures breaker now states what
+  to expect: confirmed items ARE on the frame, the next run recognizes
+  them and will not upload them twice, wait ~30 min before retrying.
+
 ### Changed
 
 - Settings now resolve **at use time** with the precedence

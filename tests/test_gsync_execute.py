@@ -19,6 +19,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from pushframe.aws.s3client import get_md5  # noqa: E402
+from pushframe import gsync as gsync_module  # noqa: E402
 from pushframe.gsync import (  # noqa: E402
     GOOGLE_SYNC_REMOVAL_THRESHOLD,
     run_google_sync,
@@ -179,6 +180,26 @@ class _FakeSQS:
         return {"Messages": []}
 
 
+class _WaityBudget:
+    """Budget whose first acquire waits (0.75/min-like pacing) so the
+    on_wait protocol path is exercised end-to-end through gsync."""
+
+    def __init__(self):
+        self._calls = 0
+
+    def acquire(self, n, *, wait, max_wait, now, sleep, on_wait=None):
+        self._calls += 1
+        if self._calls == 1 and on_wait:
+            on_wait(3.0)  # one live countdown tick
+        sleep(0)
+
+    def reconcile_tripped(self, now):
+        pass
+
+    def save(self):
+        pass
+
+
 def _jpeg(n: int) -> bytes:
     """Deterministic, PIL-decodable JPEG — _prep_upload decodes the bytes
     (data_uti comes from the decoded format, not the filename), so staged
@@ -249,6 +270,47 @@ def test_failed_download_never_reaches_manifest(tmp_path, capsys):
     assert _gid(3) not in manifest  # SAFE-04: failed download not persisted
     # a failed download leaves NO file (18-01 contract); 'kept for retry'
     # means the FAILURE is recorded, so the next run re-attempts item 3
+
+
+def test_apply_wires_budget_wait_into_the_progress_bar(tmp_path, capsys):
+    """Venus regression, phase 23.5: the 252 s/item the operator saw was the
+    WRITE BUDGET waiting (bucket dry, 0.75/min refill) — and gsync never
+    wired execute_plan's on_wait, so the bar sat silent at 7% looking dead.
+    Contract: budget waits render into the progress bar as a live countdown.
+    """
+    bodies = {2: _jpeg(2), 3: _jpeg(3)}
+    router = _GoogleRouter(item_bodies=bodies)
+    aura = _FakeAura(_assets_for(1))
+
+    captured = {'waits': 0}
+
+    class SpyBar:
+        def __init__(self, *a, **k):
+            self.total = k.get('total')
+        def update(self, n=1):
+            pass
+        def set_postfix_str(self, s):
+            if 'cooldown' in s or 'budget' in s:
+                captured['waits'] += 1
+        def __enter__(self):
+            return self
+        def __exit__(self, *a):
+            return False
+
+    mp = pytest.MonkeyPatch()
+    mp.setattr(gsync_module, 'tqdm', SpyBar)
+    try:
+        rc = run_google_sync("Cadre", "Fabrice", apply=True, yes=True,
+                             session=_google_session(router), aura=aura,
+                             s3_client=_FakeS3(), sqs_client=_FakeSQS(),
+                             cache_dir=tmp_path / "cache",
+                             manifest_path=tmp_path / "manifest.json",
+                             budget=_WaityBudget())
+    finally:
+        mp.undo()
+
+    assert rc == 0
+    assert captured['waits'] >= 1, "budget waits never reached the progress bar"
 
 
 def test_safe02_threshold_gate_aborts_on_non_yes(tmp_path, capsys):

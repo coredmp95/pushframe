@@ -470,6 +470,7 @@ def execute_plan(plan: SyncPlan, aura, frame_id: str, *, s3_client, sqs_client,
                  throttle_seconds: float = WRITE_THROTTLE_SECONDS, sleep=time.sleep,
                  max_consecutive_failures: int = MAX_CONSECUTIVE_WRITE_FAILURES,
                  progress=lambda *args: None,
+                 on_error=lambda *args: None,
                  batch_size: int = WRITE_BATCH_SIZE,
                  chunk_delay_seconds: float = WRITE_CHUNK_DELAY_SECONDS,
                  on_wait=lambda *args: None,
@@ -713,6 +714,7 @@ def execute_plan(plan: SyncPlan, aura, frame_id: str, *, s3_client, sqs_client,
             except Exception as e:
                 result.upload_failures.append((path, str(e)))
                 progress('upload', path, False)
+                on_error('upload', path, False, str(e))
                 note_failure(str(e))
 
         if not prepped:
@@ -743,6 +745,7 @@ def execute_plan(plan: SyncPlan, aura, frame_id: str, *, s3_client, sqs_client,
                         reason = 'file not acknowledged in batch_update successes'
                         result.upload_failures.append((path, reason))
                         progress('upload', path, False)
+                        on_error('upload', path, False, reason)
                         note_failure(reason)
             except httpx.HTTPStatusError as e:
                 # REL-01/REL-02/REL-04, D-01/D-02/D-04: a plain HTTP 401 on
@@ -788,6 +791,7 @@ def execute_plan(plan: SyncPlan, aura, frame_id: str, *, s3_client, sqs_client,
                                   'anti-abuse trip, not authentication')
                         result.upload_failures.append((path, reason))
                         progress('upload', path, False)
+                        on_error('upload', path, False, reason)
                         note_failure(reason)
                     if budget is not None:
                         budget.save()
@@ -813,6 +817,7 @@ def execute_plan(plan: SyncPlan, aura, frame_id: str, *, s3_client, sqs_client,
                     reason = f'verify probe after re-login was inconclusive: {probe_error}'
                     result.upload_failures.append((by_lid[lid], reason))
                     progress('upload', by_lid[lid], False)
+                    on_error('upload', by_lid[lid], False, reason)
                     note_failure(reason)
 
                 if absent:
@@ -852,6 +857,7 @@ def execute_plan(plan: SyncPlan, aura, frame_id: str, *, s3_client, sqs_client,
                                 reason = 'file not acknowledged in batch_update successes (retry)'
                                 result.upload_failures.append((path, reason))
                                 progress('upload', path, False)
+                                on_error('upload', path, False, reason)
                                 note_failure(reason)
                     except (RateLimitError, ConsecutiveWriteFailureError):
                         raise
@@ -862,6 +868,7 @@ def execute_plan(plan: SyncPlan, aura, frame_id: str, *, s3_client, sqs_client,
                             reason = f'HTTP 401 retry failed: {resend_exc}'
                             result.upload_failures.append((path, reason))
                             progress('upload', path, False)
+                            on_error('upload', path, False, reason)
                             note_failure(str(resend_exc))
         except RateLimitError:
             # Anti-abuse throttle/lockout: abort the whole batch (do not
@@ -904,6 +911,7 @@ def execute_plan(plan: SyncPlan, aura, frame_id: str, *, s3_client, sqs_client,
                 result.upload_failures.append((path, str(e)))
                 progress('upload', path, False)
                 note_failure(str(e))
+                on_error('upload', path, False, str(e))
 
         if budget is not None:
             # Save after every chunk that returns normally (success OR
@@ -957,6 +965,7 @@ def execute_plan(plan: SyncPlan, aura, frame_id: str, *, s3_client, sqs_client,
                         result.reshow_failures.append((asset.id, reason))
                         progress('reshow', asset.id, False)
                         note_failure(reason)
+                        on_error('reshow', asset.id, False, reason)
                     if budget is not None:
                         budget.save()
                     continue
@@ -983,6 +992,7 @@ def execute_plan(plan: SyncPlan, aura, frame_id: str, *, s3_client, sqs_client,
                         result.reshow_failures.append((asset.id, reason))
                         progress('reshow', asset.id, False)
                         note_failure(str(resend_exc))
+                        on_error('reshow', asset.id, False, str(resend_exc))
         except RateLimitError:
             if budget is not None:
                 budget.reconcile_tripped(clock())
@@ -1002,6 +1012,7 @@ def execute_plan(plan: SyncPlan, aura, frame_id: str, *, s3_client, sqs_client,
                 result.reshow_failures.append((asset.id, str(e)))
                 progress('reshow', asset.id, False)
                 note_failure(str(e))
+                on_error('reshow', asset.id, False, str(e))
 
         if budget is not None:
             budget.save()
@@ -1053,6 +1064,7 @@ def execute_plan(plan: SyncPlan, aura, frame_id: str, *, s3_client, sqs_client,
                         result.delete_failures.append((asset.id, reason))
                         progress('delete', asset.id, False)
                         note_failure(reason)
+                        on_error('delete', asset.id, False, reason)
                     if budget is not None:
                         budget.save()
                     continue
@@ -1079,6 +1091,7 @@ def execute_plan(plan: SyncPlan, aura, frame_id: str, *, s3_client, sqs_client,
                         result.delete_failures.append((asset.id, reason))
                         progress('delete', asset.id, False)
                         note_failure(str(resend_exc))
+                        on_error('delete', asset.id, False, str(resend_exc))
         except RateLimitError:
             if budget is not None:
                 budget.reconcile_tripped(clock())
@@ -1098,6 +1111,7 @@ def execute_plan(plan: SyncPlan, aura, frame_id: str, *, s3_client, sqs_client,
                 result.delete_failures.append((asset.id, str(e)))
                 progress('delete', asset.id, False)
                 note_failure(str(e))
+                on_error('delete', asset.id, False, str(e))
 
         if budget is not None:
             budget.save()

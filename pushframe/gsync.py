@@ -406,13 +406,58 @@ def run_google_sync(album_target: str, frame_arg: str, *, apply: bool = False,
     staged_by_id = staged.staged_by_id
     confirmed_paths: list[str] = []
 
+    # Anti-panic, phase 23.5: state the pacing contract BEFORE the bar starts.
+    # A budget-limited run can spend minutes between batches (30-request
+    # bucket, 0.75/min refill) — an operator who knows that reads a pacing
+    # countdown as progress, not as a hang.
+    total_items = len(plan.to_upload) + len(plan.to_delete)
+    if total_items:
+        print(f'applying {total_items} item(s) at write-budget pace — long '
+              f'"pacing" countdowns between batches are NORMAL (≈0.75 write '
+              f'requests/min refill after the 30-request burst); every wait '
+              f'is shown live. Interrupts are safe: progress already confirmed '
+              f'is kept.')
+
     with tqdm(total=len(plan.to_upload) + len(plan.to_delete), desc='Applying',
               unit='item', disable=not sys.stderr.isatty()) as bar:
-        def _progress(kind, identifier, ok):
+        def _progress(kind, identifier, ok, error=None):
             bar.update(1)
-            bar.set_postfix_str(f'{kind} {"ok" if ok else "FAIL"}')
-            if kind == 'upload' and ok:
-                confirmed_paths.append(str(identifier))
+            name = Path(identifier).name if kind == 'upload' else str(identifier)
+            if ok:
+                # Venus phase-23.5 fix: name the file — 'upload ok photo-2.jpg'
+                # instead of a bare postfix the operator cannot follow.
+                bar.set_postfix_str(f'{kind} ok {name}')
+            else:
+                # Escalate failures WITH the cause + the actionable remedy,
+                # instead of a context-free FAIL. 401s during a write run are
+                # the account-lockout signature (phase 23.5 venus regression):
+                # the remedy names the wait-and-relogin path immediately.
+                cause = str(error or '').strip() or 'unknown error'
+                short = cause if len(cause) <= 120 else cause[:117] + '...'
+                if '401' in short:
+                    remedy = ' — likely account lockout: STOP, wait ~30 min, then `pushframe status` to re-login'
+                else:
+                    remedy = ''
+                bar.set_postfix_str(f'{kind} FAIL {name}: {short}{remedy}')
+
+        def _wait(remaining):
+            # Venus phase-23.5 fix: execute_plan's on_wait was never wired, so
+            # inter-chunk cooldowns AND write-budget waits (the 252 s/item the
+            # operator saw) rendered as a frozen bar. Both arrive here; one
+            # honest label says pacing is normal and the bar is alive.
+            bar.set_postfix_str(f'pacing {remaining:.0f}s — budget refill/cooldown, normal')
+
+        def _progress_factory(inner):
+            def cb(kind, identifier, ok):
+                inner(kind, identifier, ok)
+                if kind == 'upload' and ok:
+                    confirmed_paths.append(str(identifier))
+            return cb
+
+        def _on_error(kind, identifier, ok, reason):
+            # execute_plan's new on_error seam: the failure CAUSE reaches the
+            # live bar, not just the summary lines at the end.
+            _progress(kind, identifier, ok, error=reason)
 
         exec_kwargs: dict = {}
         if budget is not None:
@@ -420,9 +465,17 @@ def run_google_sync(album_target: str, frame_arg: str, *, apply: bool = False,
         try:
             result = execute_plan(plan, aura, frame.id, s3_client=s3,
                                   sqs_client=sqs, removal_mode='hide',
-                                  progress=_progress, **exec_kwargs)
+                                  progress=_progress_factory(_progress),
+                                  on_wait=_wait, on_error=_on_error, **exec_kwargs)
         except Exception as e:
+            bar.close()
             print(f'google-sync failed: apply aborted: {e}')
+            print(f'What happened: the run stopped early to protect the account. '
+                  f'{len(confirmed_paths)} item(s) were confirmed written before '
+                  f'the stop and ARE on the frame — the next run recognizes them '
+                  f'(verify probe) and will NOT upload them twice. Wait ~30 min '
+                  f'before retrying; if `pushframe status` says 475/lockout, wait '
+                  f'longer.')
             return 1
 
     # Persist manifest entries for every staged item whose bytes are PROVEN
