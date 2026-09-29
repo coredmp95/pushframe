@@ -32,6 +32,9 @@ Any advice or issues are welcome.
   environment, dependency, and interpreter management.
 - A live Aura account (email + password) for any command that actually hits the API.
 
+Release history lives in [CHANGELOG.md](CHANGELOG.md) (Added / Changed /
+Deprecated / Fixed / Security per release, Keep a Changelog format).
+
 ## Install (Ubuntu/Debian)
 
 Pre-built `.deb` packages embed their own Python 3.14 runtime under
