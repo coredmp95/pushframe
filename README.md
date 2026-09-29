@@ -76,8 +76,9 @@ sudo install -d -m 0755 /etc/apt/keyrings
 curl -fsSL https://coredmp95.github.io/pushframe/dists/pushframe.asc \
   | sudo gpg --dearmor -o /etc/apt/keyrings/pushframe.gpg
 
-# 2. add the sources entry
-echo "deb [signed-by=/etc/apt/keyrings/pushframe.gpg] https://coredmp95.github.io/pushframe stable main" \
+# 2. add the sources entry (arch=amd64: the repo is amd64-only — on
+#    multi-arch machines this silences apt's i386 notice)
+echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/pushframe.gpg] https://coredmp95.github.io/pushframe stable main" \
   | sudo tee /etc/apt/sources.list.d/pushframe.list
 
 # 3. install
