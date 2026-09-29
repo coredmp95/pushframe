@@ -129,8 +129,11 @@ echo "== publishing to gh-pages (orphan commit, force) =="
 WT="build/gh-pages-worktree"
 git worktree remove --force "$WT" 2>/dev/null || true
 git worktree prune
+# a previous failed run can leave the orphan branch behind; --orphan refuses
+# an existing branch name and died silently under the old 2>/dev/null
+git branch -D gh-pages-publish 2>/dev/null || true
 git worktree add --detach "$WT" >/dev/null
-git -C "$WT" checkout --orphan gh-pages-publish 2>/dev/null
+git -C "$WT" checkout --orphan gh-pages-publish
 git -C "$WT" rm -rf --quiet . 2>/dev/null || true
 cp -a "$TREE"/. "$WT"/
 touch "$WT/.nojekyll"
