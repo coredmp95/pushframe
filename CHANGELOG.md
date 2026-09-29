@@ -14,6 +14,10 @@ frames; it is not affiliated with Aura Frames Inc.
 
 ## [Unreleased]
 
+- (v5.1 work will land here)
+
+## [5.0.5] — 2026-09-29
+
 ### Added
 
 - **`pushframe config`** (v5.1, phase 23): interactive wizard that asks for
