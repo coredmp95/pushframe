@@ -16,6 +16,27 @@ frames; it is not affiliated with Aura Frames Inc.
 
 - (v5.1 work will land here)
 
+### Added (phase 25: Multi-frame & Scheduling)
+
+- **Named pairs** (MTF-01): `pushframe config pair add/remove/list` —
+  `pairs` in config.json is a named dict (`{"cadre-venus": {"album": …,
+  "frame": …}}`); duplicates and unknown names fail named.
+- **`google-sync --pair <name>` / `--all`** (MTF-02/03): per-pair state
+  (manifest `~/.config/pushframe/pairs/<name>/`, cache
+  `~/.local/state/pushframe/pairs/<name>/cache/`); `--all` runs every pair
+  in sorted order with ONE shared write budget (account-level SAFE-02);
+  a failing pair is reported and never blocks the others; exit 1 if any
+  failed.
+- **`pushframe schedule add/list/remove`** (TMR-01..03): systemd USER
+  timers (no root) — `pushframe-<job>.service/.timer`, oneshot,
+  `Restart=no` (the next tick is the retry), `RandomizedDelaySec`, per-job
+  log at `~/.local/state/pushframe/<job>.log`. ExecStart is fully
+  non-interactive (token session); **`--scheduled` flips SAFE-02 to
+  skip-and-log** (a timed run never mass-hides silently and never fails
+  the unit over a safety decision). Preflight names the systemd user
+  session requirement with the `loginctl enable-linger` remedy
+  (documented; never executed by the tool).
+
 ## [5.0.7] — 2026-09-29
 
 ### Added (phase 24: Token-First Sessions & Preflight Sweep)

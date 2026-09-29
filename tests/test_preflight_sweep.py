@@ -40,6 +40,23 @@ CASES = [
         "sync_dir_no_creds", {"dir": "."},
         "not authenticated", "pushframe config",
         id="mode-8-sync-no-creds"),
+    # --- phase 25 additions (25-CONTEXT §Failure modes) ---
+    pytest.param(
+        "pair_unknown", {"pair": "ghost"},
+        'unknown pair "ghost"', "Known pairs",
+        id="mode-13-pair-unknown"),
+    pytest.param(
+        "all_zero_pairs", {},
+        "no pairs configured", "config pair add",
+        id="mode-14-all-zero-pairs"),
+    pytest.param(
+        "schedule_no_systemd", {},
+        "systemd", "enable-linger",
+        id="mode-15-no-systemd-session"),
+    pytest.param(
+        "pair_duplicate", {"name": "dup", "album": "A", "frame": "F"},
+        "already exists", "remove it first",
+        id="mode-16-pair-duplicate"),
 ]
 
 
@@ -100,6 +117,52 @@ def gsync_no_creds(capsys, no_creds, album, frame):
 
 class _MuteAura:
     """Aura stub good enough to reach the dir preflight (which fails first)."""
+
+
+# --- phase 25 callables ------------------------------------------------------
+
+def pair_unknown(capsys, no_creds, pair):
+    from pushframe.gsync import run_google_sync
+    return run_google_sync("Album", "Frame", apply=False, pair=pair,
+                           session=_MuteSession(), aura=_MuteAura())
+
+
+def all_zero_pairs(capsys, no_creds):
+    from pushframe.gsync import run_google_sync
+    return run_google_sync("Album", "--all", apply=False, run_all=True,
+                           session=_MuteSession(), aura=_MuteAura())
+
+
+def schedule_no_systemd(capsys, no_creds):
+    import pytest as _pytest
+    from pushframe import schedule as sch
+    mp = _pytest.MonkeyPatch()
+    mp.setattr(sch, "UNIT_DIR", no_creds_parent / "units")
+    mp.setattr(sch, "systemd_user_session_ok", lambda: False)
+    try:
+        return sch.schedule_add("nightly", pair="whatever", every="1d")
+    finally:
+        mp.undo()
+
+
+def pair_duplicate(capsys, no_creds, name, album, frame):
+    from pushframe import pairs as pairs_mod
+    pairs_mod.pair_add(name, album=album, frame=frame)
+    rc = 0
+    try:
+        pairs_mod.pair_add(name, album=album, frame=frame)
+    except Exception as e:
+        print(f'pair not added: {e}')
+        rc = 1
+    return rc
+
+
+def _MuteSession():
+    return object()
+
+
+import pathlib
+no_creds_parent = pathlib.Path("/tmp")
 
 
 # --- the sweep ---------------------------------------------------------------
