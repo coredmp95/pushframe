@@ -42,18 +42,43 @@ class BootstrapError(RuntimeError):
     """Bootstrap prerequisites missing or the login never completed."""
 
 
+DEFAULT_PROFILE_DIR = Path.home() / ".config" / "pushframe" / "chrome-profile"
+
+
 def _require_profile() -> Path:
-    """Resolve the dedicated profile directory; fail loud when unset (T-16-06)."""
+    """Resolve the dedicated profile directory (v5.1 simplification).
+
+    Precedence: PUSHFRAME_PROBE_CHROME_PROFILE > AURA_PROBE_CHROME_PROFILE
+    (legacy) > the built-in default ~/.config/pushframe/chrome-profile —
+    created on demand. The env var is now an OVERRIDE, not a prerequisite:
+    a fresh machine gets google-link with zero configuration.
+
+    A near-miss env name (e.g. USHFRAME_PROBE_CHROME_PROFILE — a truncated
+    prefix, seen in the wild on venus) is called out explicitly, because a
+    silent typo looks identical to "unset".
+    """
     profile = os.environ.get(PROFILE_ENV_VAR, "").strip()
     if not profile:
         profile = os.environ.get(_LEGACY_PROFILE_ENV_VAR, "").strip()
     if not profile:
-        raise BootstrapError(
-            f"{PROFILE_ENV_VAR} is unset — the daily-driver profile is "
-            f"structurally unreachable; point the env var at a dedicated "
-            f"profile directory (e.g. ~/.config/pushframe/chrome-profile) "
-            f"and re-run (T-16-06)"
-        )
+        # Near-miss detection: subsequence match (USHFRAME_… = PUSHFRAME_…
+        # minus its first letter — a real-world typo, seen on venus) catches
+        # truncated/scrambled names that a plain substring check misses.
+        target = PROFILE_ENV_VAR.lower()
+        for name, value in os.environ.items():
+            low = name.lower()
+            if name == PROFILE_ENV_VAR or not low.endswith(target[4:]):
+                continue
+            it = iter(target)
+            if all(ch in it for ch in low):  # low is a subsequence of target
+                raise BootstrapError(
+                    f"env var '{name}' looks like a misspelled "
+                    f"{PROFILE_ENV_VAR} (value: {value}) — fix the name in "
+                    f"your shell profile, or unset it to use the default "
+                    f"profile at {DEFAULT_PROFILE_DIR}"
+                )
+        DEFAULT_PROFILE_DIR.mkdir(parents=True, exist_ok=True)
+        return DEFAULT_PROFILE_DIR
     path = Path(profile).expanduser().resolve()
     path.mkdir(parents=True, exist_ok=True)
     return path
@@ -68,6 +93,34 @@ def run_bootstrap(*, auto: bool = False) -> dict:
     {vault_path, cookie_count, auth_markers} — never cookie values.
     """
     profile_dir = _require_profile()
+
+    # Preflight (v5.1): fail with the REMEDY, not a traceback. Order matters —
+    # the python package first, then a browser able to drive.
+    missing = []
+    try:
+        import playwright  # noqa: F401
+    except ImportError:
+        missing.append(
+            "the 'playwright' python package (this .deb/wheel ships without it;"
+            " install with: pip install --user playwright  — or "
+            "pip install 'pushframe[google-browser]')"
+        )
+    has_chrome = shutil.which("google-chrome") is not None
+    has_chromium = shutil.which("chromium") is not None or shutil.which("chromium-browser") is not None
+    if not has_chrome and not has_chromium:
+        missing.append(
+            "a browser for Playwright to drive — install Google Chrome "
+            "(recommended; channel=chrome avoids bot flags), or run "
+            "'playwright install chromium' after installing the package"
+        )
+    if missing:
+        remedy = "\n  - ".join(missing)
+        raise BootstrapError(
+            "google-link prerequisites missing on this machine:\n"
+            f"  - {remedy}\n"
+            "Then re-run: pushframe google-link"
+        )
+
     from playwright.sync_api import sync_playwright  # lazy, in-function import ONLY
 
     print(f"dedicated profile: {profile_dir}")
@@ -77,7 +130,6 @@ def run_bootstrap(*, auto: bool = False) -> dict:
     # engine already treats it as an ordinary browser); otherwise bundled
     # Chromium with automation switches masked so navigator.webdriver stays
     # false.
-    has_chrome = shutil.which("google-chrome") is not None
     launch_kwargs = dict(user_data_dir=str(profile_dir), headless=False,
                          args=["--disable-blink-features=AutomationControlled"])
     if has_chrome:

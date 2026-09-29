@@ -108,7 +108,20 @@ Milestone summary — see `.planning/MILESTONES.md` for the full retros.
 
 ## [Unreleased]
 
-- Nothing staged yet; next changes land here before the next tag.
+### Added
+
+- google-link zero-config: the dedicated Chrome profile defaults to
+  `~/.config/pushframe/chrome-profile` (created on demand); the env var
+  becomes an override. A near-miss env name (e.g. a truncated
+  `USHFRAME_…`) is called out explicitly instead of looking like "unset".
+- google-link preflight: missing prerequisites (playwright package,
+  Chrome/Chromium) now fail with the exact remedy instead of a traceback
+  (`ModuleNotFoundError: playwright` was the whole output before).
+
+### Changed
+
+- `PUSHFRAME_PROBE_CHROME_PROFILE` is no longer required to run
+  `google-link`.
 
 ## [5.0.3] — 2026-09-29
 

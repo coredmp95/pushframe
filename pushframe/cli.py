@@ -324,12 +324,10 @@ def run_google_link(*, debug: bool = False, bootstrap_fn=None) -> int:
     """
     _configure_cli_logging(debug)
 
-    if not os.environ.get(PROFILE_ENV_VAR, '').strip():
-        print(f'google-link failed: {PROFILE_ENV_VAR} is unset — the daily-driver '
-              f'profile is structurally unreachable; point the env var at a '
-              f'dedicated Chrome profile directory (e.g. ~/.config/pushframe/'
-              f'chrome-profile) and re-run (T-16-06)')
-        return 1
+    # v5.1: no env prerequisite here — bootstrap._require_profile() owns the
+    # precedence (override > legacy > built-in default, created on demand)
+    # and raises a helpful BootstrapError (near-miss names included) that the
+    # handler below prints verbatim.
 
     # Re-link notice (LGS-02): same command refreshes an existing session.
     # Vault read routes through from_vault (denylist-sanctioned); a dead or

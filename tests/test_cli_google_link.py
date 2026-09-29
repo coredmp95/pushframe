@@ -40,13 +40,38 @@ def test_google_link_success_with_injected_bootstrap(monkeypatch, capsys):
     assert FAKE_COOKIE_VALUE not in out
 
 
-def test_google_link_missing_profile_fails_loud(monkeypatch, capsys):
-    monkeypatch.delenv("PUSHFRAME_PROBE_CHROME_PROFILE", raising=False)
-    rc = run_google_link(bootstrap_fn=_fake_bootstrap())
-    assert rc == 1
-    out = capsys.readouterr().out
-    assert "PUSHFRAME_PROBE_CHROME_PROFILE" in out
-    assert "structurally unreachable" in out
+def test_require_profile_zero_config_uses_default(tmp_path, monkeypatch):
+    """v5.1 contract: the profile env var is an OVERRIDE, not a prerequisite.
+    With nothing set, _require_profile resolves to the built-in default
+    (~/.config/pushframe/chrome-profile) and CREATES it — a fresh machine
+    needs no shell configuration."""
+    for name in ("PUSHFRAME_PROBE_CHROME_PROFILE", "AURA_PROBE_CHROME_PROFILE",
+                 "USHFRAME_PROBE_CHROME_PROFILE"):
+        monkeypatch.delenv(name, raising=False)
+    from pushframe.google import bootstrap as bs
+    monkeypatch.setattr(bs, "DEFAULT_PROFILE_DIR", tmp_path / "chrome-profile")
+    resolved = bs._require_profile()
+    assert resolved == tmp_path / "chrome-profile"
+    assert resolved.is_dir()
+
+
+def test_require_profile_near_miss_env_name_is_called_out(tmp_path, monkeypatch):
+    """A truncated prefix (USHFRAME_PROBE_CHROME_PROFILE, seen in the wild
+    on venus) must not look like a plain 'unset': the error names the
+    suspect variable and offers the default-profile escape hatch."""
+    for name in ("PUSHFRAME_PROBE_CHROME_PROFILE", "AURA_PROBE_CHROME_PROFILE"):
+        monkeypatch.delenv(name, raising=False)
+    from pushframe.google import bootstrap as bs
+    monkeypatch.setattr(bs, "DEFAULT_PROFILE_DIR", tmp_path / "chrome-profile")
+    monkeypatch.setenv("USHFRAME_PROBE_CHROME_PROFILE", "/somewhere")
+    try:
+        bs._require_profile()
+        raised = None
+    except bs.BootstrapError as e:
+        raised = str(e)
+    assert raised is not None
+    assert "USHFRAME_PROBE_CHROME_PROFILE" in raised and "misspell" in raised
+    assert "chrome-profile" in raised
 
 
 def test_google_link_relink_notice_when_vault_exists(tmp_path, monkeypatch, capsys):
