@@ -37,11 +37,11 @@ on PyPI, already taken.
      carries its own venv (opt-in layout /opt or /usr/lib) rather than fighting
      distutils — the modern, hermetic, upstream-recommended pattern for apps. -->
 
-- [ ] **DEB-01**: `dpkg -i pushframe_<version>_amd64.deb` (or `apt install ./pushframe_….deb`) installs a working `pushframe` on Ubuntu 26.04: binary on PATH, `pushframe status --help` runs, dependencies satisfied — verified in a clean container/schroot, not just the dev machine
-- [ ] **DEB-02**: The package is built reproducibly by a repo script (e.g. `scripts/build-deb.sh` or `fpm`/`dpkg-deb` via pyproject metadata — version read from the single source of truth) and emits the `.deb` as a CI/release artifact; building requires no Debian packaging expertise
-- [ ] **DEB-03**: Correct Debian metadata: Package `pushframe`, Section `utils`, Maintainer, Description (with the unofficial disclaimer), License, Depends expressing the interpreter requirement (e.g. `python3 (>= 3.14)` or the bundled-runtime equivalent), and Conflicts/Replaces/Provides for the never-shipped `aura-cli` name avoided (no conflict needed — the name was never packaged; documented decision)
-- [ ] **DEB-04**: Install/uninstall is clean per Debian policy as observed by `lintian` (no errors): files under `/usr/lib/pushframe/` (private venv) + `/usr/bin/pushframe` symlink, config strictly under `$HOME` at runtime (no root-owned files in `~`), postrm removes nothing from `$HOME`
-- [ ] **DEB-05**: An APT repository layout is published for distribution: `dists/`+`pool/` structure (reprepro or dpkg-scanpackages based), Release/InRelease signing key documented, and the repo served from GitHub Pages with the one-line user instructions (`curl … | apt` sources entry + `apt install pushframe`)
+- [x] **DEB-01**: `dpkg -i pushframe_<version>_amd64.deb` (or `apt install ./pushframe_….deb`) installs a working `pushframe` on Ubuntu 26.04: binary on PATH, `pushframe status --help` runs, dependencies satisfied — verified in a clean container/schroot, not just the dev machine
+- [x] **DEB-02**: The package is built reproducibly by a repo script (e.g. `scripts/build-deb.sh` or `fpm`/`dpkg-deb` via pyproject metadata — version read from the single source of truth) and emits the `.deb` as a CI/release artifact; building requires no Debian packaging expertise
+- [x] **DEB-03**: Correct Debian metadata: Package `pushframe`, Section `utils`, Maintainer, Description (with the unofficial disclaimer), License, Depends expressing the interpreter requirement (e.g. `python3 (>= 3.14)` or the bundled-runtime equivalent), and Conflicts/Replaces/Provides for the never-shipped `aura-cli` name avoided (no conflict needed — the name was never packaged; documented decision)
+- [x] **DEB-04**: Install/uninstall is clean per Debian policy as observed by `lintian` (no errors): files under `/usr/lib/pushframe/` (private venv) + `/usr/bin/pushframe` symlink, config strictly under `$HOME` at runtime (no root-owned files in `~`), postrm removes nothing from `$HOME`
+- [x] **DEB-05**: An APT repository layout is published for distribution: `dists/`+`pool/` structure (reprepro or dpkg-scanpackages based), Release/InRelease signing key documented, and the repo served from GitHub Pages with the one-line user instructions (`curl … | apt` sources entry + `apt install pushframe`)
 
 ### PyPI Publishing (PYI)
 
@@ -86,7 +86,7 @@ phase numbering continues from v4.0's Phase 19.
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | IDN-01..06 | Phase 20 | Complete |
-| DEB-01..05 | Phase 21 | Pending |
+| DEB-01..05 | Phase 21 | Complete |
 | PYI-01..02 | Phase 22 | Pending |
 | REL-01..03 | Phase 22 | Pending |
 

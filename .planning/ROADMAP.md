@@ -28,7 +28,7 @@ not-affiliated disclaimer (nominative use to identify compatibility). Distributa
 **one release action** (a tag) producing `.deb` + APT repo update + PyPI upload.
 
 - [x] **Phase 20: pushframe Rename, Migration & Repo Switch** - Rename binary+module to `pushframe`, migrate config, move the repo out of the fork — completed 2026-09-29
-- [ ] **Phase 21: Debian Package & APT Repo** - Build a policy-clean `.deb` by script, publish a signed APT repo on GitHub Pages
+- [x] **Phase 21: Debian Package & APT Repo** - Build a policy-clean `.deb` by script, publish a signed APT repo on GitHub Pages (completed 2026-09-29)
 - [ ] **Phase 22: PyPI + Release Engineering** - Publish to PyPI, make one tag produce every artifact
 
 ## Phase Details
@@ -76,11 +76,11 @@ side-action (create repo) + `git remote set-url` + push — no force-push anywhe
 Plans:
 **Wave 1**
 
-- [ ] 21-01-PLAN.md — build-deb.sh (dpkg-deb, embedded uv-standalone runtime, control metadata), test-deb-container.sh (clean-room install/help/metadata/remove + lintian), README .deb install pointer (DEB-01..04)
+- [x] 21-01-PLAN.md — build-deb.sh (dpkg-deb, embedded uv-standalone runtime, control metadata), test-deb-container.sh (clean-room install/help/metadata/remove + lintian), README .deb install pointer (DEB-01..04)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 21-02-PLAN.md — dedicated GPG key, zero-dependency signed APT tree (scanpackages + hand-built Release/InRelease), gh-pages publication, container journey test, README APT journey (DEB-05)
+- [x] 21-02-PLAN.md — dedicated GPG key, zero-dependency signed APT tree (scanpackages + hand-built Release/InRelease), gh-pages publication, container journey test, README APT journey (DEB-05)
 
 **Notes**: Chosen layout is a private runtime under `/usr/lib/pushframe/` (hermetic,
 upstream-recommended app pattern) rather than distutils-installing into the system
@@ -117,7 +117,7 @@ deps.
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 20. pushframe Rename, Migration & Repo Switch | 1/1 | Complete | 2026-09-29 |
-| 21. Debian Package & APT Repo | 0/2 | Planned | - |
+| 21. Debian Package & APT Repo | 2/2 | Complete    | 2026-09-29 |
 | 22. PyPI + Release Engineering | 0/? | Not started | - |
 
 ## Requirement Coverage (v5.0)
