@@ -18,3 +18,33 @@ jobs:
 
       - name: Run the offline test suite (no credentials, no network)
         run: uv run --extra dev pytest -q -m "not live"
+
+  dependency-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.2.0
+        with:
+          enable-cache: true
+
+      # FAIL THE BUILD on any known CVE in the LOCKED dependency tree
+      # (uv.lock — the exact set users install, not pyproject's open
+      # ranges). pip-audit reads the OSV/PyPI advisory DBs. Dependabot
+      # flags and PRs stay the discovery side; this gate makes a known-
+      # vulnerable lockfile unshippable on master, independent of scan
+      # timing (2026-09-30: the push banner fired on a tree that the
+      # merged urllib3 bump had already fixed — stale, but nothing
+      # enforced it). Fails loudly on ANY confirmed vulnerability;
+      #GHSA-withdrawn advisories vanish on their own. If a vulnerability
+      # lands with NO patched release yet, this job blocks master until
+      # one exists or the dep is pinned/removed — that visibility is the
+      # point; use `continue-on-error: true` temporarily ONLY with a
+      # linked issue.
+      - name: Audit the locked dependency tree (pip-audit)
+        run: |
+          set -euo pipefail
+          uv export --format requirements-txt --no-hashes --no-emit-project -o /tmp/reqs.txt
+          grep -v '^#' /tmp/reqs.txt | grep -v '^$' | head -3
+          uvx pip-audit --requirement /tmp/reqs.txt --no-deps --strict
