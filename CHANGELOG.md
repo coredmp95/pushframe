@@ -14,6 +14,16 @@ frames; it is not affiliated with Aura Frames Inc.
 
 ## [Unreleased]
 
+### Changed (tests)
+
+- **Network guard**: `httpx.Client` is patched for the whole test session
+  so any client built WITHOUT an explicit transport gets a blocking one —
+  except when built inside a live-marked test (the only legitimate
+  real-network shape). An offline test that reaches the real network now
+  fails loudly instead of silently depending on a local .env (the relogin
+  masking that kept the tests workflow red from v5.1.0 to 5.1.1), and a
+  local .env can no longer masquerade as a live posture.
+
 ## [5.1.1] — 2026-09-30
 
 ### Changed
