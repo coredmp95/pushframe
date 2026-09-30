@@ -215,7 +215,7 @@ def run_google_sync(album_target: str, frame_arg: str, *, apply: bool = False,
                     aura=None, s3_client=None, sqs_client=None, budget=None,
                     workers: int = 4, threshold: float | None = None,
                     input_fn=None, is_interactive: bool | None = None,
-                    list_shared=None, cache_dir=None,
+                    list_shared=None, cache_dir=None, vault_path=None,
                     manifest_path=None, batch_size: int | None = None,
                     pair: str | None = None, run_all: bool = False,
                     scheduled: bool = False) -> int:
@@ -314,7 +314,7 @@ def run_google_sync(album_target: str, frame_arg: str, *, apply: bool = False,
         # with the full remedy (google-link + the headless ssh -X recipe).
         try:
             from pushframe.preflight import require_google_vault
-            require_google_vault()
+            require_google_vault(vault_path)
         except Exception as e:
             print(f'google-sync failed: {e}')
             return 1

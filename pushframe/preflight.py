@@ -6,6 +6,7 @@ Google cookie vault; sync/push require the source directory to EXIST (D-03:
 hard error) while empty stays the friendly "nothing to do" (not an error —
 looping scripts over sometimes-empty dirs must not break).
 """
+import os
 from pathlib import Path
 
 
@@ -14,11 +15,32 @@ class PreflightError(Exception):
     action; str() renders both."""
 
 
-def require_google_vault(vault_path: Path | None = None) -> Path:
-    """google-sync's vault check (PRF-01): present + non-empty JSON object."""
-    import json
+def default_vault_path() -> Path:
+    """The vault path google-sync's preflight probes: PUSHFRAME_VAULT_PATH
+    when set (tests and power users pin it — a suite must never depend on
+    the real machine's vault), else the production path expanded per-user."""
     from pushframe.google.vault import DEFAULT_VAULT_PATH as _default
-    path = vault_path or _default
+    override = os.getenv("PUSHFRAME_VAULT_PATH")
+    return Path(override).expanduser() if override else _default.expanduser()
+
+
+def require_google_vault(vault_path: Path | None = None) -> Path:
+    """google-sync's vault check (PRF-01): present + parseable JSON holding
+    at least one cookie record.
+
+    Two 2026-09-30 live-proven bugs fixed here (venus: link saves fine,
+    google-sync claims 'no vault' anyway):
+    - the default path was probed WITHOUT expanduser(): a literal `~` path
+      never exists, so this preflight always fired on machines whose vault
+      was perfectly healthy (phase-24 regression, masked on CI — CI has no
+      vault either — and on scheduled runs, whose --pair branch skips this
+      block entirely);
+    - the shape check demanded a JSON OBJECT while vault.save() writes a
+      JSON LIST of cookie records — a healthy vault would have failed the
+      'unreadable' branch even with the right path.
+    """
+    import json
+    path = Path(vault_path).expanduser() if vault_path else default_vault_path()
     if not path.exists():
         raise PreflightError(
             f'no Google session vault at {path} — google-sync needs a linked '
@@ -27,7 +49,9 @@ def require_google_vault(vault_path: Path | None = None) -> Path:
             f'window can open; the 0600 vault survives logouts).')
     try:
         data = json.loads(path.read_text())
-        if not isinstance(data, dict) or not data:
+        healthy = (isinstance(data, list) and len(data) > 0) or \
+                  (isinstance(data, dict) and len(data) > 0)
+        if not healthy:
             raise ValueError('empty or malformed vault')
     except (ValueError, OSError) as e:
         raise PreflightError(

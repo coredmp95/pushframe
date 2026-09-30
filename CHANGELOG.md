@@ -12,7 +12,27 @@ every channel.
 `pushframe` is an unofficial community CLI for Aura Frames digital photo
 frames; it is not affiliated with Aura Frames Inc.
 
-## [5.1.4] - 2026-09-30
+## [5.1.5] - 2026-09-30
+
+### Fixed
+
+- **`google-sync` no longer claims "no Google session vault" on a healthy
+  vault** (venus, 2026-09-30): the vault preflight probed the default path
+  WITHOUT `expanduser()` — a literal `~` path never exists, so the check
+  fired on every machine whose vault was perfectly healthy (a
+  `google-link` seconds earlier had saved it) — and its shape check
+  demanded a JSON object while the vault is a JSON list of cookie
+  records, so even the right path would have failed. Two stacked
+  phase-24 bugs, masked until now because CI has no vault either and the
+  scheduled `--pair` branch skips this block entirely. One tell was in
+  every transcript: `google-link` prints "existing Google session found"
+  only when a vault READ succeeds. The preflight now expands the default
+  path, accepts the list shape (dict kept for backward compatibility),
+  and takes a `vault_path` argument; `PUSHFRAME_VAULT_PATH` pins the
+  path for tests. The preflight-sweep suite is now pinned away from the
+  real machine's vault (it silently depended on the bug) and its
+  `gsync_no_creds` case asserts what it always meant to (Aura-side named
+  auth failure).
 
 ### Added
 

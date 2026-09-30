@@ -34,7 +34,7 @@ CASES = [
         id="mode-8-inspect-no-creds"),
     pytest.param(
         "gsync_no_creds", {"album": "Cadre", "frame": "Fabrice"},
-        "google-sync failed", "google-link",
+        "not authenticated", "pushframe config",
         id="mode-8-gsync-no-creds"),
     pytest.param(
         "sync_dir_no_creds", {"dir": "."},
@@ -68,6 +68,10 @@ def no_creds(tmp_path, monkeypatch):
     for var in ("PUSHFRAME_EMAIL", "AURA_EMAIL",
                 "PUSHFRAME_PASSWORD", "AURA_PASSWORD"):
         monkeypatch.delenv(var, raising=False)
+    # The vault preflight is pinned AWAY from the real machine's vault: after
+    # the 2026-09-30 path fix this suite would otherwise depend on whether
+    # the dev box happens to hold a healthy vault (venus live-proven bug).
+    monkeypatch.setenv("PUSHFRAME_VAULT_PATH", str(tmp_path / "no-vault.json"))
 
 
 # --- callables ---------------------------------------------------------------
@@ -109,10 +113,10 @@ def gsync_no_creds(capsys, no_creds, album, frame):
     # named because no credentials of any kind are available.
     vault = settings.CONFIG_PATH.parent / "google-cookies.json"
     vault.parent.mkdir(parents=True, exist_ok=True)
-    vault.write_text(json.dumps({"SID": "x"}))  # minimal-looking vault
+    vault.write_text(json.dumps([{"name": "SID", "value": "x"}]))  # list shape (vault.save's)
     from pushframe.gsync import run_google_sync
     return run_google_sync(album, frame, apply=False, yes=True,
-                           is_interactive=False)
+                           is_interactive=False, vault_path=str(vault))
 
 
 class _MuteAura:
