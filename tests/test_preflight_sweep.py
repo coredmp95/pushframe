@@ -7,6 +7,16 @@ inventory entry + one parametrize case, nowhere else.
 
 The contract per case: handler returns non-zero, captured output contains
 the named marker AND the remedy substring, and NO 'Traceback' anywhere.
+
+2026-09-30 (venus live + CI): there is deliberately NO `gsync_no_creds`
+case — the Google gate stands BEFORE the Aura gate by design, so a vault-less
+gsync run fails Google-side named long before any Aura credential check,
+and a form-valid fake vault pushes the run past the gate onto the REAL
+Google network with a bogus cookie (the 5.1.2 network guard covers pushd,
+not google.com). The Aura-side no-creds contract is proven by
+`sync_dir_no_creds` / `inspect_no_creds` (same establish_session surface);
+gsync's Google-side named shapes by `gsync_no_vault`, `pair_unknown`,
+`all_zero_pairs`.
 """
 import json
 
@@ -32,10 +42,6 @@ CASES = [
         "inspect_no_creds", {},
         "not authenticated", "pushframe config",
         id="mode-8-inspect-no-creds"),
-    pytest.param(
-        "gsync_no_creds", {"album": "Cadre", "frame": "Fabrice"},
-        "not authenticated", "pushframe config",
-        id="mode-8-gsync-no-creds"),
     pytest.param(
         "sync_dir_no_creds", {"dir": "."},
         "not authenticated", "pushframe config",
@@ -106,17 +112,6 @@ def sync_dir_no_creds(capsys, no_creds, dir):
 def inspect_no_creds(capsys, no_creds):
     from pushframe.cli import run_inspect
     return run_inspect("whatever")
-
-
-def gsync_no_creds(capsys, no_creds, album, frame):
-    # vault exists (mode 5 covered separately) — the Aura session then fails
-    # named because no credentials of any kind are available.
-    vault = settings.CONFIG_PATH.parent / "google-cookies.json"
-    vault.parent.mkdir(parents=True, exist_ok=True)
-    vault.write_text(json.dumps([{"name": "SID", "value": "x"}]))  # list shape (vault.save's)
-    from pushframe.gsync import run_google_sync
-    return run_google_sync(album, frame, apply=False, yes=True,
-                           is_interactive=False, vault_path=str(vault))
 
 
 class _MuteAura:

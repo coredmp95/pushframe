@@ -12,7 +12,25 @@ every channel.
 `pushframe` is an unofficial community CLI for Aura Frames digital photo
 frames; it is not affiliated with Aura Frames Inc.
 
-## [5.1.5] - 2026-09-30
+## [Unreleased]
+
+### Fixed
+
+- `google-sync`'s new `vault_path` argument now flows END-TO-END: the
+  preflight AND the actual `GoogleSession.from_vault()` read both use the
+  pinned path (5.1.5 pinned only the preflight — a gap found by CI, whose
+  vault-less runner exposed it; harmless on real machines, which use the
+  default path).
+
+### Removed
+
+- The phase-24 sweep's `gsync_no_creds` case: with the vault gate standing
+  BEFORE the Aura gate by design, a form-valid fake vault pushed the run
+  past the gate onto the REAL Google network with a bogus cookie (the
+  5.1.2 network guard covers pushd, not google.com). The Aura-side
+  no-creds contract stays proven by the `sync`/`inspect` cases; gsync's
+  Google-side named shapes by `gsync_no_vault`, `pair_unknown`,
+  `all_zero_pairs`.
 
 ### Fixed
 

@@ -319,7 +319,13 @@ def run_google_sync(album_target: str, frame_arg: str, *, apply: bool = False,
             print(f'google-sync failed: {e}')
             return 1
         try:
-            session = GoogleSession.from_vault()
+            # The pinned path flows END-TO-END (2026-09-30 CI lesson: pinning
+            # the preflight alone left this read on the default path — on a
+            # vault-less machine the run died 'bootstrap first' before ever
+            # reaching its intended failure, and a test pinning only the
+            # preflight could push the DEFAULT read onto the network).
+            session = (GoogleSession.from_vault(path=str(vault_path))
+                       if vault_path else GoogleSession.from_vault())
         except CookieVaultError as e:
             print(f'google-sync failed: {e}')
             return 1
