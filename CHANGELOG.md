@@ -16,6 +16,21 @@ frames; it is not affiliated with Aura Frames Inc.
 
 ### Fixed
 
+- **`google-sync --apply` (and `sync --apply` / `push --apply` /
+  `reconcile --remove`) no longer crash building the write budget on a
+  token-session host** (venus, 2026-09-30, debug session
+  gsync-apply-budget-none-crash): the budget's account email was read
+  from the ENVIRONMENT only while auth resolves env-then-stored-session
+  — the config/env duality was broken at exactly that layer. With a
+  stored token session and no env vars (venus's intended posture), the
+  run authenticated fine, printed the plan, took the operator's `y`
+  confirmation, then died on `email.encode()` inside the budget state
+  filename. The identity now resolves through ONE helper
+  (`session.account_email()`: env override first, then the stored
+  session) at all three call sites, and a fully identity-less run skips
+  pacing with a named stderr line instead of crashing (a budget is
+  per-account state; with no account named there is nothing to key).
+
 - `google-sync`'s new `vault_path` argument now flows END-TO-END: the
   preflight AND the actual `GoogleSession.from_vault()` read both use the
   pinned path (5.1.5 pinned only the preflight — a gap found by CI, whose

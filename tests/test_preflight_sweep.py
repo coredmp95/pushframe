@@ -63,6 +63,10 @@ CASES = [
         "pair_duplicate", {"name": "dup", "album": "A", "frame": "F"},
         "already exists", "remove it first",
         id="mode-16-pair-duplicate"),
+    pytest.param(
+        "reconcile_no_identity", {"frame": "ghost-frame"},
+        "not authenticated", "pushframe config",
+        id="mode-17-reconcile-no-identity"),
 ]
 
 
@@ -142,6 +146,18 @@ def schedule_no_systemd(capsys, no_creds):
         return sch.schedule_add("nightly", pair="whatever", every="1d")
     finally:
         mp.undo()
+
+
+def reconcile_no_identity(capsys, no_creds, frame):
+    """venus 2026-09-30 (gsync-apply-budget-none-crash): reconcile --remove
+    built the write budget from an env-ONLY email read — on a token-session
+    host it crashed on email.encode() AFTER the confirmation. The identity
+    resolver now falls back to the stored session, and a fully identity-less
+    run must fail NAMED here (no config), never traceback."""
+    from pushframe.cli import run_reconcile
+    # no injected aura: establish_session must fail NAMED (empty config,
+    # no env) before any network — that IS the identity-less path.
+    return run_reconcile(frame, remove=True, yes=True)
 
 
 def pair_duplicate(capsys, no_creds, name, album, frame):

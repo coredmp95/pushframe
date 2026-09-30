@@ -494,7 +494,12 @@ def run_google_sync(album_target: str, frame_arg: str, *, apply: bool = False,
     if debug:
         _configure_cli_logging(True)
     if budget is None and s3_client is None:
-        budget = _build_write_budget(_os.getenv('PUSHFRAME_EMAIL') or _os.getenv('AURA_EMAIL'), ignore_budget=False)
+        # venus 2026-09-30 (debug gsync-apply-budget-none-crash): resolve the
+        # account through session.account_email (env override THEN stored
+        # session) — the bare getenv read got None on this token-session host
+        # and crashed on email.encode() after the y confirmation.
+        from pushframe.session import account_email
+        budget = _build_write_budget(account_email(), ignore_budget=False)
 
     staged_by_id = staged.staged_by_id
     confirmed_paths: list[str] = []

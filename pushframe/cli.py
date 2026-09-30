@@ -1126,7 +1126,8 @@ def run_reconcile(frame_arg: str, *, remove: bool = False, yes: bool = False, me
 
         # D-13: the same account-wide budget as sync/push -- reconcile has
         # no --ignore-budget escape hatch, so this is always False.
-        write_budget = _build_write_budget(os.getenv('PUSHFRAME_EMAIL') or os.getenv('AURA_EMAIL'), False)
+        from pushframe.session import account_email
+        write_budget = _build_write_budget(account_email(), False)
 
         apply_reconciliation(result, aura, frame.id, mechanism=mechanism, budget=write_budget)
 
@@ -1175,6 +1176,17 @@ def _build_write_budget(email: str, ignore_budget: bool) -> 'WriteBudget | None'
     itself is never persisted in the file body (T-09-02).
     """
     if ignore_budget:
+        return None
+    if not email:
+        # venus 2026-09-30 (debug gsync-apply-budget-none-crash): a run with
+        # no resolvable identity (no env, no stored email) previously died
+        # HERE, on email.encode(), AFTER the operator confirmed the apply.
+        # A budget is per-ACCOUNT state; with no account named there is
+        # nothing to key — skip pacing rather than crash. Named debug
+        # output on stderr keeps this observable, never silent.
+        import sys as _sys
+        print('write-budget: no account identity (env or stored session) '
+              '— pacing skipped for this run', file=_sys.stderr)
         return None
     state_path = AURA_STATE_DIR / f'budget-{hashlib.sha1(email.encode()).hexdigest()[:12]}.json'
     return WriteBudget.load(
@@ -1389,7 +1401,8 @@ def run_sync(dir_arg: str, frame_arg: str, apply: bool = False, yes: bool = Fals
         # protection by default with zero new flags. Only `--ignore-budget`
         # (push-only) omits `budget`; `write_budget`/`geo_check` being
         # `None` is exec_kwargs's signal to omit the corresponding kwarg.
-        write_budget = _build_write_budget(os.getenv('PUSHFRAME_EMAIL') or os.getenv('AURA_EMAIL'), ignore_budget)
+        from pushframe.session import account_email
+        write_budget = _build_write_budget(account_email(), ignore_budget)
         geo_check = _build_geo_check(country)
 
         total = len(plan.to_upload) + len(plan.to_delete)

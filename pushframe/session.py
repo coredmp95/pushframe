@@ -72,6 +72,26 @@ def auto_refresh_stored():
     return config_store.load()
 
 
+def account_email() -> str | None:
+    """THE one account-identity resolver (venus 2026-09-30, debug
+    gsync-apply-budget-none-crash): env override first, else the stored
+    session's email. Every consumer that only needs the ACCOUNT NAME (the
+    budget state-file key, `who` display strings) must resolve through
+    here — a bare os.getenv read is the bug that crashed google-sync
+    --apply: auth resolved the stored-session email and logged in fine,
+    then the budget layer read env-only, got None, and died on
+    email.encode() after the operator had already confirmed the plan.
+    Returns None only when the run has no identity at all — callers must
+    handle that named (skip/budgetless), never crash.
+    """
+    import os
+    env_email = os.getenv('PUSHFRAME_EMAIL') or os.getenv('AURA_EMAIL')
+    if env_email:
+        return env_email
+    stored = auto_refresh_stored()
+    return (stored or {}).get('email') or None
+
+
 def frames_read_with_refresh(aura, who, stored):
     """THE shared frames-read gate (status, inspect, sync/push, google-sync):
     the ONE-shot TTY token refresh plus the named, never-a-traceback failure
