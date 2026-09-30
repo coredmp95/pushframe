@@ -14,6 +14,8 @@ frames; it is not affiliated with Aura Frames Inc.
 
 ## [Unreleased]
 
+## [5.1.2] — 2026-09-30
+
 ### Changed (tests)
 
 - **Network guard**: `httpx.Client` is patched for the whole test session
@@ -23,6 +25,16 @@ frames; it is not affiliated with Aura Frames Inc.
   fails loudly instead of silently depending on a local .env (the relogin
   masking that kept the tests workflow red from v5.1.0 to 5.1.1), and a
   local .env can no longer masquerade as a live posture.
+
+### Fixed (tests)
+
+- **The `tests` workflow is green again** (red on master since v5.1.0 —
+  not a 5.1.1 regression): the 9 offline tests of the 401-retry and
+  write-throttling suites relied on the pre-phase-24 re-login default
+  (`aura.login`); phase 24 made the default token-aware, which fails
+  named off-TTY without env credentials — exactly the CI case. A local
+  `.env` with real credentials masked it locally. All 9 `execute_plan`
+  call sites now pin `relogin=aura.login`; zero product code changed.
 
 ## [5.1.1] — 2026-09-30
 
