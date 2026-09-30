@@ -16,7 +16,15 @@ from pushframe.utils import settings as _settings
 
 AURA_API_BASE_URL = _settings.AURA_API_BASE_URL
 AURA_API_VERSION = _settings.AURA_API_VERSION
-USER_AGENT = 'Aura/4.7.790 (Android 30; Client)'
+# Client identity is part of pushd's anti-abuse fingerprint (venus
+# 2026-09-30: the years-stale '4.7.790' UA plus the shared all-zeros
+# device id read as "not a phone" — reads stayed green for the real app
+# while writes 401'd; see docs/CLI.md "Client identity matters"). The UA
+# is therefore a setting (env PUSHFRAME_USER_AGENT → config file →
+# default), resolved at import like the two settings above; the default
+# tracks a current Play build, and DEVICE_IDENTIFIER should be a
+# per-install UUID (`pushframe config set DEVICE_IDENTIFIER "$(uuidgen)"`).
+USER_AGENT = _settings.USER_AGENT
 
 # Keys whose values are secrets and must never reach the on-disk logs (D-07).
 _REDACT_KEYS = {'password', 'auth_token', 'x-token-auth'}

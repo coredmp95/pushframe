@@ -358,6 +358,27 @@ def run_config(wizard_args=None, stdin_isatty: bool | None = None) -> int:
               '(use config set / config import for scripts).')
         return 1
 
+    # Identity provisioning (5.1.1, venus anti-abuse lesson): before the
+    # FIRST API call of a fresh install, give it a unique device id so its
+    # very first login already presents a credible per-install fingerprint
+    # instead of the all-zeros id every pushframe install used to share.
+    # Only the absence of one triggers a write; an explicit setting (env or
+    # file) is never second-guessed. The block contains no account data —
+    # D-03's "nothing written before a successful login" keeps its meaning
+    # for session facts (email/token/frame/debug).
+    if not os.getenv('PUSHFRAME_DEVICE_IDENTIFIER') \
+            and not os.getenv('AURA_DEVICE_IDENTIFIER') \
+            and config_store.setting('DEVICE_IDENTIFIER') is None:
+        import uuid
+        # load→mutate→save (NOT update(settings=...), which would REPLACE the
+        # settings map and drop any sibling file settings like LOCALE).
+        data = config_store.load()
+        identity = str(uuid.uuid4())
+        data.setdefault('settings', {})['DEVICE_IDENTIFIER'] = identity
+        config_store.save(data)
+        print(f'device identity provisioned: DEVICE_IDENTIFIER = {identity}'
+              ' (unique to this install)')
+
     existing = config_store.load()
     if existing.get('email'):
         print(f"configuring pushframe (current email: {existing['email']} — Enter keeps it)")
@@ -437,6 +458,15 @@ def _config_show() -> int:
             print(f'  {key} = {shown!r}  (file)')
     if data.get('auth_token'):
         print('  auth_token = ***  (file)')
+    # Identity hygiene (5.1.1, venus anti-abuse lesson): the all-zeros id is
+    # shared by every unprovisioned pushframe install and reads as a
+    # non-phone client — name it and hand the remedy.
+    if settings.DEVICE_IDENTIFIER == settings.DEFAULTS['DEVICE_IDENTIFIER']['default']:
+        print('  WARNING: DEVICE_IDENTIFIER is still the shared all-zeros '
+              'default — pushd reads it as a non-phone client (venus '
+              '2026-09-30: reads stayed green while writes were 401-refused '
+              'for months). Give this install a unique identity: '
+              'pushframe config set DEVICE_IDENTIFIER "$(uuidgen)"')
     return 0
 
 

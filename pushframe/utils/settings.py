@@ -20,11 +20,15 @@ CONFIG_PATH = Path(os.getenv('PUSHFRAME_CONFIG_FILE',
 
 # The single table: settings name -> (env spellings, default, caster).
 # Defaults ARE the literals that shipped for years (MOD-02 posture), so an
-# empty config + empty environment behaves byte-identically to 5.0.x.
+# empty config + empty environment behaves byte-identically to 5.0.x —
+# sole deliberate exception: USER_AGENT's default was bumped to a current
+# Play build in 5.1.1 because the years-stale identity feeds the
+# anti-abuse trip (venus lesson; see docs/CLI.md "Client identity").
 DEFAULTS: dict[str, dict] = {
     'LOCALE':                          {'env': ('PUSHFRAME_LOCALE', 'AURA_LOCALE'), 'default': 'en-US'},
     'AURA_APP_IDENTIFIER':             {'env': ('PUSHFRAME_APP_IDENTIFIER', 'AURA_APP_IDENTIFIER'), 'default': 'com.pushd.client'},
     'DEVICE_IDENTIFIER':               {'env': ('PUSHFRAME_DEVICE_IDENTIFIER', 'AURA_DEVICE_IDENTIFIER'), 'default': '0000000000000000'},
+    'USER_AGENT':                      {'env': ('PUSHFRAME_USER_AGENT', 'AURA_USER_AGENT'), 'default': 'Aura/4.7.4271 (Android 36; Client)'},
     'IMAGE_PROXY_BASE_URL':            {'env': (), 'default': 'https://imgproxy.pushd.com'},
     'AURA_API_BASE_URL':               {'env': ('PUSHFRAME_API_BASE_URL',), 'default': 'https://api.pushd.com/v5'},
     'AURA_API_VERSION':                {'env': ('PUSHFRAME_API_VERSION',), 'default': 'v5'},

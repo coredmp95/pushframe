@@ -1,6 +1,6 @@
 [project]
 name = "pushframe"
-version = "5.1.0"
+version = "5.1.1"
 description = "Unofficial community CLI for Aura Frames digital photo frames (sync a local folder or a Google Photos album; not affiliated with Aura Frames Inc.)"
 readme = "README.md"
 requires-python = ">=3.14"

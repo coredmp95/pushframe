@@ -123,6 +123,20 @@ retry, no re-login — both feed the trip). The drill:
    pushframe google-sync Cadre --frame "Cadre de Fabrice" --apply --yes --batch-size 10
    ```
 
+**Client identity matters.** Pushd's anti-abuse layer also fingerprints
+the client itself: a years-stale `Aura/4.7.790` user agent and the
+all-zeros `0000000000000000` device identifier shared by every pushframe
+installation read as "not a phone" (2026-09-30: reads stayed green for
+the real phone app while writes were 401-refused for months). Give each
+install its own identity once:
+
+```bash
+pushframe config set DEVICE_IDENTIFIER "$(uuidgen)"
+```
+
+The user agent defaults to a current Play build (a setting since 5.1.1);
+bump it with `pushframe config set USER_AGENT 'Aura/…'` if it ages again.
+
 Progress is never lost: only confirmed writes are remembered, and the next
 run uploads the remainder once — never twice.
 
@@ -730,6 +744,7 @@ to adopt one.
 | `AURA_LOCALE` | `en-US` |
 | `AURA_APP_IDENTIFIER` | `com.pushd.client` |
 | `AURA_DEVICE_IDENTIFIER` | `0000000000000000` |
+| `AURA_USER_AGENT` | `Aura/4.7.4271 (Android 36; Client)` |
 
 Booleans accept `1`, `true`, `yes`, `on` (case-insensitive); anything else is false.
 

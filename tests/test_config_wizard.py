@@ -57,17 +57,85 @@ def test_wizard_success_writes_0600_config(cfg_path, monkeypatch, fake_login_ok)
     assert data["auth_token"] == "tok-abc-123"  # noqa: S105
     assert data["default_frame"] == "Cadre de Fabrice"
     assert data["debug"] is False
+    # Identity provisioning (5.1.1): the first wizard run on a fresh store
+    # must persist a unique device id — never the shared all-zeros default.
+    identity = data["settings"]["DEVICE_IDENTIFIER"]
+    assert identity != "0000000000000000"
+    assert identity.count("-") == 4 and len(identity) == 36
     mode = stat.S_IMODE(cfg_path.stat().st_mode)
     assert mode == 0o600
 
 
+def test_wizard_provisioned_identity_survives_save_and_rerun(cfg_path, monkeypatch, fake_login_ok):
+    """The provisioned id is written BEFORE the login and must survive the
+    wizard's final save (no settings-key clobber), and a second run must
+    keep it byte-identical (no re-roll — device ids are stable)."""
+    _feed(monkeypatch, ["coredmp95@gmail.com", "s3cret", "1", "n"])  # noqa: S105
+    from pushframe.cli import run_config
+    assert run_config(wizard_args=[], stdin_isatty=True) == 0
+    first = json.loads(cfg_path.read_text())["settings"]["DEVICE_IDENTIFIER"]
+
+    _feed(monkeypatch, ["coredmp95@gmail.com", "", "", "", ""])  # noqa: S105
+    assert run_config(wizard_args=[], stdin_isatty=True) == 0
+    second = json.loads(cfg_path.read_text())["settings"]["DEVICE_IDENTIFIER"]
+    assert first == second
+
+
+def test_wizard_respects_explicit_device_identity(cfg_path, monkeypatch, fake_login_ok):
+    """An explicit id (file or env) is never second-guessed — provisioning
+    only fills the ABSENCE of one."""
+    config_store.update(settings={"DEVICE_IDENTIFIER": "my-explicit-id"})
+    _feed(monkeypatch, ["coredmp95@gmail.com", "s3cret", "1", "n"])  # noqa: S105
+    from pushframe.cli import run_config
+    assert run_config(wizard_args=[], stdin_isatty=True) == 0
+    assert json.loads(cfg_path.read_text())["settings"]["DEVICE_IDENTIFIER"] \
+        == "my-explicit-id"
+
+
+def test_wizard_provisioning_keeps_sibling_settings(cfg_path, monkeypatch, fake_login_ok):
+    """Provisioning must not clobber sibling file settings (update(
+    settings=...) REPLACES the map; the load→mutate→save path preserves
+    them)."""
+    config_store.update(settings={"LOCALE": "fr-FR"})
+    _feed(monkeypatch, ["coredmp95@gmail.com", "s3cret", "1", "n"])  # noqa: S105
+    from pushframe.cli import run_config
+    assert run_config(wizard_args=[], stdin_isatty=True) == 0
+    st = json.loads(cfg_path.read_text())["settings"]
+    assert st["LOCALE"] == "fr-FR"
+    assert st["DEVICE_IDENTIFIER"] != "0000000000000000"
+
+
+def test_show_warns_on_all_zeros_device_identity(cfg_path, capsys, monkeypatch):
+    """Identity hygiene (5.1.1): config show names the shared all-zeros
+    device id with its remedy; a provisioned or explicit id silences it."""
+    from pushframe.cli import run_config
+    monkeypatch.delenv("PUSHFRAME_DEVICE_IDENTIFIER", raising=False)
+    monkeypatch.delenv("AURA_DEVICE_IDENTIFIER", raising=False)
+
+    assert run_config(wizard_args=["show"]) == 0
+    out = capsys.readouterr().out
+    assert "WARNING" in out and "uuidgen" in out
+
+    config_store.update(
+        settings={"DEVICE_IDENTIFIER": "45ce0cfa-fe12-4850-b8de-f3ca56fbb36d"})
+    assert run_config(wizard_args=["show"]) == 0
+    assert "WARNING" not in capsys.readouterr().out
+
+
 def test_wizard_failed_login_writes_nothing(cfg_path, monkeypatch, fake_login_fail, capsys):
+    """D-03, amended for 5.1.1 identity provisioning: a failed login
+    persists NO session facts and NO default_frame — the only pre-login
+    write allowed is the account-independent device identity block."""
     _feed(monkeypatch, ["coredmp95@gmail.com", "wrong-pass"])  # noqa: S105
     from pushframe.cli import run_config
     rc = run_config(wizard_args=[], stdin_isatty=True)
     assert rc == 1
-    assert not cfg_path.exists()
     assert "invalid credentials" in capsys.readouterr().out
+    assert cfg_path.exists()  # identity block only
+    data = json.loads(cfg_path.read_text())
+    assert "email" not in data and "auth_token" not in data  # noqa: S105
+    assert "default_frame" not in data
+    assert "DEVICE_IDENTIFIER" in data.get("settings", {})
 
 
 def test_wizard_non_tty_fails_loud(cfg_path, monkeypatch):

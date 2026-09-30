@@ -14,7 +14,27 @@ frames; it is not affiliated with Aura Frames Inc.
 
 ## [Unreleased]
 
-- (v5.1 work will land here)
+## [5.1.1] — 2026-09-30
+
+### Changed
+
+- **Credible client identity** (venus 2026-09-30 anti-abuse lesson): the
+  user agent is now a setting — `USER_AGENT` (env `PUSHFRAME_USER_AGENT`,
+  or `pushframe config set USER_AGENT …`) — whose default tracks a
+  current Play build (`Aura/4.7.4271 (Android 36; Client)`) instead of
+  the years-stale `4.7.790`; combined with a per-install
+  `config set DEVICE_IDENTIFIER "$(uuidgen)"`, an installation stops
+  presenting the shared all-zeros fingerprint that kept reads green
+  (like the real phone app) while writes were 401-refused for months.
+- **Automatic identity provisioning**: the `pushframe config` wizard now
+  generates a unique `DEVICE_IDENTIFIER` (uuid4) on a fresh install
+  BEFORE its first API call, so the very first login already presents a
+  per-install fingerprint — no installation ever ships the all-zeros id
+  again. Explicit identities (env or config file) are never overwritten,
+  and the generated id is stable across wizard re-runs.
+- `config show` warns when the effective `DEVICE_IDENTIFIER` is still the
+  shared all-zeros default, naming the anti-abuse rationale and the
+  `config set DEVICE_IDENTIFIER "$(uuidgen)"` remedy.
 
 ## [5.1.0] — 2026-09-29
 

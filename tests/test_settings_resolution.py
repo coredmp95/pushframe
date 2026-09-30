@@ -70,6 +70,26 @@ def test_legacy_aura_env_still_read(config_file, monkeypatch):
     assert settings.LOCALE == "es-ES"
 
 
+def test_user_agent_default_tracks_a_current_play_build(config_file, monkeypatch):
+    """venus 2026-09-30: the years-stale 4.7.790 build fingerprinted
+    pushframe as a non-phone client. The default must stay contemporary."""
+    monkeypatch.delenv("PUSHFRAME_USER_AGENT", raising=False)
+    monkeypatch.delenv("AURA_USER_AGENT", raising=False)
+    ua = settings.USER_AGENT
+    assert ua.startswith("Aura/4.7.")
+    build = int(ua.split("/")[1].split(" ")[0].split(".")[2])
+    assert build >= 4000
+
+
+def test_user_agent_resolves_from_file_then_env(config_file, monkeypatch):
+    _write(config_file, {"version": 1, "settings": {
+        "USER_AGENT": "Aura/4.7.5000 (Android 36; Client)"}})
+    assert settings.USER_AGENT == "Aura/4.7.5000 (Android 36; Client)"
+    monkeypatch.setenv("PUSHFRAME_USER_AGENT",
+                       "Aura/4.7.5001 (Android 36; Client)")
+    assert settings.USER_AGENT == "Aura/4.7.5001 (Android 36; Client)"
+
+
 def test_numeric_and_bool_settings_resolve(config_file, monkeypatch):
     monkeypatch.delenv("PUSHFRAME_WRITE_BUDGET_CAPACITY", raising=False)
     monkeypatch.delenv("AURA_WRITE_BUDGET_CAPACITY", raising=False)
