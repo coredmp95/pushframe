@@ -304,11 +304,13 @@ def test_run_of_plain_401_write_failures_aborts_batch(tmp_path):
     overrides[SELECT_ASSET_PATH] = httpx.Response(401, json={'error': 'unauthorized'})
     s3 = _FakeS3Client()
 
+    aura = offline_aura(overrides=overrides)
     with pytest.raises(ConsecutiveWriteFailureError) as exc_info:
         execute_plan(
-            plan, offline_aura(overrides=overrides), FRAME_ID,
+            plan, aura, FRAME_ID,
             s3_client=s3, sqs_client=_FakeSQSClient(),
             throttle_seconds=0, sleep=lambda *_: None,
+            relogin=aura.login,  # pinned: pre-phase-24 password default
         )
 
     err = exc_info.value
@@ -351,12 +353,13 @@ def test_interspersed_failures_do_not_trip_the_backstop(tmp_path, monkeypatch):
 
     monkeypatch.setattr(aura.asset_api, 'batch_update', _flaky_batch_update)
 
-    result = execute_plan(
-        plan, aura, FRAME_ID,
-        s3_client=_FakeS3Client(), sqs_client=_FakeSQSClient(),
-        throttle_seconds=0, sleep=lambda *_: None,
-        batch_size=1,
-    )
+    result =        execute_plan(
+            plan, aura, FRAME_ID,
+            s3_client=_FakeS3Client(), sqs_client=_FakeSQSClient(),
+            throttle_seconds=0, sleep=lambda *_: None,
+            batch_size=1,
+            relogin=aura.login,  # pinned: pre-phase-24 password default
+        )
 
     # No abort: all 8 attempted, 4 succeeded, 4 recorded per-item (D-08 intact).
     assert result.upload_succeeded == 4
@@ -390,12 +393,13 @@ def test_a_success_resets_the_consecutive_run(tmp_path, monkeypatch):
 
     monkeypatch.setattr(aura.asset_api, 'batch_update', _flaky_batch_update)
 
-    result = execute_plan(
-        plan, aura, FRAME_ID,
-        s3_client=_FakeS3Client(), sqs_client=_FakeSQSClient(),
-        throttle_seconds=0, sleep=lambda *_: None,
-        batch_size=1,
-    )
+    result =        execute_plan(
+            plan, aura, FRAME_ID,
+            s3_client=_FakeS3Client(), sqs_client=_FakeSQSClient(),
+            throttle_seconds=0, sleep=lambda *_: None,
+            batch_size=1,
+            relogin=aura.login,  # pinned: pre-phase-24 password default
+        )
 
     assert result.upload_succeeded == 1
     assert len(result.upload_failures) == 8
@@ -444,11 +448,13 @@ def test_max_consecutive_failures_zero_disables_the_backstop(tmp_path):
     overrides = _ok_overrides()
     overrides[SELECT_ASSET_PATH] = httpx.Response(401, json={'error': 'unauthorized'})
 
+    aura = offline_aura(overrides=overrides)
     result = execute_plan(
-        plan, offline_aura(overrides=overrides), FRAME_ID,
+        plan, aura, FRAME_ID,
         s3_client=_FakeS3Client(), sqs_client=_FakeSQSClient(),
         throttle_seconds=0, sleep=lambda *_: None,
         max_consecutive_failures=0,
+        relogin=aura.login,  # pinned: pre-phase-24 password default
     )
 
     assert result.upload_succeeded == 0
@@ -469,12 +475,14 @@ def test_consecutive_run_spans_upload_and_delete_phases(tmp_path):
     overrides[SELECT_ASSET_PATH] = httpx.Response(401, json={'error': 'unauthorized'})
     overrides[REMOVE_ASSET_PATH] = httpx.Response(401, json={'error': 'unauthorized'})
 
+    aura = offline_aura(overrides=overrides)
     with pytest.raises(ConsecutiveWriteFailureError) as exc_info:
         execute_plan(
-            plan, offline_aura(overrides=overrides), FRAME_ID,
+            plan, aura, FRAME_ID,
             s3_client=_FakeS3Client(), sqs_client=_FakeSQSClient(),
             throttle_seconds=0, sleep=lambda *_: None,
             batch_size=1,
+            relogin=aura.login,  # pinned: pre-phase-24 password default
         )
 
     err = exc_info.value

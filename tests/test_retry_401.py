@@ -169,6 +169,7 @@ def test_401_on_select_asset_recovers_after_relogin_and_resend(tmp_path):
         plan, aura, FRAME_ID, s3_client=_FakeS3Client(), sqs_client=_FakeSQSClient(),
         sleep=lambda *_: None, throttle_seconds=0, chunk_delay_seconds=0,
         asset_probe=_ordered_probe(['absent']),
+        relogin=aura.login,  # pinned: this test encodes the PRE-phase-24 password default
     )
 
     assert result.upload_succeeded == 1
@@ -197,6 +198,7 @@ def test_two_item_chunk_401_resends_only_the_genuinely_absent_item(tmp_path):
         plan, aura, FRAME_ID, s3_client=_FakeS3Client(), sqs_client=_FakeSQSClient(),
         sleep=lambda *_: None, throttle_seconds=0, chunk_delay_seconds=0,
         asset_probe=_ordered_probe(['landed', 'absent']),
+        relogin=aura.login,  # pinned: pre-phase-24 password default
     )
 
     assert result.items_already_landed == 1
@@ -364,6 +366,7 @@ def test_retried_upload_chunk_consumes_5_budget_tokens_total(tmp_path):
         plan, aura, FRAME_ID, s3_client=_FakeS3Client(), sqs_client=_FakeSQSClient(),
         sleep=lambda *_: None, throttle_seconds=0, chunk_delay_seconds=0,
         asset_probe=_ordered_probe(['absent']),
+        relogin=aura.login,  # pinned: pre-phase-24 password default
         budget=budget, clock=lambda: T0, wait_on_budget=False,
     )
 
@@ -391,6 +394,7 @@ def test_all_items_already_landed_consumes_3_tokens_no_resend_charge(tmp_path):
         plan, aura, FRAME_ID, s3_client=_FakeS3Client(), sqs_client=_FakeSQSClient(),
         sleep=lambda *_: None, throttle_seconds=0, chunk_delay_seconds=0,
         asset_probe=_ordered_probe(['landed', 'landed']),
+        relogin=aura.login,  # pinned: pre-phase-24 password default
         budget=budget, clock=lambda: T0, wait_on_budget=False,
     )
 
@@ -419,6 +423,7 @@ def test_probe_itself_never_charges_budget_regardless_of_chunk_size(tmp_path):
         plan, aura, FRAME_ID, s3_client=_FakeS3Client(), sqs_client=_FakeSQSClient(),
         sleep=lambda *_: None, throttle_seconds=0, chunk_delay_seconds=0,
         asset_probe=_ordered_probe(['landed', 'landed', 'landed']),
+        relogin=aura.login,  # pinned: pre-phase-24 password default
         budget=budget, clock=lambda: T0, wait_on_budget=False,
     )
 
@@ -453,6 +458,7 @@ def test_budget_exhausted_propagates_from_retry_acquire_with_no_bypass(tmp_path)
             plan, aura, FRAME_ID, s3_client=_FakeS3Client(), sqs_client=_FakeSQSClient(),
             sleep=lambda *_: None, throttle_seconds=0, chunk_delay_seconds=0,
             asset_probe=_ordered_probe(['absent']),
+            relogin=aura.login,  # pinned: pre-phase-24 password default
             budget=budget, clock=lambda: T0, wait_on_budget=False,
         )
 
