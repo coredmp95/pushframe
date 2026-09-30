@@ -382,7 +382,12 @@ def run_google_sync(album_target: str, frame_arg: str, *, apply: bool = False,
             print(f'Login failed: {e}')
             return 1
 
-    frames = aura.frame_api.get_frames()
+    from pushframe.session import auto_refresh_stored, frames_read_with_refresh
+    _stored = auto_refresh_stored()
+    frames = frames_read_with_refresh(
+        aura, who=(_stored or {}).get('email'), stored=_stored)
+    if frames is None:
+        return 2
     frame_res = resolve_frame(frame_arg, frames)
     if frame_res.status == 'ambiguous':
         print(f"'{frame_arg}' matches more than one frame:")

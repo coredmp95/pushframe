@@ -12,7 +12,38 @@ every channel.
 `pushframe` is an unofficial community CLI for Aura Frames digital photo
 frames; it is not affiliated with Aura Frames Inc.
 
-## [Unreleased]
+## [5.1.4] - 2026-09-30
+
+### Added
+
+- **One-shot TTY token refresh on every frames-reading verb** — `status`,
+  `inspect`, `sync`, `push` and `google-sync` (venus, 2026-09-30): when
+  the stored token is refused (401) and stdin is a terminal, the command
+  offers ONE re-login right there — the new token is persisted and the
+  same run continues (venus proved a fresh login reads green while the
+  stored token was dead). All five verbs share one gate
+  (`session.frames_read_with_refresh`), so the behavior, the failure
+  shapes and the guardrails are byte-identical everywhere. Guardrails:
+  exactly one attempt per process — a refused FRESH login is never
+  retried and prints the 24-hour-silence verdict (that means the
+  anti-abuse trip reached the read surface); non-TTY/scheduled runs
+  never prompt, they fail named with the `pushframe config` remedy; the
+  env-credential path (fresh credentials every run) never prompts.
+  One test per verb proves the contract: 401 once → exactly one
+  wizard-seam login → re-read succeeds → token persisted.
+
+### Fixed
+
+- **`pushframe status` no longer tracebacks on a refused frames read**
+  (venus, debug session status-crash-401-trip): a 401 with the trip's
+  `logout:true` body prints a named diagnosis — the remedy is
+  `pushframe config` (refresh the stored token; a fresh login read frames
+  fine minutes later, so on a READ that body means a dead token first),
+  with the 24h-silence protocol reserved for the case where the same
+  body recurs on a genuinely fresh login. A 475/429 on the read prints a
+  named WAIT (never a re-login suggestion). Every shape exits 1 named —
+  the PRF-02 no-traceback contract now holds on the token path's first
+  authenticated call.
 
 ## [5.1.3] — 2026-09-30
 

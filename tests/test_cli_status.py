@@ -30,6 +30,134 @@ def _reset_loguru(monkeypatch):
     logger.remove()
 
 
+FRAME_401_TRIP_BODY = httpx.Response(
+    401, json={"error": True, "message": "Request Unauthenticated", "logout": True})
+FRAME_401_TOKEN_BODY = httpx.Response(
+    401, json={"error": True, "message": "invalid session token"})
+
+
+def test_status_fresh_creds_refused_with_trip_body_means_the_trip(monkeypatch, capsys):
+    """Debug session status-crash-401-trip, updated contract: on the env
+    path the credentials are ALREADY fresh — a trip-shaped 401 body there
+    is the anti-abuse trip on reads: 24h-silence verdict, no re-login
+    suggestion, never a traceback."""
+    monkeypatch.setenv('AURA_EMAIL', 'you@example.invalid')
+    monkeypatch.setenv('AURA_PASSWORD', 'super-secret-pw')
+
+    aura = offline_aura(overrides={'/v5/frames.json': FRAME_401_TRIP_BODY})
+    rc = run_status(aura=aura)
+
+    assert rc == 1
+    out = capsys.readouterr().out
+    assert 'HTTP 401' in out
+    assert 'FRESH credentials' in out
+    assert '24h' in out
+    assert 'Traceback' not in out
+
+
+def test_status_stale_token_401_non_tty_fails_named_without_refresh(monkeypatch, capsys, tmp_path):
+    """Scheduled/no-TTY runs NEVER prompt: the refresh guard raises the
+    named SessionExpiredError and status surfaces it with the config
+    remedy — exit 1, zero tracebacks."""
+    from pushframe.utils import settings
+    monkeypatch.setattr(settings, 'CONFIG_PATH', tmp_path / 'config.json')
+    from pushframe import config_store
+    config_store.update(email='vaulted@example.invalid', auth_token='tok-dead',
+                        user_id='u-1')
+    monkeypatch.delenv('AURA_EMAIL', raising=False)
+    monkeypatch.delenv('AURA_PASSWORD', raising=False)
+    monkeypatch.setattr('sys.stdin.isatty', lambda: False)
+
+    aura = offline_aura(overrides={'/v5/frames.json': FRAME_401_TOKEN_BODY})
+    rc = run_status(aura=aura)
+
+    assert rc == 1
+    out = capsys.readouterr().out
+    assert 'refresh' in out and 'pushframe config' in out
+    assert 'Traceback' not in out
+
+
+def test_status_stale_token_401_tty_refreshes_once_and_succeeds(monkeypatch, capsys, tmp_path):
+    """The venus story, automated: stored token refused → ONE TTY re-login
+    prompt → new token persisted → the SAME run lists the frames. Never a
+    second attempt: the login is called exactly once."""
+    from pushframe.utils import settings
+    monkeypatch.setattr(settings, 'CONFIG_PATH', tmp_path / 'config.json')
+    from pushframe import config_store
+    config_store.update(email='vaulted@example.invalid', auth_token='tok-dead',
+                        user_id='u-1')
+    monkeypatch.delenv('AURA_EMAIL', raising=False)
+    monkeypatch.delenv('AURA_PASSWORD', raising=False)
+    monkeypatch.setattr('sys.stdin.isatty', lambda: True)
+
+    logins = []
+
+    import getpass as gp
+    monkeypatch.setattr(gp, 'getpass', lambda *a: 'typed-pw')  # noqa: S105
+    monkeypatch.setattr('builtins.input', lambda *a: 'vaulted@example.invalid')
+
+    def fake_wizard_login(email, password):
+        logins.append((email, password))
+        return {'email': email, 'auth_token': 'fresh-tok',  # noqa: S105
+                'user_id': 'u-1', 'frames': []}
+
+    monkeypatch.setattr('pushframe.cli._wizard_login', fake_wizard_login)
+
+    # frames.json: the trip-shaped 401 once (dead token), then the normal
+    # fixture listing after the refresh.
+    state = {'calls': 0}
+    from tests.offline import FIXTURES_DIR
+    frames_fixture = (FIXTURES_DIR / 'frames.json').read_text()
+
+    def frames_route(request):
+        state['calls'] += 1
+        if state['calls'] == 1:
+            return FRAME_401_TRIP_BODY
+        return httpx.Response(200, content=frames_fixture)
+
+    aura = offline_aura(overrides={'/v5/frames.json': frames_route})
+
+    rc = run_status(aura=aura)
+
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert 'Fake Frame' in out
+    assert logins == [('vaulted@example.invalid', 'typed-pw')]  # noqa: S105 — exactly ONE
+    assert state['calls'] == 2  # refused once, re-read once after refresh
+    assert config_store.load()['auth_token'] == 'fresh-tok'  # noqa: S105
+
+
+def test_status_token_shaped_401_names_the_config_remedy(monkeypatch, capsys):
+    monkeypatch.setenv('AURA_EMAIL', 'you@example.invalid')
+    monkeypatch.setenv('AURA_PASSWORD', 'super-secret-pw')
+
+    aura = offline_aura(overrides={'/v5/frames.json': FRAME_401_TOKEN_BODY})
+    rc = run_status(aura=aura)
+
+    assert rc == 1
+    out = capsys.readouterr().out
+    assert 'HTTP 401' in out and 'pushframe config' in out
+    assert 'Traceback' not in out
+
+
+def test_status_rate_limit_475_named_wait_message(monkeypatch, capsys):
+    """A 475 on the frames read is classified by the client layer itself
+    (_raise_if_rate_limited): status must surface it as a named WAIT, never
+    a traceback."""
+    monkeypatch.setenv('AURA_EMAIL', 'you@example.invalid')
+    monkeypatch.setenv('AURA_PASSWORD', 'super-secret-pw')
+
+    aura = offline_aura(overrides={'/v5/frames.json': httpx.Response(
+        475, text='The Aura API is rate-limiting or has locked out this account.')})
+    rc = run_status(aura=aura)
+
+    assert rc == 1
+    out = capsys.readouterr().out
+    assert 'rate-limited or locked out' in out
+    assert 'pushframe config' not in out  # a 475 is a WAIT, not a token fix
+    assert 'Traceback' not in out
+
+
 def test_status_missing_creds_exits_nonzero_no_network(monkeypatch, capsys):
     monkeypatch.delenv('AURA_EMAIL', raising=False)
     monkeypatch.delenv('AURA_PASSWORD', raising=False)

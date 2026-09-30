@@ -42,6 +42,145 @@ def _is_auth_failure(exc: Exception) -> bool:
     return '401' in str(exc) and 'unauthorized' in str(exc).lower()
 
 
+def _tty() -> bool:
+    import sys
+    return sys.stdin.isatty()
+
+
+def _run_login_prompt(aura, email):
+    """ONE interactive re-login on the wizard seam; persists the new token.
+    Returns the Aura with fresh auth headers; None on an empty-email abort
+    (only possible when nothing is stored)."""
+    print('refused — one re-login to refresh the stored token:')
+    result = _prompt_login(aura, _tty())
+    if result is None:
+        raise NoCredentialsError(
+            'login aborted (no email given) — no session stored; '
+            're-run the command to retry')
+    return result
+
+
+def auto_refresh_stored():
+    """The stored dict when the auto-refresh case is even possible (a stored
+    token session, no env override) — None otherwise. Shared by every verb's
+    frames-read gate."""
+    import os
+    from pushframe import config_store
+    if ((os.getenv('PUSHFRAME_EMAIL') or os.getenv('AURA_EMAIL'))
+            and (os.getenv('PUSHFRAME_PASSWORD') or os.getenv('AURA_PASSWORD'))):
+        return None  # env override: credentials are fresh every run
+    return config_store.load()
+
+
+def frames_read_with_refresh(aura, who, stored):
+    """THE shared frames-read gate (status, inspect, sync/push, google-sync):
+    the ONE-shot TTY token refresh plus the named, never-a-traceback failure
+    shapes (PRF-02). Returns the frames list, or None after printing a named
+    failure (caller returns non-zero).
+
+    Refresh fires only via refresh_if_auto (stored session, no env override,
+    TTY) — exactly once per process. A FRESH login still refused with the
+    trip's logout:true body prints the 24-hour-silence verdict; other 401s
+    name the `pushframe config` remedy; 475/429 name the WAIT.
+    """
+    import httpx
+    from pushframe.client import RateLimitError
+    from pushframe.sync import _is_write_trip_body
+    while True:
+        try:
+            return aura.frame_api.get_frames()
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 401 and stored and refresh_if_auto(aura, stored):
+                continue  # exactly one re-read, on the fresh token
+            if e.response.status_code == 401:
+                fresh = stored is None  # env path: credentials were already fresh
+                print(f'Logged in as {who}')
+                if _is_write_trip_body(str(e)):
+                    print('frames read refused — HTTP 401 with the trip\'s '
+                          'signature body on a READ.')
+                    if fresh:
+                        print('FRESH credentials were refused with the '
+                              'trip\'s body: this is the anti-abuse trip on '
+                              'the read surface — total silence 24h, one '
+                              'probe after. Do not loop.')
+                    else:
+                        print('The stored token is dead OR the trip reached '
+                              'reads — refresh once via `pushframe config` '
+                              '(Enter keeps the email). If a FRESH login is '
+                              'refused too, that is the trip on reads: '
+                              'total silence 24h, one probe after.')
+                else:
+                    print(f'frames read refused — HTTP 401: {e}')
+                    print('The stored session looks rejected: run '
+                          '`pushframe config` to refresh the token (Enter '
+                          'keeps the email), then re-run.')
+                return None
+            print(f'frames read failed: {e}')
+            return None
+        except RateLimitError as e:
+            print(f'Logged in as {who}')
+            print(f'rate-limited or locked out while reading frames — {e}')
+            print('Wait before retrying; do NOT loop this command (each call '
+                  'extends the lockout).')
+            return None
+
+
+def refresh_if_auto(aura, stored) -> bool:
+    """Refresh ONLY when the refusal is the auto-refresh case: a stored
+    token session (no env creds) on an interactive terminal — that is, when
+    `pushframe config` could fix it without the operator typing anything
+    new. Returns True when the aura was refreshed and the caller may retry
+    its first authenticated read ONCE; False when the caller must fail the
+    named way (no stored session, env override, or non-TTY).
+
+    Guardrails (venus anti-abuse contract, 2026-09-30): exactly one attempt
+    per process, a refused FRESH login is never retried (its SessionExpired
+    error carries the 24h-silence verdict), non-TTY never prompts.
+    """
+    import os
+    import sys
+    if stored is None or not stored.get('email') or not stored.get('auth_token'):
+        return False
+    if (os.getenv('PUSHFRAME_EMAIL') or os.getenv('AURA_EMAIL')) and \
+            (os.getenv('PUSHFRAME_PASSWORD') or os.getenv('AURA_PASSWORD')):
+        return False  # env override: creds are already fresh every run
+    if not sys.stdin.isatty():
+        return False
+    try:
+        refresh_token_once(aura, stored)
+    except Exception:
+        return False
+    return True
+
+
+def refresh_token_once(aura, stored: dict):
+    """The anti-abuse-bounded token refresh (venus, 2026-09-30): on a 401
+    refusal of the STORED token, a TTY run gets ONE re-login prompt instead
+    of failing. ONE attempt per process — a refused FRESH login is never
+    retried (retrying a tripped surface feeds the trip), and non-TTY runs
+    (scheduled) never prompt at all: they raise SessionExpiredError, named.
+
+    Returns the authenticated Aura, or raises (SessionExpiredError /
+    NoCredentialsError). The caller's 401 message travels in the exception
+    chain for the trip-vs-token classification downstream.
+    """
+    import sys
+    if not sys.stdin.isatty():
+        raise SessionExpiredError(
+            'stored token refused and stdin is not a terminal — re-run '
+            '`pushframe config` once interactively to refresh it')
+    print(f'stored token refused (current email: {stored["email"]})')
+    try:
+        return _run_login_prompt(aura, stored['email'])
+    except Exception as e:
+        if _is_auth_failure(e):
+            raise SessionExpiredError(
+                'the FRESH login was refused too — this is not a stale '
+                'token: total silence (no command, no re-login) and one '
+                'probe after 24h (the anti-abuse protocol); do NOT loop.') from e
+        raise
+
+
 def _store_token(email: str, auth_token: str, user_id: str | None) -> None:
     """Persist the session facts — token only, never the password (SEC-01)."""
     data = {'email': email, 'auth_token': auth_token}

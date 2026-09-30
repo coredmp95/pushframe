@@ -282,10 +282,15 @@ it is the value a command would actually use).
 
 ```
 usage: pushframe status [-h]
-```
-
-The first command to run. It checks your credentials are present, logs in, and lists your
-frames. Nothing is ever written.
+```The first command to run. With env credentials it logs in fresh; with a
+stored token session it resumes it (no login call) and lists your frames.
+Nothing is ever written except a session token: if the stored token is
+refused (HTTP 401), an interactive run offers ONE re-login right there and
+continues — a refused fresh login is never retried (that shape is the
+anti-abuse trip on reads: 24-hour silence); a non-interactive run fails
+named with the `pushframe config` remedy instead of prompting. `inspect`,
+`sync`, `push` and `google-sync` read frames through the same gate, so
+this contract holds on every frames-reading verb.
 
 ```bash
 uv run pushframe status

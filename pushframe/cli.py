@@ -12,6 +12,8 @@ from tqdm import tqdm
 from pushframe.aura import Aura
 from pushframe.aws.s3client import S3Client
 from pushframe.aws.sqsclient import SQSClient
+import httpx
+
 from pushframe.client import RateLimitError
 from pushframe.google.bootstrap import BootstrapError, PROFILE_ENV_VAR, default_bootstrap
 from pushframe.google.client import GoogleSession
@@ -609,6 +611,7 @@ def run_status(aura=None, debug: bool = False, google_session=None) -> int:
     # and before login/get_frames (the HTTP calls that trigger them).
     _configure_cli_logging(debug)
 
+    stored = None  # the token-refresh seam only exists on the stored path
     if session[0] == 'env':
         try:
             aura.login()
@@ -625,7 +628,18 @@ def run_status(aura=None, debug: bool = False, google_session=None) -> int:
                             user_id=stored.get('user_id'))
         who = stored['email']
 
-    frames = aura.frame_api.get_frames()
+    # The frames read is the FIRST authenticated call of the token path —
+    # its failure modes are operator-relevant and must never traceback
+    # (PRF-02). Key lesson of 2026-09-30 (debug/status-crash-401-trip): on
+    # a READ, the trip-shaped logout:true body means a STALE STORED TOKEN
+    # first — a fresh login read frames fine minutes later — so the remedy
+    # is ONE TTY re-login right here (venus: the env path proved a fresh
+    # login reads green); the 24h wait is only the answer if a FRESH token
+    # is refused too. Never more than ONE refresh attempt per run, never a
+    # prompt off-TTY (scheduled runs fail named instead).
+    frames = _read_frames_with_refresh(aura, who, stored)
+    if frames is None:
+        return 1  # named failure already printed by the helper
     print(f'Logged in as {who}')
     print(f'{len(frames)} frames:')
     for frame in frames:
@@ -637,6 +651,14 @@ def run_status(aura=None, debug: bool = False, google_session=None) -> int:
         print(line)
 
     return 0
+
+
+def _read_frames_with_refresh(aura, who, stored):
+    """Thin wrapper over the shared gate (session.frames_read_with_refresh)
+    — status, inspect, sync/push and google-sync all read frames through
+    the same named-failure + one-shot-refresh contract."""
+    from pushframe.session import frames_read_with_refresh
+    return frames_read_with_refresh(aura, who, stored)
 
 
 def _google_status_section(google_session=None) -> list[str]:
@@ -941,8 +963,15 @@ def run_inspect(frame_arg: str, aura=None, debug: bool = False) -> int:
         print(f'Login failed: {e}')
         return 1
 
+    from pushframe.session import auto_refresh_stored
+    stored = auto_refresh_stored()
+    frames = _read_frames_with_refresh(
+        aura, who=(stored or {}).get('email')
+        or os.getenv('PUSHFRAME_EMAIL') or os.getenv('AURA_EMAIL'),
+        stored=stored)
+    if frames is None:
+        return 1
     try:
-        frames = aura.frame_api.get_frames()
         resolved = resolve_frame(frame_arg, frames)
 
         if resolved.status == 'ambiguous':
@@ -1225,8 +1254,15 @@ def run_sync(dir_arg: str, frame_arg: str, apply: bool = False, yes: bool = Fals
         print(f'Login failed: {e}')
         return 1
 
+    from pushframe.session import auto_refresh_stored
+    stored = auto_refresh_stored()
+    frames = _read_frames_with_refresh(
+        aura, who=(stored or {}).get('email')
+        or os.getenv('PUSHFRAME_EMAIL') or os.getenv('AURA_EMAIL'),
+        stored=stored)
+    if frames is None:
+        return 1
     try:
-        frames = aura.frame_api.get_frames()
         resolved = resolve_frame(frame_arg, frames)
 
         if resolved.status == 'ambiguous':
