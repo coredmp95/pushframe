@@ -105,6 +105,83 @@ def test_wizard_provisioning_keeps_sibling_settings(cfg_path, monkeypatch, fake_
     assert st["DEVICE_IDENTIFIER"] != "0000000000000000"
 
 
+def test_wizard_enter_keeps_existing_email(cfg_path, monkeypatch, capsys):
+    """CLI contract (venus, 5.1.2): the banner promises "Enter keeps it"
+    and Enter must keep it — an empty answer on a configured install keeps
+    the stored email and offers the stored token (Enter again finishes the
+    wizard with ZERO API calls). A fresh install (no stored email) still
+    aborts named on an empty answer."""
+    from pushframe.cli import run_config
+    config_store.update(email='coredmp95@gmail.com', auth_token='tok-keep')  # noqa: S105
+
+    _feed(monkeypatch, ['', ''])  # Enter email → Enter keep-token → done
+    assert run_config(wizard_args=[], stdin_isatty=True) == 0
+    data = json.loads(cfg_path.read_text())
+    assert data['email'] == 'coredmp95@gmail.com'
+    assert data['auth_token'] == 'tok-keep'  # noqa: S105
+    assert 'config saved' in capsys.readouterr().out
+
+    # fresh install: no stored email — empty Enter aborts, writes no session
+    cfg_path.unlink()
+    _feed(monkeypatch, [''])
+    assert run_config(wizard_args=[], stdin_isatty=True) == 1
+    data = json.loads(cfg_path.read_text())
+    assert 'email' not in data and 'auth_token' not in data  # noqa: S105
+    assert 'no email given' in capsys.readouterr().out
+
+
+def test_wizard_frame_number_enter_skips_prompt_contract(cfg_path, monkeypatch, fake_login_ok, capsys):
+    """Prompt-contract audit: 'default frame number (Enter to skip)' — a
+    bare Enter must skip and store NO default_frame; a valid index selects
+    the frame."""
+    from pushframe.cli import run_config
+
+    # Enter skips: no default_frame lands in the file
+    _feed(monkeypatch, ['me@example.invalid', 's3cret', '', ''])  # noqa: S105
+    assert run_config(wizard_args=[], stdin_isatty=True) == 0
+    data = json.loads(cfg_path.read_text())
+    assert 'default_frame' not in data
+
+    # a valid index selects the frame
+    cfg_path.unlink()
+    _feed(monkeypatch, ['me@example.invalid', 's3cret', '1', ''])  # noqa: S105
+    assert run_config(wizard_args=[], stdin_isatty=True) == 0
+    assert json.loads(cfg_path.read_text())['default_frame'] == 'Cadre de Fabrice'
+
+
+def test_wizard_frame_number_out_of_range_re_asked_until_valid_or_skip(cfg_path, monkeypatch, fake_login_ok, capsys):
+    """The loop (wart fix): an out-of-range or non-numeric answer is
+    RE-ASKED with the named remedy — 'invalid choice, pick 1-N or Enter to
+    skip' — until a valid number is picked or an explicit Enter skips."""
+    from pushframe.cli import run_config
+
+    # invalid '9' → re-ask → '1' selected
+    prompts = []
+    answers = iter(['me@example.invalid', '9', '1', ''])
+
+    def fake_input(prompt=''):
+        prompts.append(prompt)
+        return next(answers)
+
+    monkeypatch.setattr('builtins.input', fake_input)
+    monkeypatch.setattr('getpass.getpass', lambda *a: 's3cret')  # noqa: S105
+    assert run_config(wizard_args=[], stdin_isatty=True) == 0
+    data = json.loads(cfg_path.read_text())
+    assert data['default_frame'] == 'Cadre de Fabrice'
+    assert prompts.count('invalid choice, pick 1-1 or Enter to skip: ') == 1
+    assert any(p.endswith('default frame number (Enter to skip): ')
+               for p in prompts)
+
+    # invalid '0' → re-ask → explicit Enter skips (session still saved)
+    cfg_path.unlink()
+    prompts.clear()
+    answers = iter(['me@example.invalid', '0', '', ''])
+    assert run_config(wizard_args=[], stdin_isatty=True) == 0
+    data = json.loads(cfg_path.read_text())
+    assert 'default_frame' not in data and data['auth_token']  # noqa: S105
+    assert prompts.count('invalid choice, pick 1-1 or Enter to skip: ') == 1
+
+
 def test_show_warns_on_all_zeros_device_identity(cfg_path, capsys, monkeypatch):
     """Identity hygiene (5.1.1): config show names the shared all-zeros
     device id with its remedy; a provisioned or explicit id silences it."""

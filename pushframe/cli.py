@@ -385,6 +385,11 @@ def run_config(wizard_args=None, stdin_isatty: bool | None = None) -> int:
     else:
         print('configuring pushframe — credentials are login-tested now, stored after.')
     email = input('Aura email: ').strip()
+    if not email and existing.get('email'):
+        # The banner promised "Enter keeps it" — keep that promise. With a
+        # stored token this path finishes with ZERO API calls (anti-abuse:
+        # a gratuitous login is exactly what the trip punishes).
+        email = existing['email']
     if not email:
         print('no email given — aborting, nothing written.')
         return 1
@@ -415,7 +420,12 @@ def run_config(wizard_args=None, stdin_isatty: bool | None = None) -> int:
         for i, f in enumerate(frames, 1):
             print(f'  {i}. {f["name"]}')
         choice = input('default frame number (Enter to skip): ').strip()
-        if choice.isdigit() and 1 <= int(choice) <= len(frames):
+        # Prompt-contract audit fix: an out-of-range or non-numeric answer
+        # used to be silently treated as a skip — re-ask until a valid
+        # number or an explicit Enter.
+        while choice and not (choice.isdigit() and 1 <= int(choice) <= len(frames)):
+            choice = input(f'invalid choice, pick 1-{len(frames)} or Enter to skip: ').strip()
+        if choice:
             data['default_frame'] = frames[int(choice) - 1]['name']
     debug = input('enable debug logging by default? [y/N] ').strip().lower()
     if debug in ('y', 'yes'):
@@ -1073,7 +1083,7 @@ def run_reconcile(frame_arg: str, *, remove: bool = False, yes: bool = False, me
                 count = len(result.stuck)
                 print(f'IRREVERSIBLE: {count} row(s) will be permanently destroyed '
                       f'account-wide via hard-delete. This cannot be undone.')
-                answer = input(f'To confirm, type the number of rows to hard-delete ({count}): ')
+                answer = input(f'Verbatim to confirm — type the number of rows to hard-delete ({count}): ')
                 if answer.strip() != str(count):
                     print('Aborted.')
                     return 0
@@ -1321,7 +1331,7 @@ def run_sync(dir_arg: str, frame_arg: str, apply: bool = False, yes: bool = Fals
                 count = len(plan.to_delete)
                 print(f'IRREVERSIBLE: {count} photo(s) will be permanently destroyed '
                       f'account-wide, not just removed from this frame. This cannot be undone.')
-                answer = input(f'To confirm, type the number of photos to hard-delete ({count}): ')
+                answer = input(f'Verbatim to confirm — type the number of photos to hard-delete ({count}): ')
                 if answer.strip() != str(count):
                     print('Aborted.')
                     return 0

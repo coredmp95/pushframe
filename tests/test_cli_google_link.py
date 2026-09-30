@@ -97,6 +97,37 @@ def test_google_link_bootstrap_error_exits_nonzero(monkeypatch, capsys):
     assert "no auth cookies detected" in capsys.readouterr().out
 
 
+def test_manual_enter_prompt_states_the_login_before_enter_contract(monkeypatch, capsys):
+    """Prompt-contract audit: the manual-mode Enter prompt reads as
+    "log in, THEN press Enter" — the Enter closes the harvest, the login
+    is a Google-window action BEFORE it, and the cookie check after the
+    Enter — not the Enter itself — decides success."""
+    from pushframe.google import bootstrap as bs
+
+    class _FakeContext:
+        def cookies(self):
+            return [{"name": "SID", "value": "x", "domain": ".google.com", "path": "/"},
+                    {"name": "SAPISID", "value": "y", "domain": ".google.com", "path": "/"}]
+
+        def close(self):
+            pass
+
+    entered = []
+
+    def fake_input(prompt=""):
+        entered.append(prompt)
+        return ""
+
+    cookies = bs._enter_after_login(_FakeContext(), input_fn=fake_input)
+
+    assert len(entered) == 1
+    prompt = entered[0]
+    low = prompt.lower()
+    assert "log into google" in low and "then press enter" in low
+    # the harvest closed with the typed Enter; cookies came back from it
+    assert {c["name"] for c in cookies} == {"SID", "SAPISID"}
+
+
 def test_google_link_never_prints_cookie_values(monkeypatch, capsys):
     """Even the fake bootstrap's summary dict is value-free; if a cookie
     VALUE ever leaked into the flow, this grep would catch it."""

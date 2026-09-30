@@ -501,6 +501,28 @@ def test_hard_delete_with_yes_skips_the_gate(tmp_path, monkeypatch, capsys):
     assert len(calls) == 1
 
 
+def test_hard_delete_prompt_states_the_verbatim_rule(tmp_path, monkeypatch, capsys):
+    """Prompt-contract audit: the gate's prompt now SAYS the verbatim rule —
+    a reflex 'y' was always rejected; the wording finally admits it."""
+    monkeypatch.setattr(cli.sys.stdin, 'isatty', lambda: True)
+    prompts = []
+
+    def fake_input(prompt=''):
+        prompts.append(prompt)
+        return 'y'  # the reflex answer
+
+    monkeypatch.setattr('builtins.input', fake_input)
+
+    rc, calls = _run_apply(tmp_path, monkeypatch,
+                           _assets_response_with_settings(_removal_candidate()),
+                           yes=False, removal_mode='hard_delete')
+
+    assert rc == 0
+    assert 'Verbatim to confirm' in prompts[-1]
+    assert 'Aborted.' in capsys.readouterr().out
+    assert calls == []
+
+
 def test_reshow_is_reported_in_plan_and_summary(tmp_path, monkeypatch, capsys):
     """A photo present locally but hidden on the frame is a re-show, and gets
     its own line rather than being folded into unchanged (D-08)."""

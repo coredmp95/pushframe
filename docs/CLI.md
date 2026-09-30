@@ -108,20 +108,60 @@ tokens; safe to repeat; never run it in CI.
 
 ### When the anti-abuse layer refuses your writes
 
-Pushd's anti-abuse layer can refuse writes while reads and login keep
-working (proven venus, 2026-09). The refusal body says
-`"Request Unauthenticated"` — **that is the trip's disguise, not a token
-problem**. pushframe recognizes it and stops on the FIRST refusal (no
-retry, no re-login — both feed the trip). The drill:
+Pushd's anti-abuse layer can refuse writes while reads keep working
+(proven venus, 2026-09). It has two shapes — learn both, the disguised
+one is the trap:
+
+| Surface | Shape | Server body |
+|---|---|---|
+| `login.json` | **HTTP 475** — explicit lockout | "Aura API is rate-limiting or has locked out this account" |
+| everything else — **token included** | **HTTP 401** — the trip in disguise | `{"error": true, "message": "Request Unauthenticated", "logout": true}` |
+
+The 401 arrives on a FRESH token, seconds after a successful login: it
+means "we refuse this client's writes (trip)", not "your token is bad".
+The trip is **account-wide** — not scoped to the session, the endpoint
+that provoked it, or the login that just succeeded — and it can spread
+to more surfaces when provoked (venus: writes-only 401 first; after
+probe activity, `login.json` itself went 475).
+
+**Never re-login, never retry.** Every call that touches a tripped
+surface re-arms the clock, and a fresh login bypasses nothing — the
+trip is not session-scoped. Venus's counter-evidence: 8 doctor probes
+spread over 7 hours, all 475, each one buying another wait — the probes
+were the reason nothing cleared. pushframe already stops on the FIRST
+trip-shaped refusal (`TripDetectedError` — no retry, no re-login); the
+discipline is yours to keep outside the tool.
+
+The drill:
 
 1. `pushframe doctor` before any sync (GO = the write surface is open NOW)
-2. Trip detected → wait **60+ min** from the stop, then `pushframe doctor` again
+2. Trip detected → wait **60+ min** from the stop, then `pushframe doctor` again — **once**. A second tripped doctor is the signal to stop doctoring (every probe re-arms the clock) and escalate to the 24-hour protocol below.
 3. If doctor passes but a sync still trips immediately, lower the per-batch
    volume — the trip keys on batch size (a 1-item write may pass where a
    50-item chunk is refused):
    ```bash
    pushframe google-sync Cadre --frame "Cadre de Fabrice" --apply --yes --batch-size 10
    ```
+
+#### The 24-hour probe protocol (escalated recovery)
+
+When 60+ minutes does not clear the trip (venus, 2026-09-30: still
+tripped after a ~5-hour silence), stop probing and switch to days:
+
+1. **Total silence.** No pushframe command of any kind against the
+   account — and nothing automated either: a timer or a loop probing
+   hourly keeps the account tripped indefinitely.
+2. **After 24h+ of silence, ONE probe — a read, never a doctor.**
+   `pushframe status` resumes the stored token session (no login call,
+   no write). Doctor is the WRONG first probe here: its write attempt
+   re-arms the clock even while it tells you the truth.
+3. **Probe green** (reads answer) → ONE `pushframe doctor` as the single
+   write probe. GO → run the sync with a lowered batch size (step 3
+   above). Probe trips → back to step 1; next probe in another 24h.
+
+Never two probes in one 24h bucket. The wait has no measured shape —
+what is measured is only that hours do not cut it, and every premature
+call restarts it.
 
 **Client identity matters.** Pushd's anti-abuse layer also fingerprints
 the client itself: a years-stale `Aura/4.7.790` user agent and the
@@ -196,12 +236,17 @@ the file is `~/.config/pushframe/config.json`, mode `0600`, written atomically.
 
 ### The wizard (`pushframe config`)
 
-Asks for your email, then your password (**hidden input**), then **verifies the
-login against the real Aura API before writing anything** — a failed login writes
-nothing. On success it stores the email plus the session `auth_token` (not the
-password; a stored token is silently refreshed at re-login), then offers the
-optional questions (country for the geo guard, budget tuning) with current
-effective values as defaults.
+On a fresh install it asks for your email, then your password (**hidden
+input**), then **verifies the login against the real Aura API before writing
+anything** — a failed login writes nothing. On an install that already has an
+email stored, **pressing Enter keeps the stored email** — the banner says so and
+means it: with a stored session token, a second Enter reuses the token and the
+wizard finishes WITHOUT any API call (the anti-abuse rule: no gratuitous
+login); only typing a NEW email moves to the password question. On success it
+stores the email plus the session `auth_token` (not the password; a stored
+token is silently refreshed at re-login), then offers the optional questions
+(country for the geo guard, budget tuning) with current effective values as
+defaults.
 
 Refuses to run when stdin is not a terminal — scheduled jobs have nothing to
 interact with; feed them the environment or the config file instead.
@@ -768,6 +813,12 @@ affects uploads, hides and deletes alike.
 
 **There is no automatic retry yet.** If an apply reports 401 failures, simply run it again.
 The operation is safe to repeat: uploads dedupe by md5, and hides are idempotent.
+
+This covers the *transient* 401s — the no-special-body failures. If the
+body says `"Request Unauthenticated"`, that is the anti-abuse trip, not
+a transient failure: do NOT run it again, do NOT re-login — see [When
+the anti-abuse layer refuses your
+writes](#when-the-anti-abuse-layer-refuses-your-writes).
 
 ### A frame's asset count disagrees with its listing
 

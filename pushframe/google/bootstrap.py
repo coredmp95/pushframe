@@ -84,12 +84,25 @@ def _require_profile() -> Path:
     return path
 
 
+def _enter_after_login(context, *, input_fn=input):
+    """Manual-mode harvest close: the Enter comes AFTER the login in the
+    opened window and only closes the harvest — the cookie check after it
+    (not the Enter itself) decides success. Seam for offline tests."""
+    input_fn("…log into Google in the opened window, THEN press Enter "
+             "here to finish the harvest> ")
+    cookies = context.cookies()
+    context.close()
+    return cookies
+
+
 def run_bootstrap(*, auto: bool = False) -> dict:
     """Open the dedicated-profile browser, harvest cookies, save the vault.
 
     auto=True polls the context for completed Google auth (SAPISID-family
     cookies) instead of waiting for an Enter in the terminal — for runs
-    launched from a non-interactive shell. Returns an identity summary dict:
+    launched from a non-interactive shell. In manual mode the Enter comes
+    AFTER the login and only closes the harvest — the cookie check below
+    still decides success. Returns an identity summary dict:
     {vault_path, cookie_count, auth_markers} — never cookie values.
     """
     profile_dir = _require_profile()
@@ -181,9 +194,7 @@ def run_bootstrap(*, auto: bool = False) -> dict:
             cookies = context.cookies()
             context.close()
         else:
-            input("…press Enter here AFTER logging in on the opened window> ")
-            cookies = context.cookies()
-            context.close()
+            cookies = _enter_after_login(context, input_fn=input)
 
     if not any(c["name"] in ("SID", "SAPISID", "__Secure-1PSID") for c in cookies):
         raise BootstrapError(

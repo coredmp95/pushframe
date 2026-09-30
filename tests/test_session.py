@@ -171,3 +171,53 @@ def test_resume_401_propagates_into_the_tty_path():
     assert session_mod._is_auth_failure(RuntimeError(
         "Client error '401 Unauthorized' for url '...'"))
     assert not session_mod._is_auth_failure(ValueError("corrupt config"))
+
+
+def test_prompt_login_bare_enter_keeps_stored_email(cfg_path, monkeypatch, capsys):
+    """Prompt-contract audit: the session-path login prompt shows the same
+    "current email — Enter keeps it" banner as the wizard, and a bare Enter
+    KEEPS it — exactly one login call, none with an empty email."""
+    _clear_creds(monkeypatch)
+    _store_session(cfg_path, email="vaulted@example.invalid")
+
+    from pushframe import session as session_mod
+    logins = []
+
+    def _fake_login(e, p):
+        logins.append((e, p))
+        return {"email": e, "auth_token": "fresh-tok",  # noqa: S105
+                "user_id": "u-1", "frames": []}
+
+    monkeypatch.setattr(session_mod, "_wizard_login", _fake_login)
+    monkeypatch.setattr("builtins.input", lambda *a: "")  # bare Enter
+    import getpass as gp
+    monkeypatch.setattr(gp, "getpass", lambda *a: "typed-pw")  # noqa: S105
+
+    aura = session_mod._prompt_login(_RecordingAura(), True)
+
+    out = capsys.readouterr().out
+    assert "current email: vaulted@example.invalid" in out
+    assert "Enter keeps it" in out
+    assert logins == [("vaulted@example.invalid", "typed-pw")]  # noqa: S105
+    assert aura is not None
+    assert json.loads(cfg_path.read_text())["auth_token"] == "fresh-tok"  # noqa: S105
+
+
+def test_prompt_login_empty_email_on_fresh_install_aborts_named(cfg_path, monkeypatch, capsys):
+    """The other branch of the same contract: with NO stored email, a bare
+    Enter aborts named BEFORE the password question and before any login —
+    establish_session surfaces it as the named no-credentials error."""
+    _clear_creds(monkeypatch)
+
+    from pushframe import session as session_mod
+    from pushframe.session import NoCredentialsError
+
+    monkeypatch.setattr(
+        session_mod, "_wizard_login",
+        lambda *a, **k: pytest.fail("no login call with an empty email"))
+    monkeypatch.setattr("builtins.input", lambda *a: "")
+
+    with pytest.raises(NoCredentialsError) as exc:
+        session_mod._prompt_login_or_fail(_RecordingAura(), True)
+    assert "no email given" in capsys.readouterr().out
+    assert "login aborted" in str(exc.value)

@@ -71,12 +71,35 @@ def _prompt_login(aura, stdin_isatty: bool):
             'stored session expired and stdin is not a terminal — re-run '
             '`pushframe config` once interactively (or set PUSHFRAME_EMAIL/'
             'PUSHFRAME_PASSWORD for this run)')
+    stored_email = config_store.load().get('email')
+    if stored_email:
+        print(f"configuring pushframe (current email: {stored_email} — Enter keeps it)")
     email = input('Aura email: ').strip()
+    if not email and stored_email:
+        # Same contract as the wizard's prompt (fixed in 5.1.2): the banner
+        # promised "Enter keeps it" — an empty answer keeps the stored email
+        # instead of feeding an empty email to the login.
+        email = stored_email
+    if not email:
+        print('no email given — aborting, nothing stored.')
+        return None
     password = getpass.getpass('Aura password (input hidden): ')
     result = _wizard_login(email, password)
     _store_token(result['email'], result['auth_token'], result.get('user_id'))
     aura.login(email=email, password=password)
     return aura
+
+
+def _prompt_login_or_fail(aura, stdin_isatty):
+    """_prompt_login may abort (empty email on a never-configured host);
+    establish_session must surface that as the named no-credentials error
+    instead of returning None where an Aura was expected."""
+    result = _prompt_login(aura, stdin_isatty)
+    if result is None:
+        raise NoCredentialsError(
+            'login aborted (no email given) — no session stored; '
+            're-run the command to retry')
+    return result
 
 
 def establish_session(aura=None, *, stdin_isatty: bool | None = None,
@@ -120,11 +143,11 @@ def establish_session(aura=None, *, stdin_isatty: bool | None = None,
                     f'terminal — re-run `pushframe config` once '
                     f'interactively') from e
             print('stored session expired — one re-login to refresh it:')
-            return _prompt_login(aura, stdin_isatty)
+            return _prompt_login_or_fail(aura, stdin_isatty)
 
     # 3. interactive first-time setup (same ONE prompt)
     if do_prompt and stdin_isatty:
-        return _prompt_login(aura, stdin_isatty)
+        return _prompt_login_or_fail(aura, stdin_isatty)
 
     # 4. nothing available — named, with the remedy
     raise NoCredentialsError(

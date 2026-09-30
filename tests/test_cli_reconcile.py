@@ -310,3 +310,83 @@ def test_run_reconcile_remove_yes_end_to_end_removes_stuck_rows(monkeypatch, cap
     assert rc == 0
     out = capsys.readouterr().out
     assert 'Removed: 3 succeeded, 0 failed' in out
+
+
+def test_run_reconcile_hard_delete_interactive_gate_rejects_everything_but_the_count(monkeypatch, capsys):
+    """Prompt-contract audit: the hard-delete gate demands the VERBATIM row
+    count — the prompt says so, the reflex 'y' is rejected, any other text
+    too, and NO write path is touched on any wrong answer."""
+    monkeypatch.setenv('AURA_EMAIL', 'you@example.invalid')
+    monkeypatch.setenv('AURA_PASSWORD', 'super-secret-pw')
+    monkeypatch.setattr('sys.stdin.isatty', lambda: True)
+
+    aura = offline_aura(overrides={ASSETS_PATH: _placeholder_assets_response()})
+
+    for wrong in ('y', '12', ''):  # 3 stuck rows in the fixture; none of these is '3'
+        prompts = []
+
+        def fake_input(prompt='', _p=prompts):
+            _p.append(prompt)
+            return wrong
+
+        monkeypatch.setattr('builtins.input', fake_input)
+        rc = run_reconcile('Fake', aura=aura, remove=True, yes=False,
+                           mechanism='hard-delete')
+        assert rc == 0
+        assert 'Verbatim to confirm' in prompts[-1]
+        assert '(3)' in prompts[-1]
+        assert 'Aborted.' in capsys.readouterr().out
+        assert _write_paths_hit(aura) == []
+
+
+def test_run_reconcile_hard_delete_proceeds_on_the_exact_count(monkeypatch, capsys):
+    monkeypatch.setenv('AURA_EMAIL', 'you@example.invalid')
+    monkeypatch.setenv('AURA_PASSWORD', 'super-secret-pw')
+    monkeypatch.setattr('sys.stdin.isatty', lambda: True)
+    monkeypatch.setattr(cli_module, '_build_write_budget', lambda email, ignore_budget: None)
+    monkeypatch.setattr('builtins.input', lambda *_: '3')  # exactly the fixture's stuck count
+    # The offline router has no canned DELETE /v5/assets/{id} route — prove
+    # the GATE lets the exact count through by observing the primitive's
+    # calls instead (the endpoint's own behavior is covered in test_reconcile).
+    import pushframe.reconcile as reconcile_mod
+    sent = []
+
+    def _fake_hard_delete(aura_, frame_id, chunk):
+        sent.extend(asset.id for asset in chunk)
+        return [object()] * len(chunk)
+
+    monkeypatch.setitem(reconcile_mod._RECONCILE_PRIMITIVE, 'hard-delete',
+                        _fake_hard_delete)
+
+    aura = offline_aura(overrides={ASSETS_PATH: _placeholder_assets_response()})
+
+    rc = run_reconcile('Fake', aura=aura, remove=True, yes=False,
+                       mechanism='hard-delete')
+
+    assert rc == 0
+    assert len(sent) == 3
+
+
+def test_run_reconcile_remove_interactive_y_n_gate(monkeypatch, capsys):
+    """Prompt-contract audit: the default (remove) mechanism's interactive
+    gate is a real y/N — the prompt says so, a non-y answer aborts before
+    any write."""
+    monkeypatch.setenv('AURA_EMAIL', 'you@example.invalid')
+    monkeypatch.setenv('AURA_PASSWORD', 'super-secret-pw')
+    monkeypatch.setattr('sys.stdin.isatty', lambda: True)
+    prompts = []
+
+    def fake_input(prompt=''):
+        prompts.append(prompt)
+        return 'n'
+
+    monkeypatch.setattr('builtins.input', fake_input)
+
+    aura = offline_aura(overrides={ASSETS_PATH: _placeholder_assets_response()})
+
+    rc = run_reconcile('Fake', aura=aura, remove=True, yes=False, mechanism='remove')
+
+    assert rc == 0
+    assert 'Proceed? [y/N]' in prompts[-1]
+    assert 'Aborted.' in capsys.readouterr().out
+    assert _write_paths_hit(aura) == []

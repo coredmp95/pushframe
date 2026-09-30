@@ -14,6 +14,33 @@ frames; it is not affiliated with Aura Frames Inc.
 
 ## [Unreleased]
 
+## [5.1.3] — 2026-09-30
+
+### Fixed
+
+- **`pushframe config` — Enter now keeps the stored email, as the banner
+  always promised** (venus, 5.1.2): an empty answer on a configured
+  install aborted with "no email given — aborting" instead of keeping
+  it. With a stored token, Enter-Enter now finishes the wizard with ZERO
+  API calls (the anti-abuse rule: no gratuitous login); typing a new
+  email still re-logins, and a fresh install still aborts named on an
+  empty answer.
+- **Prompt-contract audit — every interactive prompt checked against its
+  banner**, one behavior test per prompt. Two more promised-vs-real gaps
+  fixed alongside the wizard's: the session-path login prompt (expired
+  token refresh) showed NO banner and aborted the login on a bare Enter —
+  it now prints the same "current email — Enter keeps it" banner and
+  keeps it; and the two hard-delete confirmation gates only said "To
+  confirm, type the number…" — now "Verbatim to confirm —", because the
+  y/N reflex answer being silently rejected WAS the contract, just never
+  the wording. google-link's manual Enter prompt reworded to make the
+  AFTER-login gate explicit ("log into Google …, THEN press Enter"); no
+  behavior change there.
+- **The wizard's default-frame question loops on a bad answer**: an
+  out-of-range or non-numeric entry used to be silently treated as a
+  skip — it now re-asks with `invalid choice, pick 1-N or Enter to skip`
+  until a valid number is picked or an explicit Enter skips.
+
 ## [5.1.2] — 2026-09-30
 
 ### Changed (tests)
