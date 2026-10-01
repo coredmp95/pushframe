@@ -784,7 +784,7 @@ feature of pushframe** (one-time `google-link` → pick the album with
 [pair](#pairs--one-album--several-frames-and-back)). The full narrative
 (with a verified end-to-end walkthrough, cache/manifest internals and
 the mirror safety gates) lives in the
-[README highlight section](../README.md#highlight-mirror-a-google-photos-album-onto-your-frame);
+[README highlight section](../README.md#the-highlight-your-frame-follows-a-google-photos-album);
 this is the command-level reference.
 
 ### `google-link` — link (or re-link) Google Photos
