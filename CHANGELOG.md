@@ -12,6 +12,31 @@ every channel.
 `pushframe` is an unofficial community CLI for Aura Frames digital photo
 frames; it is not affiliated with Aura Frames Inc.
 
+## [5.1.7] - 2026-10-01
+
+### Fixed
+
+- **The live progress bar names the primitive that actually runs** (D-07,
+  venus 2026-10-01): the removal loop of `execute_plan` emitted a
+  hardcoded `delete` kind on every per-item progress callback, so a hide
+  run's bar read `delete ok <asset>` mid-run even though the final summary
+  correctly said `Hidden` — the wording contract held on plan headers and
+  summaries but not on the live stream. The bar now shows `hide ok` /
+  `delete ok` / `hard-delete ok` matching `removal_mode` (a parametrized
+  test pins one kind per mode).
+
+### Docs
+
+- `docs/CLI.md` aligned with the real CLI surface (full audit against
+  argparse + code): a new Google commands section (`google-link` incl.
+  the browser's auto-close on login detection, `google-album`,
+  `google-sync` with `--pair`/`--all`/`--scheduled` and its 0/1/2 exit
+  codes), the Contents index covering Pairs/Scheduling/Google, the
+  current root usage block (12 verbs), `sync`'s `--batch-size`/
+  `--chunk-delay`, the write-budget identity's env-then-stored-session
+  resolution (5.1.6), the Google-side environment variables, and the
+  removal-verb note on plan lines.
+
 ## [5.1.6] - 2026-09-30
 
 ### Fixed
