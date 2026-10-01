@@ -14,7 +14,25 @@ frames; it is not affiliated with Aura Frames Inc.
 
 ## [Unreleased]
 
+### Changed
+
+- **Documentation restructured around users, not development history.** The
+  README is now a user guide (highlight → install → connect → everyday use →
+  safety model → troubleshooting) and no longer carries the device-flow
+  transcripts, the write-path research narrative or the open
+  reverse-engineering questions; those moved to a new
+  [`docs/INTERNALS.md`](docs/INTERNALS.md) ("how it works" for curious
+  readers). docs/CLI.md's reconcile evidence story is condensed to what a
+  user needs. No behavior change.
+
 ### Added
+
+- `docs/INTERNALS.md`: how pushframe works internally — the
+  reverse-engineered cloud API, the Google mirror engine (cache, manifest,
+  safety gates), the anti-abuse findings, the device flows (documented from
+  code, not verified) and the open questions.
+
+### Changed (docs)
 
 - `pushframe schedule --help` now answers "what gets scheduled": the timer
   runs a `google-sync` of the Google album onto the frame (`--pair NAME` →
@@ -22,6 +40,11 @@ frames; it is not affiliated with Aura Frames Inc.
   with the `--album/--frame`, `--sync-dir` (local-directory sync) and
   `--at "OnCalendar"` alternatives plus copy-pasteable examples.
   docs/CLI.md and the README spell out the same.
+- Internal task codes (SAFE-xx, phase N, plan 11-xx, D-xx, MTF/TMR/PRF/SEC,
+  UAT) removed from all user-facing documentation AND from the CLI's own
+  output (`--help` strings, the mass-hide confirmation and the scheduled
+  skip message now speak plain language); two tests pinning the old
+  strings updated.
 
 ## [5.1.7] - 2026-10-01
 
