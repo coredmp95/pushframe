@@ -26,6 +26,14 @@ frames; it is not affiliated with Aura Frames Inc.
   requests past it; the single-retry transient recovery stays for the
   genuine mid-listing case. One new test reproduces the drift with the live
   page counts.
+- **MPO files (stereo/3D JPEG containers) upload as their first frame**
+  (live-proven 2026-10-01: two Google Photos items in the "Cadre" album
+  decoded as PIL `MPO`, 2 frames each, and failed closed as unmapped).
+  The frame being a 2D display, the FIRST view is re-encoded as plain JPEG
+  and uploaded with the `public.jpeg` UTI — honest bytes, honest md5, and
+  the md5-diff dedupe still matches on the next run. Previously these
+  files failed every run with an `Unsupported image format: MPO` per-item
+  failure.
 
 ## [5.1.8] - 2026-10-01
 

@@ -36,6 +36,7 @@ documented tradeoff, T-fyr-01).
 """
 from __future__ import annotations
 
+import io
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -501,22 +502,36 @@ def _prep_upload(path: Path, s3_client) -> AssetPartial:
     """Per-file S3 prep phase for a single new local file: decode the image
     once to read both its dimensions and its real format (D-11), resolve
     the Apple UTI from that decoded format -- not the filename -- upload
-    the raw bytes to S3, and build the `AssetPartial` that will be sent in
+    the bytes to S3, and build the `AssetPartial` that will be sent in
     the chunk's batched `batch_update` call. Because the UTI comes from the
     decoded bytes rather than the extension, a `.jpg` that is really a PNG
     can no longer be mislabeled server-side; the bytes decide. Raises
     (fails closed) if the decoded format is unmapped, `Image.open` fails,
     or the S3 upload fails -- the caller catches this per file so one bad
     file never blocks the rest of the chunk.
+
+    MPO files (Multi-Picture Object -- the stereo/3D JPEG containers some
+    cameras and phones produce, live-proven 2026-10-01 on two Google Photos
+    items) are reduced to their FIRST frame re-encoded as plain JPEG: the
+    frame is a 2D display, and the first view is the primary one. The upload
+    then carries honest JPEG bytes and the `public.jpeg` UTI.
     """
     local_identifier = str(uuid.uuid4())
     with Image.open(path) as image:
         width, height = image.size
         data_uti = _DATA_UTI_BY_IMAGE_FORMAT.get(image.format)
-        if data_uti is None:
+        if image.format == 'MPO':
+            image.seek(0)
+            buf = io.BytesIO()
+            image.convert('RGB').save(buf, 'JPEG', quality=95)
+            payload = buf.getvalue()
+            data_uti = 'public.jpeg'
+        elif data_uti is None:
             raise ValueError(f'Unsupported image format: {image.format} ({path.name})')
+        else:
+            payload = path.read_bytes()
 
-    filename, md5 = s3_client.upload_file(path.read_bytes(), path.suffix)
+    filename, md5 = s3_client.upload_file(payload, path.suffix)
 
     return local_identifier, AssetPartial(
         local_identifier=local_identifier,

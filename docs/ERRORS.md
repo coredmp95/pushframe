@@ -58,6 +58,7 @@ twice.
 | `⚠ N of M photos … would be hidden — over the … mass-hide safety threshold` | The plan hides more than 20 % of the frame's photos, so it demands explicit confirmation | Read the counts; `y` only if that is really what you want |
 | `SKIPPED (--scheduled): this plan would hide too many photos …` | Same gate in scheduled mode: the run **skips and logs** instead of proceeding | Run `google-sync` manually, review the plan, apply deliberately |
 | `google-sync failed: reading frame assets failed: …` | The frame listing itself failed | Re-run; if persistent, `pushframe status` / `pushframe inspect` to check the account and frame |
+| `Unsupported image format: MPO …` on a few items (pre-5.1.9) | The file is a stereo/3D JPEG container (MPO) | Fixed in 5.1.9+: the first view uploads as plain JPEG. Update pushframe and re-run — the failed items retry automatically |
 | `snAcKc carries a null inner payload on HTTP 200 …` | Google answered a page request with an empty envelope. One automatic retry already ran; if it recurs on every run it means the past-the-end request shape Google now answers with null (a listing-size change) — fixed in 5.1.9+; on older versions, update | Update pushframe; if it persists on the latest version, wait a few minutes and re-run |
 
 ## Writes, budget, pacing

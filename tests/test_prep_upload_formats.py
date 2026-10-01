@@ -95,6 +95,41 @@ def test_mislabeled_png_named_jpg_produces_public_png(tmp_path):
 
 # --- Behavior 5: unmapped decoded format fails closed (D-12) ---------------
 
+def test_mpo_is_reduced_to_its_first_frame_as_jpeg(tmp_path):
+    """MPO files (stereo/3D JPEG containers, live-proven 2026-10-01 on two
+    Google Photos items) used to fail closed as unmapped; the frame is a 2D
+    display, so the FIRST view is what should upload -- re-encoded as plain
+    JPEG with the `public.jpeg` UTI (the md5 travels inside the fake, so the
+    bytes-level check below is the honest one)."""
+    import io
+
+    # Build a real 2-frame MPO: PIL writes the MPF multi-picture container
+    # when saving MPO with append_images.
+    primary = Image.new('RGB', (6, 4), (10, 20, 30))
+    second = Image.new('RGB', (6, 4), (200, 100, 50))
+    path = tmp_path / 'stereo.jpg'
+    primary.save(path, format='MPO', save_all=True,
+                 append_images=[second])
+
+    # Sanity: PIL really decoded it as MPO with 2 frames.
+    with Image.open(path) as check:
+        assert check.format == 'MPO'
+        assert getattr(check, 'n_frames', 1) == 2
+
+    s3 = _FakeS3Client()
+    local_identifier, partial = _prep_upload(path, s3)
+
+    assert partial.data_uti == 'public.jpeg'
+    assert (partial.width, partial.height) == (6, 4)
+    # The S3 payload is the RE-ENCODED first frame, not the container:
+    uploaded_bytes, uploaded_ext = s3.upload_calls[0]
+    assert uploaded_bytes != path.read_bytes()
+    with Image.open(io.BytesIO(uploaded_bytes)) as uploaded:
+        assert uploaded.format == 'JPEG'
+        assert getattr(uploaded, 'n_frames', 1) == 1
+        assert uploaded.size == (6, 4)
+
+
 def test_webp_raises_valueerror_naming_decoded_format_and_uploads_nothing(tmp_path):
     path = tmp_path / 'photo.webp'
     _write_image(path, 'WEBP')
