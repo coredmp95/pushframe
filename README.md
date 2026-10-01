@@ -73,9 +73,9 @@ runs skip rather than fail on a mass-hide.
 **How to set it up — three commands:**
 
 ```bash
-# 1. One-time: harvest the Google session in a dedicated Chrome profile
-#    (auto-detects the completed login; re-linking is the same command).
-export PUSHFRAME_PROBE_CHROME_PROFILE=~/.config/pushframe/chrome-profile
+# 1. One-time: a browser window opens on a dedicated profile; log into
+#    Google, it auto-detects the completed login (re-linking is the
+#    same command).
 uv run pushframe google-link
 
 # 2. Pick the album and preview the plan (writes nothing):
@@ -249,8 +249,9 @@ which stores only the email plus the session token — never the password).
 - `PUSHFRAME_STATE_DIR`: Where the persisted budget lives. (Default: `~/.config/pushframe`)
 
 **Optional — Google sync:**
-- `PUSHFRAME_PROBE_CHROME_PROFILE`: Dedicated Chrome profile directory used by `google-link` for
-  the one-time cookie harvest (required for that command only).
+- `PUSHFRAME_PROBE_CHROME_PROFILE`: Overrides the dedicated Chrome profile directory `google-link`
+  uses for the one-time cookie harvest (default `~/.config/pushframe/chrome-profile`, created
+  on demand).
 - `PUSHFRAME_GOOGLE_SYNC_REMOVAL_THRESHOLD`: Fraction of the frame's photos above which
   `google-sync` demands explicit confirmation before hiding (Default: `0.2`).
 
@@ -424,11 +425,11 @@ mechanism is the browser-automation one proven in phase 16: a dedicated-profile
 browser harvests the session cookies once, and every later operation is plain authenticated
 HTTP over the internal `batchexecute` API — no browser runs again.
 
-**One-time setup:** point `PUSHFRAME_PROBE_CHROME_PROFILE` at a **dedicated** Chrome profile
-directory (your daily-driver profile is structurally unreachable), then link:
+**One-time setup:** `google-link` opens a **visible** Chrome window on a dedicated profile
+(default `~/.config/pushframe/chrome-profile`, created on demand — your daily-driver profile
+is structurally unreachable) and links the account:
 
 ```bash
-export PUSHFRAME_PROBE_CHROME_PROFILE=~/.config/pushframe/chrome-profile
 uv run pushframe google-link
 ```
 
@@ -480,7 +481,6 @@ principle; here is the full walkthrough.) Start to finish:
 
 ```bash
 # One-time setup (or again whenever the Google session expires):
-export PUSHFRAME_PROBE_CHROME_PROFILE=~/.config/pushframe/chrome-profile
 uv run pushframe google-link
 
 # Find the album, then mirror it:
