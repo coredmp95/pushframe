@@ -214,6 +214,7 @@ pushframe config          # interactive wizard: email → password (hidden) → 
 pushframe config show     # every setting: effective value (secrets ***), and where it comes from
 pushframe config import .env   # adopt an existing .env without retyping it
 pushframe config set KEY VALUE / get KEY / path
+pushframe config pair add NAME --album ALBUM --frame FRAME   # name an album↔frame mapping (also: list, remove)
 ```
 
 Every value resolves at use time with the precedence **environment variable → config
@@ -267,23 +268,24 @@ Boolean variables accept `1`, `true`, `yes`, `on` (case-insensitive); anything e
 ## CLI Usage (`pushframe`)
 
 A CLI wraps the library (installed as the `pushframe` entry point by `uv sync`). There are
-twelve commands — the Google trio is the flagship flow (see the
-[highlight](#highlight-mirror-a-google-photos-album-onto-your-frame) above):
+twelve commands — the Google trio first (the flagship flow, see the
+[highlight](#highlight-mirror-a-google-photos-album-onto-your-frame) above), then the
+rest alphabetically:
 
 | Command | What it does | Writes? |
 |---------|--------------|---------|
 | `google-link` | Link (or re-link) your Google Photos account — one-time browser harvest | Vault write only (outside the repo) |
 | `google-album` | Select a Google Photos album and enumerate it exactly | No (read-only) |
 | `google-sync` | **Mirror a Google Photos album onto a frame** (dry run by default) | Yes, with `--apply` |
-| `schedule` | Install/list/remove systemd USER timers that run pairs unattended | systemd units |
 | `config` | Store credentials, pairs and settings once (wizard, `0600`) | Config file only |
-| `status` | Check credentials, log in, list your frames, show the Google link state | No |
-| `logout` | Delete the stored session token — email and settings stay | Config only |
 | `doctor` | One deliberate write probe: can THIS machine write TODAY? | One 4×4 test image |
 | `inspect` | Show one frame's photos and metadata | No |
-| `sync` | Make a frame **match** a local directory | Yes, with `--apply` |
+| `logout` | Delete the stored session token — email and settings stay | Config only |
 | `push` | Upload from a supply directory — **never** removes | Yes, with `--apply` |
 | `reconcile` | Report (and optionally remove) stuck placeholder rows on a frame | Only with `--apply` |
+| `schedule` | Install/list/remove systemd USER timers that run pairs unattended | systemd units |
+| `status` | Check credentials, log in, list your frames, show the Google link state | No |
+| `sync` | Make a frame **match** a local directory | Yes, with `--apply` |
 
 **→ Full reference with every flag, real output, and known issues: [`docs/CLI.md`](docs/CLI.md)**
 

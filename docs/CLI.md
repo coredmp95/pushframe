@@ -283,6 +283,13 @@ Direct access: print the config file path; set one key (validated, whitelist,
 atomic save); print one resolved value (`get` reflects the true precedence —
 it is the value a command would actually use).
 
+### `config pair add|list|remove`
+
+Named album↔frame mappings consumed by `google-sync --pair` / `--all` and by
+the systemd timers: `add NAME --album A --frame F`, `list` (name → album →
+frame + state paths), `remove NAME`. Full semantics in
+[Pairs](#pairs--one-album--several-frames-and-back).
+
 ## `status` — check credentials and list frames
 
 ```
