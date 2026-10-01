@@ -35,23 +35,23 @@ Set it up in three commands:
 ```bash
 # 1. One-time: link your Google account. A browser window opens; log into
 #    Google inside it, the rest is automatic (re-linking is the same command).
-uv run pushframe google-link
+pushframe google-link
 
 # 2. Find your album and preview what would happen (nothing is written yet):
-uv run pushframe google-album --list
-uv run pushframe google-sync family --frame "Living Room"
+pushframe google-album --list
+pushframe google-sync family --frame "Living Room"
 
 # 3. Mirror it (one confirmation, echoing the frame's name so you can check):
-uv run pushframe google-sync family --frame "Living Room" --apply
+pushframe google-sync family --frame "Living Room" --apply
 ```
 
 Then let it run itself:
 
 ```bash
 # Name the album↔frame mapping once...
-uv run pushframe config pair add family --album family --frame "Living Room"
+pushframe config pair add family --album family --frame "Living Room"
 # ...and mirror it every night, unattended:
-uv run pushframe schedule add nightly --pair family --every 1d
+pushframe schedule add nightly --pair family --every 1d
 ```
 
 On a server or any headless machine, enable lingering once so the timer fires
@@ -126,6 +126,19 @@ sudo apt update && sudo apt install pushframe
 
 `apt update` must stay free of signature warnings — if it is not, compare the
 key fingerprint above with `gpg --show-keys /etc/apt/keyrings/pushframe.gpg`.
+
+### From source (trying the latest master)
+
+```bash
+git clone https://github.com/coredmp95/pushframe && cd pushframe
+uv sync
+uv run pushframe --version
+```
+
+Everywhere in these docs commands are shown as plain `pushframe …`, which is
+what the deb/APT and `uv tool install` installs put on your PATH. From a
+source checkout, keep the `uv run` prefix (`uv run pushframe …`) so the
+command runs inside the project's managed environment.
 
 ## Connect your account
 
@@ -213,7 +226,7 @@ then the rest alphabetically:
 ### Check the connection (`status`)
 
 ```bash
-uv run pushframe status
+pushframe status
 ```
 
 ```
@@ -229,7 +242,7 @@ substring of the frame name**, or an exact id. An ambiguous substring stops
 the run and lists the matches rather than guessing:
 
 ```bash
-uv run pushframe inspect --frame "living"
+pushframe inspect --frame "living"
 ```
 
 ### Google Photos albums — `google-link` / `google-album`
@@ -251,13 +264,13 @@ Then select and enumerate an album by name, share link, or id:
 
 ```bash
 # Discover the account's shared albums:
-uv run pushframe google-album --list
+pushframe google-album --list
 
 # By name substring — ambiguity prints a numbered list and stops (exit 2):
-uv run pushframe google-album "holidays"
+pushframe google-album "holidays"
 
 # By share link or album id — used exactly as given:
-uv run pushframe google-album "https://photos.google.com/share/AF1Qip...?key=..."
+pushframe google-album "https://photos.google.com/share/AF1Qip...?key=..."
 ```
 
 The resolved album is walked **completely** and every item's exact byte size
@@ -286,15 +299,15 @@ is missing, upload it, and mirror removals as **hides**. Start to finish:
 
 ```bash
 # One-time setup (or again whenever the Google session expires):
-uv run pushframe google-link
+pushframe google-link
 
 # Find the album, then mirror it:
-uv run pushframe google-album --list
-uv run pushframe google-sync family --frame "Living Room"           # dry-run plan (writes nothing)
-uv run pushframe google-sync family --frame "Living Room" --apply   # one y/N, then it mirrors
+pushframe google-album --list
+pushframe google-sync family --frame "Living Room"           # dry-run plan (writes nothing)
+pushframe google-sync family --frame "Living Room" --apply   # one y/N, then it mirrors
 
 # Non-interactive (CI, scripts) — --yes is required for --apply, otherwise it fails closed:
-uv run pushframe google-sync family --frame "Living Room" --apply --yes
+pushframe google-sync family --frame "Living Room" --apply --yes
 ```
 
 A real **production run** (a 95-photo album, 74 of them missing from the frame
@@ -367,14 +380,14 @@ match it.
 
 ```bash
 # Dry run, then apply. Photos already on the frame are skipped by content hash.
-uv run pushframe push ./buffet/ --frame "Living Room"
-uv run pushframe push ./buffet/ --frame "Living Room" --apply --yes
+pushframe push ./buffet/ --frame "Living Room"
+pushframe push ./buffet/ --frame "Living Room" --apply --yes
 
 # Pacing flags for the write budget:
 #   --limit N         upload at most N photos this run
 #   --batch-size N    assets per write call (default 50)
 #   --chunk-delay S   seconds to pause between write chunks (default 5)
-uv run pushframe push ./buffet/ --frame "Living Room" --apply --yes --limit 40
+pushframe push ./buffet/ --frame "Living Room" --apply --yes --limit 40
 
 # Budget / geo overrides:
 #   --max-wait S      cap the wait for budget refill (default 3600)
@@ -393,7 +406,7 @@ are **hidden by default** (reversible — see below). Nothing changes without
 `--apply`:
 
 ```bash
-uv run pushframe sync ./photos/ --frame "Living Room"
+pushframe sync ./photos/ --frame "Living Room"
 ```
 
 ```
@@ -410,10 +423,10 @@ does not cause a re-upload.
 
 ```bash
 # Apply it. One confirmation covers the whole plan and echoes the frame name + id.
-uv run pushframe sync ./photos/ --frame "Living Room" --apply
+pushframe sync ./photos/ --frame "Living Room" --apply
 
 # Non-interactive (CI, scripts) — --yes is required, otherwise it fails closed.
-uv run pushframe sync ./photos/ --frame "Living Room" --apply --yes
+pushframe sync ./photos/ --frame "Living Room" --apply --yes
 ```
 
 ### What happens to removed photos — hidden, not deleted
@@ -447,7 +460,7 @@ deliberately.
 Restoring a hidden photo is just moving the file back and re-running:
 
 ```bash
-mv /tmp/sunset.jpg ./photos/ && uv run pushframe sync ./photos/ --frame "Living Room" --apply --yes
+mv /tmp/sunset.jpg ./photos/ && pushframe sync ./photos/ --frame "Living Room" --apply --yes
 # -> To re-show: 1   (and "To upload: 0" -- it is un-hidden, not uploaded again)
 ```
 

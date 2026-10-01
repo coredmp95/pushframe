@@ -63,8 +63,8 @@ uv tool) ships the same version.
 `--debug` sits on the root parser, so it goes **before** the subcommand:
 
 ```bash
-uv run pushframe --debug status      # correct
-uv run pushframe status --debug      # error: unrecognized argument
+pushframe --debug status      # correct
+pushframe status --debug      # error: unrecognized argument
 ```
 
 Without `--debug` the CLI is quiet: normal runs print only the report. With it, every HTTP
@@ -76,8 +76,8 @@ always written to `logs/file_{timestamp}.log` regardless of the flag.
 `--frame` accepts a **case-insensitive substring of the frame name**, or an exact frame id:
 
 ```bash
-uv run pushframe inspect --frame "living"                                  # substring
-uv run pushframe inspect --frame "00000000-0000-0000-0000-000000000000"    # exact id
+pushframe inspect --frame "living"                                  # substring
+pushframe inspect --frame "00000000-0000-0000-0000-000000000000"    # exact id
 ```
 
 Resolution rules:
@@ -315,7 +315,7 @@ named with the `pushframe config` remedy instead of prompting. `inspect`,
 this contract holds on every frames-reading verb.
 
 ```bash
-uv run pushframe status
+pushframe status
 ```
 
 ```
@@ -346,7 +346,7 @@ options:
 Read-only. Shows the frame, its owner, contributors, and the first 10 photos.
 
 ```bash
-uv run pushframe inspect --frame "Living Room"
+pushframe inspect --frame "Living Room"
 ```
 
 ```
@@ -403,7 +403,7 @@ a re-upload.
 Without `--apply`, nothing changes:
 
 ```bash
-uv run pushframe sync ./photos --frame "Living Room"
+pushframe sync ./photos --frame "Living Room"
 ```
 
 ```
@@ -446,14 +446,14 @@ photos.
 `--delete` and `--hard-delete` are mutually exclusive, enforced at parse time:
 
 ```bash
-uv run pushframe sync ./photos --frame "Living Room" --delete --hard-delete
+pushframe sync ./photos --frame "Living Room" --delete --hard-delete
 # pushframe sync: error: argument --hard-delete: not allowed with argument --delete
 ```
 
 ### Applying a plan
 
 ```bash
-uv run pushframe sync ./photos --frame "Living Room" --apply
+pushframe sync ./photos --frame "Living Room" --apply
 ```
 
 You get one confirmation covering the whole plan, echoing the resolved frame's name and id
@@ -484,10 +484,10 @@ Without a TTY, `--apply` requires `--yes` and otherwise **fails closed** rather 
 on a prompt:
 
 ```bash
-uv run pushframe sync ./photos --frame "Living Room" --apply < /dev/null
+pushframe sync ./photos --frame "Living Room" --apply < /dev/null
 # --apply requires --yes when running non-interactively    (exit 1)
 
-uv run pushframe sync ./photos --frame "Living Room" --apply --yes   # runs
+pushframe sync ./photos --frame "Living Room" --apply --yes   # runs
 ```
 
 ### The `--hard-delete` gate
@@ -521,10 +521,10 @@ round trip is just moving the file:
 
 ```bash
 mv ./photos/sunset.jpg /tmp/                                        # hide it
-uv run pushframe sync ./photos --frame "Living Room" --apply --yes   # -> To hide: 1
+pushframe sync ./photos --frame "Living Room" --apply --yes   # -> To hide: 1
 
 mv /tmp/sunset.jpg ./photos/                                        # bring it back
-uv run pushframe sync ./photos --frame "Living Room" --apply --yes   # -> To re-show: 1
+pushframe sync ./photos --frame "Living Room" --apply --yes   # -> To re-show: 1
 ```
 
 The second run reports `To upload: 0` — the photo is re-shown, never uploaded a second time.
@@ -561,7 +561,7 @@ remove, or re-show anything. It is the safe way to add photos from a supply dire
 the frame being diffed to match it.
 
 ```bash
-uv run pushframe push ./buffet --frame "Living Room"
+pushframe push ./buffet --frame "Living Room"
 ```
 
 ```
@@ -574,7 +574,7 @@ Unchanged: 0
 ```
 
 ```bash
-uv run pushframe push ./buffet --frame "Living Room" --apply --yes
+pushframe push ./buffet --frame "Living Room" --apply --yes
 ```
 
 ```
@@ -672,7 +672,7 @@ row still mid-upload-processing trips at most one of the three and is never coun
 ### Report (the default)
 
 ```bash
-uv run pushframe reconcile --frame "Living Room"
+pushframe reconcile --frame "Living Room"
 ```
 
 ```
@@ -728,7 +728,7 @@ rows (the latter unless promoted by `--include-unknown-age`) are structurally un
 the removal code path, whatever `--mechanism` or confirmation you give.
 
 ```bash
-uv run pushframe reconcile --frame "Living Room" --remove --include-unknown-age
+pushframe reconcile --frame "Living Room" --remove --include-unknown-age
 ```
 
 On an account whose `created_at` is genuinely absent from the assets listing (as observed on
