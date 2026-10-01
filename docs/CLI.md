@@ -915,9 +915,12 @@ Booleans accept `1`, `true`, `yes`, `on` (case-insensitive); anything else is fa
 |---|---|
 | `0` | Success — including a dry run, and including an aborted confirmation (nothing happened, which is not a failure) |
 | `1` | Missing credentials, login failure, frame not found or ambiguous, any per-item upload/removal/re-show failure, rate-limit abort, geo mismatch, or exhausted budget |
+| `2` | Usage or ambiguity — bad arguments, or an album/frame name matching several candidates (the numbered list is printed) |
 
 A partially-failed apply exits `1` and names each failed item. Successful work already done
 is still reported.
+
+→ Every error message, by symptom, with its remedy: [`docs/ERRORS.md`](ERRORS.md).
 
 ## Known issues
 

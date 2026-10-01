@@ -516,6 +516,9 @@ that one command — see [Headless servers](#headless-servers-google-link-withou
 `pushframe inspect` and `pushframe reconcile` report them; known server-side
 quirks are catalogued in [`docs/CLI.md`](docs/CLI.md#known-issues).
 
+**Any message you don't understand.** Every error message is explained —
+symptom, meaning, remedy — in [`docs/ERRORS.md`](docs/ERRORS.md).
+
 **Logs & exit codes.** Add `--debug` **before** the subcommand for verbose
 request/response logging on stderr (`pushframe --debug status`). Every run
 also writes a full log to `logs/file_{timestamp}.log`. Exit codes: `0`
@@ -523,16 +526,23 @@ success (a dry run and an aborted confirmation both count); `1` failure
 (bad credentials, unresolvable frame, per-item failure, budget exhausted);
 `2` usage/ambiguity (e.g. an album name matching several albums).
 
-## Going deeper
+## Documentation map
 
-- [`docs/CLI.md`](docs/CLI.md) — full command reference: every flag, real
+**For users:**
+- [`docs/CLI.md`](docs/CLI.md) — the full command reference: every flag, real
   output, known issues.
+- [`docs/ERRORS.md`](docs/ERRORS.md) — what every error message means and how
+  to fix it.
+- [`CHANGELOG.md`](CHANGELOG.md) — what changed in each release.
+
+**For the curious and for contributors:**
 - [`docs/INTERNALS.md`](docs/INTERNALS.md) — how it works: the
-  reverse-engineered API, the mirror engine (cache, manifest, safety gates),
-  the anti-abuse findings, and what remains unknown.
+  reverse-engineered API, the mirror engine, the anti-abuse findings, and
+  what remains unknown.
+- [`docs/DEVELOPING.md`](docs/DEVELOPING.md) — contributing: project layout,
+  conventions, working method, and how releases ship.
 - [`VERIFICATION-REPORT.md`](VERIFICATION-REPORT.md) — what was verified
   live, step by step.
-- [`CHANGELOG.md`](CHANGELOG.md) — every release, in detail.
 
 ## Credits
 

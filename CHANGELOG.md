@@ -27,6 +27,14 @@ frames; it is not affiliated with Aura Frames Inc.
 
 ### Added
 
+- `docs/ERRORS.md`: every error message explained by symptom, meaning and
+  remedy (login/session, the refused-write 401 family, resolution ambiguity,
+  the Google safety gates, pacing/budget, scheduling) — the user's map from
+  "what does this message mean" to "what do I do".
+- `docs/DEVELOPING.md`: the contributor guide — project layout, environment,
+  conventions (plain-language user text, offline-test contract, changelog
+  discipline), the verified-increment working method, and the release
+  process (one tag → PyPI + APT + GitHub Releases).
 - `docs/INTERNALS.md`: how pushframe works internally — the
   reverse-engineered cloud API, the Google mirror engine (cache, manifest,
   safety gates), the anti-abuse findings, the device flows (documented from
