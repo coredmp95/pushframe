@@ -13,12 +13,15 @@ talks to the frame over your local network — everything goes through your Aura
 
 - [Global usage](#global-usage)
 - [`doctor`](#doctor--can-this-machine-write-today)
+- [Pairs](#pairs--one-album--several-frames-and-back)
+- [Scheduling](#scheduling--systemd-user-timers-no-root)
 - [`config`](#config--set-up-credentials-and-settings-once)
 - [`status`](#status--check-credentials-and-list-frames)
 - [`inspect`](#inspect--look-at-one-frame)
 - [`sync`](#sync--make-a-frame-match-a-directory)
 - [`push`](#push--upload-only-never-removes)
 - [`reconcile`](#reconcile--account-for-stuck-placeholder-rows)
+- [Google commands (`google-link` / `google-album` / `google-sync`)](#google-commands)
 - [Choosing between `sync` and `push`](#choosing-between-sync-and-push)
 - [Environment variables](#environment-variables)
 - [Exit codes](#exit-codes)
@@ -43,11 +46,13 @@ settings stay (the next `pushframe config` proposes your email). Idempotent;
 token material is never printed.
 
 ```
-usage: pushframe [-h] [--version] [--debug] {status,inspect,sync,push} ...
+usage: pushframe [-h] [--version] [--debug]
+                 {status,logout,doctor,config,inspect,sync,push,reconcile,
+                  google-link,google-album,google-sync,schedule} ...
 
 options:
   -h, --help  show this help message and exit
-  --version   show the program version ("pushframe 5.0.0") and exit
+  --version   show the program version (e.g. "pushframe 5.1.6") and exit
   --debug     Show verbose loguru request/response logging on stderr
 ```
 
@@ -282,8 +287,10 @@ it is the value a command would actually use).
 
 ```
 usage: pushframe status [-h]
-```The first command to run. With env credentials it logs in fresh; with a
-stored token session it resumes it (no login call) and lists your frames.
+```
+
+The first command to run. With env credentials it logs in fresh; with a stored token session
+it resumes it (no login call) and lists your frames.
 Nothing is ever written except a session token: if the stored token is
 refused (HTTP 401), an interactive run offers ONE re-login right there and
 continues — a refused fresh login is never retried (that shape is the
@@ -349,7 +356,10 @@ than bugs in this client — see [Known issues](#known-issues):
 ## `sync` — make a frame match a directory
 
 ```
-usage: pushframe sync [-h] --frame FRAME [--apply] [--yes] [--delete | --hard-delete] dir
+usage: pushframe sync [-h] [--frame FRAME] [--apply] [--yes]
+                      [--delete | --hard-delete]
+                      [--batch-size BATCH_SIZE] [--chunk-delay CHUNK_DELAY]
+                      dir
 
 positional arguments:
   dir            Local directory to scan for photos
@@ -362,6 +372,8 @@ options:
                  (frame-scoped; the photo leaves this frame)
   --hard-delete  IRREVERSIBLY destroy gone-local photos instead of hiding them
                  (account-wide; requires typing the exact count to confirm)
+  --batch-size BATCH_SIZE  Assets per select_asset/batch_update call (default 50)
+  --chunk-delay CHUNK_DELAY  Seconds to pause between write chunks (default 5)
 ```
 
 `sync` makes the frame **match the directory**. Photos in the directory but not on the frame
@@ -389,6 +401,9 @@ Already hidden: 3 (no action needed)
   - d3e4f5a6-4444-11f1-9666-0dddddddddd0 (taken 2026-07-09 06:47:55.775000)
 58 frame assets without a content hash (e.g. videos) left untouched
 ```
+
+(The removal line names the verb of the active mode — `To hide:` by
+default, `To delete:` / `To hard-delete:` with the corresponding flag.)
 
 Reading the plan:
 
@@ -569,8 +584,12 @@ requests.
 ### Write budget and geo guard
 
 `push` and `sync --apply` both run a client-side token-bucket budget and a geo pre-flight
-check before any write, so the anti-abuse lockout is difficult to reach by accident. The
-budget is persisted between runs under `AURA_STATE_DIR`.
+check before any write, so the anti-abuse lockout is difficult to reach by accident.The budget is persisted between runs under `AURA_STATE_DIR` (default
+`~/.config/pushframe/`), keyed by a hash of the **account identity**: the
+`PUSHFRAME_EMAIL`/`AURA_EMAIL` override when set, otherwise the email of
+the stored session (the same env-then-config resolution auth uses —
+5.1.6). A run with no resolvable identity at all skips pacing with a
+named stderr line instead of crashing.
 
 | Flag | Effect |
 |---|---|
@@ -748,6 +767,71 @@ candidate list.
 (see [Write budget and geo guard](#write-budget-and-geo-guard)) and paces its requests the
 same way.
 
+## Google commands
+
+Three verbs mirror a Google Photos album onto a frame. The full narrative
+(with a verified end-to-end walkthrough, cache/manifest internals and
+SAFE-01..04 semantics) lives in [README.md](../README.md); this is the
+command-level reference.
+
+### `google-link` — link (or re-link) Google Photos
+
+One command for both linking and re-linking: opens a **visible** Chrome
+window (anti-bot posture — never headless) on a dedicated profile, waits
+for the login (auto-detect on auth cookies, 30 min timeout), then
+harvests the session cookies into the vault:
+
+```
+~/.config/pushframe/google-cookies.json   (0600, outside the repo)
+```
+
+The window closes by itself as soon as the login is detected — that is
+the auto-detect working, not a crash. On a headless server, connect with
+`ssh -X` so the window can open on your screen; the vault survives
+logouts and every other command is headless by nature. Profile
+precedence: `PUSHFRAME_PROBE_CHROME_PROFILE` > legacy
+`AURA_PROBE_CHROME_PROFILE` > built-in default (created on demand).
+
+### `google-album` — inspect a shared album
+
+```
+usage: pushframe google-album [-h] [--list] [target]
+```
+
+`--list` lists the account's shared albums (discovery aid). With a
+`target` (share URL, `AF1Qip…` id, or album-name substring — ambiguity
+prints a numbered list and exits 2), enumerates every item with its exact
+disk weight. Read-only.
+
+### `google-sync` — mirror an album onto a frame
+
+```
+usage: pushframe google-sync [-h] [--frame FRAME] [--all] [--pair PAIR]
+                             [--scheduled] [--apply] [--yes] [--debug]
+                             [--batch-size BATCH_SIZE]
+                             album
+```
+
+Dry-run by default. `--apply` runs one y/N (echoing the resolved frame's
+name and id) then mirrors: uploads, and removals as **hides only** —
+this verb has no delete tier (SAFE-03). An empty or truncated album
+listing aborts instead of planning (SAFE-01); a plan whose removals
+exceed the mass-hide threshold needs an explicit confirmation (SAFE-02;
+skip-and-log instead when `--scheduled`); videos are counted and skipped,
+never silently dropped. Prerequisites: the cookie vault (`google-link`,
+checked named before anything else) and an Aura session (same one-session
+path as every verb).
+
+Frame targeting: `--frame "Name"` for one album→frame pair, `--pair NAME`
+for a named pair from the config, or `--all` for every configured pair in
+sorted order with one shared write budget (a failing pair never blocks
+the others; exit 1 if any failed). Exit codes: `0` dry-run/aborted
+confirmation, `1` failure, `2` usage/ambiguity (album not found,
+no pairs configured…).
+
+A real steady-state run prints `Applied: N uploaded, K hidden, R re-shown`,
+then prunes the staging cache — only manifest-backed progress survives.
+
 ## Choosing between `sync` and `push`
 
 |  | `sync` | `push` |
@@ -795,6 +879,18 @@ to adopt one.
 | `AURA_APP_IDENTIFIER` | `com.pushd.client` |
 | `AURA_DEVICE_IDENTIFIER` | `0000000000000000` |
 | `AURA_USER_AGENT` | `Aura/4.7.4271 (Android 36; Client)` |
+
+The client-identity defaults are the ones a fresh install ships with —
+`config set DEVICE_IDENTIFIER "$(uuidgen)"` (and optionally `USER_AGENT`)
+overwrites them in the config file, which is the documented posture above.
+
+**Optional — Google-side**
+
+| Variable | Purpose |
+|---|---|
+| `PUSHFRAME_PROBE_CHROME_PROFILE` | Dedicated Chrome profile dir for `google-link` (precedence over the legacy `AURA_PROBE_CHROME_PROFILE`, then the built-in default created on demand) |
+| `PUSHFRAME_GOOGLE_SYNC_REMOVAL_THRESHOLD` | SAFE-02 mass-hide threshold for `google-sync` (fraction of the frame's photos; see README) |
+| `PUSHFRAME_VAULT_PATH` | Override the Google cookie vault path (mainly for tests) |
 
 Booleans accept `1`, `true`, `yes`, `on` (case-insensitive); anything else is false.
 
