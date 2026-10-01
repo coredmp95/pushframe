@@ -27,6 +27,10 @@ frames; it is not affiliated with Aura Frames Inc.
 
 ### Added
 
+- **Every failed command now points at the documentation from the terminal**:
+  any non-zero exit prints one footer with the URLs of docs/ERRORS.md (every
+  error message explained) and docs/CLI.md (full command reference). It never
+  appears on success — a dry run or an aborted confirmation stays output-only.
 - `docs/ERRORS.md`: every error message explained by symptom, meaning and
   remedy (login/session, the refused-write 401 family, resolution ambiguity,
   the Google safety gates, pacing/budget, scheduling) — the user's map from

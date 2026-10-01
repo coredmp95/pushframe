@@ -1553,7 +1553,24 @@ def run_sync(dir_arg: str, frame_arg: str, apply: bool = False, yes: bool = Fals
         return 1
 
 
+def _docs_hint() -> str:
+    # The wheel ships no docs (they live on GitHub), so terminal users get
+    # URLs, not local paths. Printed ONCE, on failure only — never after a
+    # dry run or an aborted confirmation (exit 0).
+    return ('Docs — every error message explained: '
+            'https://github.com/coredmp95/pushframe/blob/master/docs/ERRORS.md\n'
+            '      full command reference: '
+            'https://github.com/coredmp95/pushframe/blob/master/docs/CLI.md')
+
+
 def main(argv=None) -> int:
+    rc = _main(argv)
+    if rc != 0:
+        print(_docs_hint())
+    return rc
+
+
+def _main(argv=None) -> int:
     load_dotenv()
     # IDN-03 (phase 20): first run on an existing auraframes install migrates
     # the config home to ~/.config/pushframe/ — one notice line, idempotent,
