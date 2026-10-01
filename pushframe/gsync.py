@@ -612,17 +612,37 @@ def run_google_sync(album_target: str, frame_arg: str, *, apply: bool = False,
     # content-hash contract). A manifest entry MEANS "the bytes live on the
     # frame", whichever evidence established it — this is what makes the
     # NEXT run download nothing (steady state, criterion 3).
+    #
+    # The md5 persisted is the one VERIFIED ON THE FRAME, not the staged
+    # file's: an MPO item (5.1.10) uploads its first frame re-encoded as
+    # JPEG, so the frame holds bytes whose md5 differs from the staged
+    # container's. execute_plan's `uploaded_md5_by_path` carries the md5 of
+    # the bytes ACTUALLY sent, keyed by source path — for a confirmed item
+    # that is the identity the frame now reports. Persisting the container
+    # md5 would make the next run demand it, find it absent (sentinel), and
+    # trip the drift guard.
     frame_md5s = {a.md5_hash for a in frame_assets if a.md5_hash}
-    confirmed_md5s: set[str] = set()
-    for path_str in confirmed_paths:
-        s = staged_by_id.get(Path(path_str).name)
-        if s:
-            confirmed_md5s.add(s['md5_hash'])
+    path_to_gid = {s['path']: s['google_media_id'] for s in staged.staged}
     added = 0
+    seen_gids: set[str] = set()
+    # 1. Confirmed uploads: the md5 of what was actually sent.
+    for path_str in confirmed_paths:
+        gid = path_to_gid.get(path_str)
+        real_md5 = result.uploaded_md5_by_path.get(path_str)
+        if gid is None or real_md5 is None or manifest.entry_for(gid):
+            continue
+        manifest.add(gid, md5_hash=real_md5,
+                     size_bytes=staged_by_id[gid]['size_bytes'],
+                     album_share_token=album.album_id)
+        seen_gids.add(gid)
+        added += 1
+    # 2. Already-held items: the staged md5 IS on the frame (no reduction
+    # happened — these were not uploaded this run).
     for s in staged.staged:
         gid = s['google_media_id']
-        if manifest.entry_for(gid) is None and (
-                s['md5_hash'] in confirmed_md5s or s['md5_hash'] in frame_md5s):
+        if gid in seen_gids or manifest.entry_for(gid) is not None:
+            continue
+        if s['md5_hash'] in frame_md5s:
             manifest.add(gid, md5_hash=s['md5_hash'],
                          size_bytes=s['size_bytes'],
                          album_share_token=album.album_id)

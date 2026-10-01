@@ -211,6 +211,18 @@ def _jpeg(n: int) -> bytes:
     return buf.getvalue()
 
 
+def _mpo(n: int) -> bytes:
+    """A real 2-frame MPO container (stereo/3D JPEG) whose primary view is
+    a distinct color — the bytes Google Photos serves for stereo shots."""
+    import io
+    from PIL import Image
+    primary = Image.new('RGB', (4, 4), (n % 255, 50, 100))
+    second = Image.new('RGB', (4, 4), (200, 30, n % 255))
+    buf = io.BytesIO()
+    primary.save(buf, format='MPO', save_all=True, append_images=[second])
+    return buf.getvalue()
+
+
 def _assets_for(n: int, *, hidden: bool = False):
     from pushframe.models.asset import Asset
     return [Asset.model_construct(id=f"frame-{i}", md5_hash=get_md5(_jpeg(i)),
@@ -253,6 +265,38 @@ def test_apply_uploads_hides_persists_manifest_and_prunes(tmp_path, capsys):
     assert manifest[_gid(2)]["md5_hash"] == get_md5(_jpeg(2))
     # prune emptied the staged files (all are manifest-backed now)
     assert list((tmp_path / "cache").iterdir()) == []
+
+
+def test_mpo_upload_persists_the_uploaded_bytes_md5_not_the_container(tmp_path, capsys):
+    """The 5.1.10 live regression (the two Cadre MPO items): an MPO item
+    uploads its FIRST frame re-encoded as JPEG, so the frame's md5 for it is
+    the re-encoded bytes' md5 — NOT the staged container's. The manifest
+    must persist the uploaded md5: with the container md5 persisted, the
+    next run demanded that md5, found it absent (sentinel path), and tripped
+    the manifest-drift safety gate, hard-blocking every later run."""
+    import io
+    from PIL import Image
+    router = _GoogleRouter(item_bodies={2: _mpo(2)})
+    aura = _FakeAura(_assets_for(1))
+    rc = run_google_sync("Cadre", "Fabrice", apply=True, yes=True,
+                         session=_google_session(router), aura=aura,
+                         s3_client=_FakeS3(), sqs_client=_FakeSQS(),
+                         cache_dir=tmp_path / "cache",
+                         manifest_path=tmp_path / "manifest.json")
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "Applied: 2 uploaded" in out   # items 2 (MPO) and 3 (plain JPEG)
+    manifest = json.loads((tmp_path / "manifest.json").read_text())
+    persisted = manifest[_gid(2)]["md5_hash"]
+    container_md5 = get_md5(_mpo(2))
+    assert persisted != container_md5          # NOT the container's md5
+    # It IS the first frame's re-encoded JPEG md5 (what _FakeS3 received).
+    from PIL import Image as PILImage
+    im = PILImage.open(io.BytesIO(_mpo(2)))
+    im.seek(0)
+    buf = io.BytesIO()
+    im.convert('RGB').save(buf, 'JPEG', quality=95)
+    assert persisted == get_md5(buf.getvalue())
 
 
 def test_failed_download_never_reaches_manifest(tmp_path, capsys):

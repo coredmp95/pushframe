@@ -458,6 +458,12 @@ class ExecutionResult:
     # path -- both default to 0 so every existing caller/test is unaffected.
     chunks_retried: int = 0
     items_already_landed: int = 0
+    # For confirmed uploads: source path -> the md5 of the bytes ACTUALLY
+    # sent to S3. Equal to the file's own md5 for passthrough uploads, but
+    # NOT for reduced containers (an MPO uploads its first frame re-encoded
+    # as JPEG) -- callers persisting "these bytes live on the frame" state
+    # must key on this, not on the source file's md5.
+    uploaded_md5_by_path: dict = field(default_factory=dict)
 
 
 # The three tiers of "this photo is no longer wanted locally" (D-01/D-03).
@@ -810,6 +816,11 @@ def execute_plan(plan: SyncPlan, aura, frame_id: str, *, s3_client, sqs_client,
             try:
                 local_identifier, partial = _prep_upload(path, s3_client)
                 prepped.append((path, local_identifier, partial))
+                # The md5 of the bytes ACTUALLY uploaded (differs from the
+                # source file's for reduced containers, e.g. MPO→first
+                # frame); execute_plan's result exposes it so callers can
+                # persist "these bytes live on the frame" state honestly.
+                result.uploaded_md5_by_path[str(path)] = partial.md5_hash
             except Exception as e:
                 result.upload_failures.append((path, str(e)))
                 progress('upload', path, False)
