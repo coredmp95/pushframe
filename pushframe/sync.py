@@ -410,11 +410,36 @@ def compute_plan(local_hashes: dict[str, list[Path]], frame_assets: list, skippe
     unchanged = 0
     already_hidden = 0
     frame_no_hash = 0
+    consumed: set = set()  # id() of assets whose demand was already satisfied
+
+    # Pass 1 -- satisfy each hash's demand preferring VISIBLE copies, so a
+    # hash with duplicate frame copies settles stably (2026-10-01 live case:
+    # two frame copies of one md5, one visible + one hidden, used to
+    # oscillate hide/re-show forever — visible→unchanged + hidden→re-show
+    # on one pass, then two visibles → hide on the next, and back). The
+    # demand-first-visible pass leaves the hidden duplicate as already_hidden
+    # (stable no-op) instead of a re-show that the next run would undo.
+    for asset in frame_assets:
+        if asset.md5_hash and demand.get(asset.md5_hash, 0) > 0 and asset.selected:
+            demand[asset.md5_hash] -= 1
+            unchanged += 1
+            consumed.add(id(asset))
+    # Pass 2 -- remaining demand goes to hidden copies (re-show); a hash with
+    # NO visible copy needs its hidden copy back.
+    for asset in frame_assets:
+        if (asset.md5_hash and demand.get(asset.md5_hash, 0) > 0
+                and not asset.selected):
+            demand[asset.md5_hash] -= 1
+            to_reshow.append(asset)
+            consumed.add(id(asset))
 
     for asset in frame_assets:
         if not asset.md5_hash:
             frame_no_hash += 1
             continue
+
+        if id(asset) in consumed:
+            continue  # already classified in pass 1 or 2
 
         if demand.get(asset.md5_hash, 0) > 0:
             # Wanted locally. Consume the demand either way (D-06 dedup) --
@@ -428,6 +453,10 @@ def compute_plan(local_hashes: dict[str, list[Path]], frame_assets: list, skippe
         else:
             # No longer wanted locally. Already hidden means there is nothing
             # left to do; re-listing it would re-issue the same hide forever.
+            # A still-wanted duplicate (its demand was already consumed in
+            # pass 1 or 2) is in the same no-op boat: hiding a copy of
+            # content the mirror WANTS would just force a re-show next run
+            # (the 2026-10-01 oscillation). Both land in already_hidden.
             if asset.selected:
                 to_delete.append(asset)
             else:

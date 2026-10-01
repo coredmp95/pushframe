@@ -533,6 +533,47 @@ def test_removal_progress_kind_names_the_running_primitive(removal_mode, expecte
         f'{removal_mode} run emitted {kinds!r} — expected {expected_kind!r} only'
 
 
+def test_duplicate_frame_copies_of_a_wanted_hash_settle_stably():
+    """The 2026-10-01 live oscillation (two Cadre MPO re-encoded uploads):
+    a hash present on the frame as 2 copies (one visible, one hidden) with
+    demand=1 must NOT oscillate hide/re-show across runs. The stable shape:
+    the visible copy is unchanged, the hidden duplicate is already_hidden —
+    the mirror wants the CONTENT once, whichever copy displays it."""
+    from pushframe.models.asset import Asset
+    from pushframe.sync import compute_plan
+
+    def asset(aid, md5, selected):
+        return Asset.model_construct(id=aid, md5_hash=md5, selected=selected)
+
+    local = {"md5-dup": ["/cache/x"]}
+    assets = [asset("a", "md5-dup", True),   # visible copy
+              asset("b", "md5-dup", False)]  # hidden duplicate
+
+    plan = compute_plan(local, assets)
+    assert plan.unchanged == 1
+    assert plan.to_reshow == []
+    assert plan.to_delete == []
+    assert plan.already_hidden == 1
+    assert plan.to_upload == []
+
+
+def test_wanted_hash_with_no_visible_copy_re_shows_exactly_one():
+    """Both copies hidden: demand=1 → exactly ONE re-show, the other stays
+    already_hidden — not two re-shows, not a hide."""
+    from pushframe.models.asset import Asset
+    from pushframe.sync import compute_plan
+
+    def asset(aid, md5, selected):
+        return Asset.model_construct(id=aid, md5_hash=md5, selected=selected)
+
+    local = {"md5-dup": ["/cache/x"]}
+    assets = [asset("a", "md5-dup", False), asset("b", "md5-dup", False)]
+    plan = compute_plan(local, assets)
+    assert len(plan.to_reshow) == 1
+    assert plan.already_hidden == 1
+    assert plan.to_delete == []
+
+
 def test_hide_mode_excludes_and_never_removes_or_deletes():
     """The default mode must reach ONLY the non-destructive primitive."""
     plan = SyncPlan(to_upload=[], to_delete=[_asset('a1'), _asset('a2')])
