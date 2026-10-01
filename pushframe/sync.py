@@ -1112,6 +1112,13 @@ def execute_plan(plan: SyncPlan, aura, frame_id: str, *, s3_client, sqs_client,
         if budget is not None:
             budget.save()
 
+    # D-07 for the LIVE bar too (venus 2026-09-30): the per-item progress
+    # kind must name the primitive that actually runs — a hide run must
+    # never say 'delete ok' mid-bar. Mirrors cli.py's _REMOVAL_VERB_PRESENT
+    # (the report-side wording contract) and gsync's dry-run plan header.
+    removal_verb = {'hide': 'hide', 'delete': 'delete',
+                    'hard_delete': 'hard-delete'}[removal_mode]
+
     for chunk in _chunked(plan.to_delete, batch_size):
         interchunk_pause()
         if budget is not None:
@@ -1130,7 +1137,7 @@ def execute_plan(plan: SyncPlan, aura, frame_id: str, *, s3_client, sqs_client,
                 for asset in chunk:
                     result.delete_succeeded += 1
                     consecutive_failures = 0
-                    progress('delete', asset.id, True)
+                    progress(removal_verb, asset.id, True)
             except httpx.HTTPStatusError as e:
                 # Same rationale as the re-show loop above: this loop acts
                 # on server-assigned asset ids, hiding/removing an
@@ -1157,9 +1164,9 @@ def execute_plan(plan: SyncPlan, aura, frame_id: str, *, s3_client, sqs_client,
                         reason = ('HTTP 401 after a successful re-login -- classified as an '
                                   'anti-abuse trip, not authentication')
                         result.delete_failures.append((asset.id, reason))
-                        progress('delete', asset.id, False)
+                        progress(removal_verb, asset.id, False)
                         note_failure(reason)
-                        on_error('delete', asset.id, False, reason)
+                        on_error(removal_verb, asset.id, False, reason)
                     if budget is not None:
                         budget.save()
                     continue
@@ -1176,7 +1183,7 @@ def execute_plan(plan: SyncPlan, aura, frame_id: str, *, s3_client, sqs_client,
                     for asset in chunk:
                         result.delete_succeeded += 1
                         consecutive_failures = 0
-                        progress('delete', asset.id, True)
+                        progress(removal_verb, asset.id, True)
                 except (RateLimitError, ConsecutiveWriteFailureError):
                     raise
                 except Exception as resend_exc:
@@ -1184,9 +1191,9 @@ def execute_plan(plan: SyncPlan, aura, frame_id: str, *, s3_client, sqs_client,
                     for asset in chunk:
                         reason = f'HTTP 401 retry failed: {resend_exc}'
                         result.delete_failures.append((asset.id, reason))
-                        progress('delete', asset.id, False)
+                        progress(removal_verb, asset.id, False)
                         note_failure(str(resend_exc))
-                        on_error('delete', asset.id, False, str(resend_exc))
+                        on_error(removal_verb, asset.id, False, str(resend_exc))
         except RateLimitError:
             if budget is not None:
                 budget.reconcile_tripped(clock())
@@ -1204,9 +1211,9 @@ def execute_plan(plan: SyncPlan, aura, frame_id: str, *, s3_client, sqs_client,
             # (coarser than upload attribution, T-fyr-01).
             for asset in chunk:
                 result.delete_failures.append((asset.id, str(e)))
-                progress('delete', asset.id, False)
+                progress(removal_verb, asset.id, False)
                 note_failure(str(e))
-                on_error('delete', asset.id, False, str(e))
+                on_error(removal_verb, asset.id, False, str(e))
 
         if budget is not None:
             budget.save()

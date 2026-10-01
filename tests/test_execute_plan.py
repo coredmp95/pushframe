@@ -439,12 +439,12 @@ def test_execute_plan_reports_progress_per_item(tmp_path):
     succeeded_upload = [r for r in recorded if r[0] == 'upload' and r[2] is True]
     assert succeeded_upload == [('upload', path_b, True)]
 
-    delete_entries = [r for r in recorded if r[0] == 'delete']
-    assert delete_entries == [('delete', 'asset-good', True)]
+    delete_entries = [r for r in recorded if r[0] == 'hide']
+    assert delete_entries == [('hide', 'asset-good', True)]
 
-    # Every 'upload' entry appears before every 'delete' entry (D-09).
+    # Every 'upload' entry appears before every removal entry (D-09).
     upload_indices = [i for i, r in enumerate(recorded) if r[0] == 'upload']
-    delete_indices = [i for i, r in enumerate(recorded) if r[0] == 'delete']
+    delete_indices = [i for i, r in enumerate(recorded) if r[0] == 'hide']
     assert max(upload_indices) < min(delete_indices)
 
 
@@ -512,6 +512,25 @@ class _RecordingPrimitives:
 def _run(plan, aura, **kwargs):
     return execute_plan(plan, aura, FRAME_ID, s3_client=_FakeS3Client(),
                         sqs_client=_FakeSQSClient(), sleep=lambda *_: None, **kwargs)
+
+
+@pytest.mark.parametrize('removal_mode,expected_kind', [
+    ('hide', 'hide'), ('delete', 'delete'), ('hard_delete', 'hard-delete')])
+def test_removal_progress_kind_names_the_running_primitive(removal_mode, expected_kind):
+    """D-07 on the LIVE progress stream (venus 2026-09-30): a hide run's
+    per-item kind must never say 'delete' — the operator watching the bar
+    reads the primitive off it, and the report-side wording contract
+    (_REMOVAL_VERB_PRESENT) already forbids this drift on summaries."""
+    plan = SyncPlan(to_delete=[_asset('a1')])
+    aura = offline_aura(overrides=_default_overrides())
+    recorded: list = []
+
+    _run(plan, aura, removal_mode=removal_mode,
+         progress=lambda kind, identifier, ok: recorded.append((kind, identifier, ok)))
+
+    kinds = {kind for kind, _, _ in recorded}
+    assert kinds == {expected_kind}, \
+        f'{removal_mode} run emitted {kinds!r} — expected {expected_kind!r} only'
 
 
 def test_hide_mode_excludes_and_never_removes_or_deletes():
