@@ -12,6 +12,19 @@ every channel.
 `pushframe` is an unofficial community CLI for Aura Frames digital photo
 frames; it is not affiliated with Aura Frames Inc.
 
+## [5.1.11] - 2026-10-01
+
+### Fixed
+
+- **The manifest persists the uploaded bytes' md5, not the staged file's**
+  (surfaced by 5.1.10's MPO reduction on the live Cadre album): for a
+  reduced upload (MPO → first frame JPEG) the frame's md5 differs from the
+  staged container's, so persisting the container md5 tripped the
+  manifest-drift safety gate on the next run ("manifest claims an upload
+  was confirmed but the frame reports no matching md5_hash").
+  `execute_plan` now exposes `uploaded_md5_by_path` and the manifest keys
+  confirmed uploads on it.
+
 ## [5.1.10] - 2026-10-01
 
 ### Added
