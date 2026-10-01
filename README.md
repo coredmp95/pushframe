@@ -66,44 +66,29 @@ and [`google-sync`](#google-sync--mirror-a-google-album-onto-a-frame) below.
 
 - An Aura account (email + password) and a paired frame.
 - A Google account with the album you want to mirror (for the Google feature).
-- One of the installs below. From source, Python 3.14 and
-  [`uv`](https://docs.astral.sh/uv/) are used.
+
+That's all — the install channels below provide everything else: the deb/APT
+packages need no Python (they carry their own runtime), and `uv tool install`
+manages its own too. Only building from source assumes
+[`uv`](https://docs.astral.sh/uv/) is present. For the Google feature,
+`google-link` additionally needs a Chrome/Chromium browser the one time it
+links your account — the command checks and names the exact remedy if
+something is missing.
 
 Release history lives in [CHANGELOG.md](CHANGELOG.md).
 
-## Install (Ubuntu/Debian)
+## Install
 
-Pre-built `.deb` packages embed their own Python 3.14 runtime under
-`/usr/lib/pushframe/` — **no system Python is used or modified**, and the
-package needs only `ca-certificates` and `libc6`. Removal is clean (the
-package owns every file it ships, including bytecode; nothing is written
-into the system tree at run time).
+Every channel ships the same release; same CLI, same config
+(`~/.config/pushframe/`), and `pushframe --version` tells you what runs.
+**On Ubuntu/Debian, the APT repository is the simple path — nothing else to
+install.**
 
-```bash
-# from a release artifact:
-sudo apt install ./pushframe_<version>_amd64.deb
-```
-
-### uv tool (or pip) — any Linux distro, per-user
-
-The PyPI package is pure Python and self-contained — no system Python is
-touched either; `uv` manages an isolated environment for the tool:
-
-```bash
-uv tool install pushframe      # or: pipx install pushframe
-pushframe --version
-```
-
-**Which path when?** deb/APT = system-wide install on Ubuntu/Debian
-servers (root-owned, autoremove-friendly). `uv tool install` = per-user,
-no sudo, any distro with uv (or pipx) installed. Same CLI, same config
-(`~/.config/pushframe/`), same version story: every channel ships the
-same release, and `pushframe --version` tells you what runs.
-
-### APT repository
+### APT repository (Ubuntu/Debian — recommended)
 
 A signed APT repository is served from this project's GitHub Pages. Three
-commands, exactly as verified in a clean container:
+commands, exactly as verified in a clean container — no Python and no other
+runtime required (amd64):
 
 ```bash
 # 0. the apt keyring dir (already present on recent systems)
@@ -115,8 +100,9 @@ sudo install -d -m 0755 /etc/apt/keyrings
 curl -fsSL https://coredmp95.github.io/pushframe/dists/pushframe.asc \
   | sudo gpg --dearmor -o /etc/apt/keyrings/pushframe.gpg
 
-# 2. add the sources entry (arch=amd64: the repo is amd64-only — on
-#    multi-arch machines this silences apt's i386 notice)
+# 2. add the sources entry
+#    (arch=amd64: the repo is amd64-only — on multi-arch machines this
+#     silences apt's i386 notice)
 echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/pushframe.gpg] https://coredmp95.github.io/pushframe stable main" \
   | sudo tee /etc/apt/sources.list.d/pushframe.list
 
@@ -126,6 +112,30 @@ sudo apt update && sudo apt install pushframe
 
 `apt update` must stay free of signature warnings — if it is not, compare the
 key fingerprint above with `gpg --show-keys /etc/apt/keyrings/pushframe.gpg`.
+Future updates arrive with the usual `sudo apt update && sudo apt upgrade`.
+
+### One-off .deb file
+
+Pre-built `.deb` packages embed their own Python 3.14 runtime under
+`/usr/lib/pushframe/` — **no system Python is used or modified**, and the
+package needs only `ca-certificates` and `libc6`. Removal is clean (the
+package owns every file it ships, including bytecode; nothing is written
+into the system tree at run time).
+
+```bash
+sudo apt install ./pushframe_<version>_amd64.deb
+```
+
+### uv tool (or pipx) — any Linux distro, per-user
+
+The PyPI package is pure Python and self-contained; `uv` (or `pipx`) manages
+an isolated environment for the tool — no system Python is touched, and you
+don't need Python installed at all:
+
+```bash
+uv tool install pushframe      # or: pipx install pushframe
+pushframe --version
+```
 
 ### From source (trying the latest master)
 

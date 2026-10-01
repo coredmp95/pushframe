@@ -42,6 +42,11 @@ frames; it is not affiliated with Aura Frames Inc.
 
 ### Changed (docs)
 
+- The README's requirements and install sections no longer assume a
+  uv/Python setup: prerequisites are just the two accounts, the install
+  channels are ordered by simplicity (APT repository first — no Python
+  required, then the one-off .deb, then `uv tool install`/pipx, then from
+  source), and each channel states exactly what it needs.
 - `pushframe schedule --help` now answers "what gets scheduled": the timer
   runs a `google-sync` of the Google album onto the frame (`--pair NAME` →
   `google-sync "<album>" --frame "<frame>" --apply --yes --scheduled`),
