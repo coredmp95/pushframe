@@ -12,6 +12,16 @@ every channel.
 `pushframe` is an unofficial community CLI for Aura Frames digital photo
 frames; it is not affiliated with Aura Frames Inc.
 
+## [5.1.10] - 2026-10-01
+
+### Added
+
+- **MPO files (stereo/3D JPEG containers) upload as their first frame**
+  (live-proven on two Google Photos items): a 2-frame PIL `MPO` used to
+  fail closed as "Unsupported image format: MPO" every run; the first view
+  is now re-encoded as plain JPEG and uploaded with the `public.jpeg` UTI
+  — honest bytes and md5, dedupe stays consistent.
+
 ## [5.1.9] - 2026-10-01
 
 ### Fixed
