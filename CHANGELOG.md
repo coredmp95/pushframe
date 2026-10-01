@@ -12,6 +12,17 @@ every channel.
 `pushframe` is an unofficial community CLI for Aura Frames digital photo
 frames; it is not affiliated with Aura Frames Inc.
 
+## [5.1.12] - 2026-10-01
+
+### Fixed
+
+- **Duplicate frame copies of a wanted hash settle stably** (the visible
+  MPO saga's last act): a hash on the frame as two copies (one visible, one
+  hidden) with demand 1 used to oscillate hide/re-show across runs. The
+  plan now prefers visible copies for the demand, re-shows only when no
+  visible copy exists, and never hides a copy of content the mirror wants
+  — the hidden duplicate is a stable no-op.
+
 ## [5.1.11] - 2026-10-01
 
 ### Fixed
