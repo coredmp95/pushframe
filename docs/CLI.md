@@ -97,13 +97,13 @@ frame.
 The pre-flight gate for any long write run. Offline tests and install
 journeys cannot prove a real WRITE lands on a real frame from THIS machine,
 THIS IP, today — the anti-abuse layer can be scoped per-IP/per-surface
-(venus, 2026-09: reads green, writes 401). Doctor probes exactly that,
+(observed in production, 2026-09: reads green, writes 401). Doctor probes exactly that,
 deliberately, with one 4×4 test image:
 
 ```bash
 pushframe doctor            # session → frames → WRITE probe → verify → cleanup
 pushframe doctor --no-write # session + frames reads only (zero writes)
-pushframe doctor --frame "Cadre"
+pushframe doctor --frame "Living Room"
 ```
 
 Five checks, one unambiguous verdict: **GO** (writes work from here, now —
@@ -114,7 +114,7 @@ tokens; safe to repeat; never run it in CI.
 ### When the anti-abuse layer refuses your writes
 
 Pushd's anti-abuse layer can refuse writes while reads keep working
-(proven venus, 2026-09). It has two shapes — learn both, the disguised
+(proven in production, 2026-09). It has two shapes — learn both, the disguised
 one is the trap:
 
 | Surface | Shape | Server body |
@@ -126,12 +126,12 @@ The 401 arrives on a FRESH token, seconds after a successful login: it
 means "we refuse this client's writes (trip)", not "your token is bad".
 The trip is **account-wide** — not scoped to the session, the endpoint
 that provoked it, or the login that just succeeded — and it can spread
-to more surfaces when provoked (venus: writes-only 401 first; after
+to more surfaces when provoked (observed: writes-only 401 first; after
 probe activity, `login.json` itself went 475).
 
 **Never re-login, never retry.** Every call that touches a tripped
 surface re-arms the clock, and a fresh login bypasses nothing — the
-trip is not session-scoped. Venus's counter-evidence: 8 doctor probes
+trip is not session-scoped. One documented counter-evidence: 8 doctor probes
 spread over 7 hours, all 475, each one buying another wait — the probes
 were the reason nothing cleared. pushframe already stops on the FIRST
 trip-shaped refusal (`TripDetectedError` — no retry, no re-login); the
@@ -145,12 +145,12 @@ The drill:
    volume — the trip keys on batch size (a 1-item write may pass where a
    50-item chunk is refused):
    ```bash
-   pushframe google-sync Cadre --frame "Cadre de Fabrice" --apply --yes --batch-size 10
+   pushframe google-sync family --frame "Living Room" --apply --yes --batch-size 10
    ```
 
 #### The 24-hour probe protocol (escalated recovery)
 
-When 60+ minutes does not clear the trip (venus, 2026-09-30: still
+When 60+ minutes does not clear the trip (observed, 2026-09-30: still
 tripped after a ~5-hour silence), stop probing and switch to days:
 
 1. **Total silence.** No pushframe command of any kind against the
@@ -190,15 +190,15 @@ run uploads the remainder once — never twice.
 Named album↔frame mappings live in the config (phase 25):
 
 ```bash
-pushframe config pair add cadre-venus --album Cadre --frame "Cadre de Fabrice"
+pushframe config pair add family --album family --frame "Living Room"
 pushframe config pair list          # name → album → frame (+ state paths)
-pushframe config pair remove cadre-venus
+pushframe config pair remove family
 ```
 
 Run one pair or every pair:
 
 ```bash
-pushframe google-sync "Album X" --pair cadre-venus --apply --yes
+pushframe google-sync "Album X" --pair family --apply --yes
 pushframe google-sync "Album X" --all --apply --yes
 ```
 
@@ -212,7 +212,7 @@ never share dedupe memory.
 ## Scheduling — systemd USER timers (no root)
 
 ```bash
-pushframe schedule add nightly --pair cadre-venus --every 1d
+pushframe schedule add nightly --pair family --every 1d
 pushframe schedule list
 pushframe schedule remove nightly
 ```
@@ -236,7 +236,7 @@ Two safety properties in scheduled mode:
 - **SAFE-02 flips to skip-and-log**: a plan that would mass-hide over the
   threshold is NOT applied — the run logs `SKIPPED (--scheduled)` and exits
   0 (review manually; the unit must not fail over a safety decision).
-- **Headless hosts** (venus & co): timers fire without an active session
+- **Headless hosts** (servers, boxes without a desktop): timers fire without an active session
   only if you enable lingering once:
   `loginctl enable-linger $USER` (run it yourself; the tool never does).
 

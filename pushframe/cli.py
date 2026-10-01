@@ -226,7 +226,7 @@ def build_parser() -> argparse.ArgumentParser:
             '                  "Mon *-*-* 02:00") instead of --every Nmin|Nh|Nd.\n'
             '\n'
             'EXAMPLES\n'
-            '  pushframe schedule add nightly --pair cadre-venus --every 1d\n'
+            '  pushframe schedule add nightly --pair family --every 1d\n'
             '  pushframe schedule add hourly --sync-dir /srv/photos --frame Salon --every 1h\n'
             '  pushframe schedule list   |   pushframe schedule remove nightly\n'
             '\n'

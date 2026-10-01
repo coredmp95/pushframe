@@ -1,7 +1,7 @@
 """Phase 25 (MTF-01, D-01): the named-pair store.
 
 Pairs live in config.json's `pairs` key as a NAMED dict:
-    {"cadre-venus": {"album": "Cadre", "frame": "Cadre de Fabrice"}}
+    {"family": {"album": "family", "frame": "Living Room"}}
 Names are operator-chosen and stable (referenced by --pair and by systemd
 timers); insertion order is the --all execution order. Duplicate add fails
 named; unknown resolution fails named LISTING the known names (PRF-02

@@ -80,10 +80,10 @@ uv run pushframe google-link
 
 # 2. Pick the album and preview the plan (writes nothing):
 uv run pushframe google-album --list
-uv run pushframe google-sync "Cadre" --frame "Cadre de Fabrice"
+uv run pushframe google-sync family --frame "Living Room"
 
 # 3. Apply (one y/N confirmation) — re-run whenever, or schedule it:
-uv run pushframe google-sync "Cadre" --frame "Cadre de Fabrice" --apply
+uv run pushframe google-sync family --frame "Living Room" --apply
 ```
 
 **Make it automatic:** name the album↔frame mapping once, then let a systemd
@@ -92,8 +92,8 @@ timer runs `google-sync --apply` of the album onto the frame at every tick
 (the same mirror as a manual run, driven entirely from stored config):
 
 ```bash
-uv run pushframe config pair add cadre --album Cadre --frame "Cadre de Fabrice"
-uv run pushframe schedule add nightly --pair cadre --every 1d
+uv run pushframe config pair add family --album family --frame "Living Room"
+uv run pushframe schedule add nightly --pair family --every 1d
 ```
 
 Only the one-time `google-link` needs a visible browser (on a server, connect
@@ -450,7 +450,7 @@ Then select and enumerate an album by name, share link, or id:
 uv run pushframe google-album --list
 
 # By name substring — ambiguity prints a numbered list and stops (exit 2):
-uv run pushframe google-album "Corse"
+uv run pushframe google-album "holidays"
 
 # By share link or album id — used exactly as given:
 uv run pushframe google-album "https://photos.google.com/share/AF1Qip...?key=..."
@@ -462,7 +462,7 @@ and every item's exact byte size is measured with 1-byte `Range` requests, so th
 prints the exact disk weight without downloading a single photo:
 
 ```
-Album: Vacances Corse (id shape: photos.google.com/share/AF1Qip…0001)
+Album: Holidays 2026 (id shape: photos.google.com/share/AF1Qip…0001)
 Items: 24 (pages: 1, exhausted: cleanly)
 Disk weight: 90,813,552 bytes = 86.6 MiB (min 512,331, max 8,120,444, avg 3,783,898)
 Per-item (index | id shape | WxH | bytes):
@@ -489,15 +489,15 @@ uv run pushframe google-link
 
 # Find the album, then mirror it:
 uv run pushframe google-album --list
-uv run pushframe google-sync "Cadre" --frame "Cadre de Fabrice"           # dry-run plan (writes nothing)
-uv run pushframe google-sync "Cadre" --frame "Cadre de Fabrice" --apply   # one y/N, then it mirrors
+uv run pushframe google-sync family --frame "Living Room"           # dry-run plan (writes nothing)
+uv run pushframe google-sync family --frame "Living Room" --apply   # one y/N, then it mirrors
 
 # Non-interactive (CI, scripts) — --yes is required for --apply, otherwise it fails closed:
-uv run pushframe google-sync "Cadre" --frame "Cadre de Fabrice" --apply --yes
+uv run pushframe google-sync family --frame "Living Room" --apply --yes
 ```
 
-A real **production run** against the live pair `cadre-venus` (album « Cadre », 95 photos,
-74 of them missing from the frame and 2 removed since the last sync):
+A real **production run** (a 95-photo album, 74 of them missing from the frame and 2 removed
+since the last sync):
 
 ```
 Plan: 74 to upload, 0 to re-show, 21 unchanged, 2 to hide, 2 already hidden

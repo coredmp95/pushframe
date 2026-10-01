@@ -28,7 +28,7 @@ frames; it is not affiliated with Aura Frames Inc.
 ### Fixed
 
 - **The live progress bar names the primitive that actually runs** (D-07,
-  venus 2026-10-01): the removal loop of `execute_plan` emitted a
+  production, 2026-10-01): the removal loop of `execute_plan` emitted a
   hardcoded `delete` kind on every per-item progress callback, so a hide
   run's bar read `delete ok <asset>` mid-run even though the final summary
   correctly said `Hidden` — the wording contract held on plan headers and
@@ -54,11 +54,11 @@ frames; it is not affiliated with Aura Frames Inc.
 
 - **`google-sync --apply` (and `sync --apply` / `push --apply` /
   `reconcile --remove`) no longer crash building the write budget on a
-  token-session host** (venus, 2026-09-30, debug session
+  token-session host** (observed in production, 2026-09-30, debug session
   gsync-apply-budget-none-crash): the budget's account email was read
   from the ENVIRONMENT only while auth resolves env-then-stored-session
   — the config/env duality was broken at exactly that layer. With a
-  stored token session and no env vars (venus's intended posture), the
+  stored token session and no env vars (that install's intended posture), the
   run authenticated fine, printed the plan, took the operator's `y`
   confirmation, then died on `email.encode()` inside the budget state
   filename. The identity now resolves through ONE helper
@@ -86,7 +86,7 @@ frames; it is not affiliated with Aura Frames Inc.
 ### Fixed
 
 - **`google-sync` no longer claims "no Google session vault" on a healthy
-  vault** (venus, 2026-09-30): the vault preflight probed the default path
+  vault** (observed in production, 2026-09-30): the vault preflight probed the default path
   WITHOUT `expanduser()` — a literal `~` path never exists, so the check
   fired on every machine whose vault was perfectly healthy (a
   `google-link` seconds earlier had saved it) — and its shape check
@@ -106,10 +106,10 @@ frames; it is not affiliated with Aura Frames Inc.
 ### Added
 
 - **One-shot TTY token refresh on every frames-reading verb** — `status`,
-  `inspect`, `sync`, `push` and `google-sync` (venus, 2026-09-30): when
+  `inspect`, `sync`, `push` and `google-sync` (observed in production, 2026-09-30): when
   the stored token is refused (401) and stdin is a terminal, the command
   offers ONE re-login right there — the new token is persisted and the
-  same run continues (venus proved a fresh login reads green while the
+  same run continues (production proved a fresh login reads green while the
   stored token was dead). All five verbs share one gate
   (`session.frames_read_with_refresh`), so the behavior, the failure
   shapes and the guardrails are byte-identical everywhere. Guardrails:
@@ -124,7 +124,7 @@ frames; it is not affiliated with Aura Frames Inc.
 ### Fixed
 
 - **`pushframe status` no longer tracebacks on a refused frames read**
-  (venus, debug session status-crash-401-trip): a 401 with the trip's
+  (observed in production, debug session status-crash-401-trip): a 401 with the trip's
   `logout:true` body prints a named diagnosis — the remedy is
   `pushframe config` (refresh the stored token; a fresh login read frames
   fine minutes later, so on a READ that body means a dead token first),
@@ -139,7 +139,7 @@ frames; it is not affiliated with Aura Frames Inc.
 ### Fixed
 
 - **`pushframe config` — Enter now keeps the stored email, as the banner
-  always promised** (venus, 5.1.2): an empty answer on a configured
+  always promised** (observed on 5.1.2): an empty answer on a configured
   install aborted with "no email given — aborting" instead of keeping
   it. With a stored token, Enter-Enter now finishes the wizard with ZERO
   API calls (the anti-abuse rule: no gratuitous login); typing a new
@@ -187,7 +187,7 @@ frames; it is not affiliated with Aura Frames Inc.
 
 ### Changed
 
-- **Credible client identity** (venus 2026-09-30 anti-abuse lesson): the
+- **Credible client identity** (production 2026-09-30 anti-abuse lesson): the
   user agent is now a setting — `USER_AGENT` (env `PUSHFRAME_USER_AGENT`,
   or `pushframe config set USER_AGENT …`) — whose default tracks a
   current Play build (`Aura/4.7.4271 (Android 36; Client)`) instead of
@@ -210,7 +210,7 @@ frames; it is not affiliated with Aura Frames Inc.
 ### Added (phase 25: Multi-frame & Scheduling)
 
 - **Named pairs** (MTF-01): `pushframe config pair add/remove/list` —
-  `pairs` in config.json is a named dict (`{"cadre-venus": {"album": …,
+  `pairs` in config.json is a named dict (`{"family": {"album": …,
   "frame": …}}`); duplicates and unknown names fail named.
 - **`google-sync --pair <name>` / `--all`** (MTF-02/03): per-pair state
   (manifest `~/.config/pushframe/pairs/<name>/`, cache
@@ -259,7 +259,7 @@ frames; it is not affiliated with Aura Frames Inc.
   owned by the session path.
 
 ## [5.0.6] — 2026-09-29
-- **`pushframe doctor`** — the field write-probe the venus regressions
+- **`pushframe doctor`** — the field write-probe the production regressions
   demanded: one 4×4 test image through the REAL write path (S3 +
   select_asset + batch_update), verify + cleanup, then a GO/NO-GO verdict
   with the 401 body classified. `--no-write` for reads-only. Closes the
@@ -285,7 +285,7 @@ frames; it is not affiliated with Aura Frames Inc.
 
 ### Fixed
 
-- **`google-sync`/`sync`/`push` apply feedback was opaque** (venus
+- **`google-sync`/`sync`/`push` apply feedback was opaque** (a production
   regression): the progress bar sat silent for minutes at a time — budget
   waits and inter-chunk cooldowns never reached the bar — and failures
   showed a bare `upload FAIL` with no cause. The bar now shows a live
@@ -300,14 +300,14 @@ frames; it is not affiliated with Aura Frames Inc.
 - The abort message on the 5-consecutive-failures breaker now states what
   to expect: confirmed items ARE on the frame, the next run recognizes
   them and will not upload them twice, wait ~30 min before retrying.
-- **Scoped-trip honesty** (second venus regression): `pushframe status`
+- **Scoped-trip honesty** (second production regression): `pushframe status`
   staying green does NOT mean writes will work — the anti-abuse trip can
   be scoped to the assets surface (write endpoints AND the
   `asset_for_local_identifier` verify-probe read) while login/frames keep
   answering. The abort message no longer suggests status as an all-clear;
   it prescribes 60+ min from the abort and a single, solitary retry call.
 - **"Request Unauthenticated" + logout:true identified as the trip's
-  disguise** (fourth venus regression, decisive capture): the body arrived
+  disguise** (fourth production regression, decisive capture): the body arrived
   on a FRESH token immediately after a successful re-login, one item after
   a doctor probe had WRITTEN fine — so Pushd's "Request Unauthenticated"
   here means "we refuse your writes (trip)", not "your token is bad". The
@@ -326,7 +326,7 @@ frames; it is not affiliated with Aura Frames Inc.
   Forwarded only when supplied — the historical default (50) otherwise
   rules. The anti-trip drill (doctor → wait → batch-size) is documented in
   docs/CLI.md.
-- **401 bodies are captured and classified** (third venus regression): an
+- **401 bodies are captured and classified** (third production regression): an
   HTTP 401 exception now carries the server's response body (redacted
   through the same filter as request logs, truncated to 300 chars, also
   debug-logged) — so per-item failure reasons, verify-probe errors and the
