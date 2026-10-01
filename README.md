@@ -4,7 +4,10 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.14](https://img.shields.io/badge/python-3.14-blue.svg)](https://www.python.org/downloads/)
 
-Implements most of the AuraFrames APIs in Python.
+**The unofficial Aura Frames CLI whose flagship feature mirrors a Google Photos
+album onto your frame — automatically, reversibly, on a schedule.** Under the
+hood it implements most of the AuraFrames APIs in Python (read **and** write
+path). See the [highlight section](#highlight-mirror-a-google-photos-album-onto-your-frame).
 
 Any advice or issues are welcome.
 
@@ -22,9 +25,84 @@ Any advice or issues are welcome.
 > and irreversible delete have each been exercised through the CLI, including the
 > confirmation gates. See [`docs/CLI.md`](docs/CLI.md) for the commands and the known issues.
 >
+> **Google Photos mirror: VERIFIED end-to-end** — `google-link` → `google-album` →
+> `google-sync --apply` on a live 95-photo album: a real apply uploaded the 74 missing
+> photos and hid the 2 removed ones in 1:26, and a steady-state run plans from listings
+> alone and transfers nothing. See the
+> [highlight section](#highlight-mirror-a-google-photos-album-onto-your-frame).
+>
 > The **device** upload/download flows described near the end of this README remain
 > **documented from code, not verified** — they describe what the official app does, not a
 > path this client exercises.
+
+## Highlight: mirror a Google Photos album onto your frame
+
+> **This is the killer feature.** Point `pushframe` at a Google Photos album
+> (shared albums included) and a frame: every run makes the frame **match the
+> album**. One-time browser login, then plain authenticated HTTP — set it up
+> once, schedule it nightly, and the frame follows the album forever.
+> **Live-verified end-to-end**: a real apply on a 95-photo album uploaded the
+> 74 missing photos and hid the 2 removed ones in 1:26, and a steady-state run
+> plans from listings alone and transfers nothing.
+
+**The principle — a one-way mirror, album → frame.** Each run lists the album
+and the frame, diffs them **by md5 content hash**, then:
+
+1. **downloads once and uploads** what is missing — into a staging cache that
+   is pruned once the uploads confirm; what persists is a small manifest
+   mapping each Google photo id to its md5;
+2. **hides** what left the album — it stops displaying on the frame but stays
+   in the account, and re-adding it to the album re-shows it **without
+   re-uploading a byte**;
+3. **re-shows** what came back — photos already on the frame (under any name,
+   even uploaded from elsewhere) are **recognized, never re-uploaded**.
+
+Because the manifest persists, a steady-state run costs one album listing and
+one frame listing — **zero downloads, zero uploads**, and its `--apply` is
+effectively free.
+
+**Safety rails (SAFE-01..04):** an empty or truncated album listing aborts
+instead of planning a mass-hide (SAFE-01); a plan hiding more than 20 % of the
+frame's photos demands an explicit confirmation (SAFE-02); **this verb never
+deletes** — removal is hide-only, and the irreversible tiers stay with `sync`
+alone (SAFE-03); a failed download is retried next run and never uploaded as
+junk bytes (SAFE-04). Every frame write is paced by the client-side
+[write budget](#write-path-upload--status--anti-abuse-budget), and scheduled
+runs skip rather than fail on a mass-hide.
+
+**How to set it up — three commands:**
+
+```bash
+# 1. One-time: harvest the Google session in a dedicated Chrome profile
+#    (auto-detects the completed login; re-linking is the same command).
+export PUSHFRAME_PROBE_CHROME_PROFILE=~/.config/pushframe/chrome-profile
+uv run pushframe google-link
+
+# 2. Pick the album and preview the plan (writes nothing):
+uv run pushframe google-album --list
+uv run pushframe google-sync "Cadre" --frame "Cadre de Fabrice"
+
+# 3. Apply (one y/N confirmation) — re-run whenever, or schedule it:
+uv run pushframe google-sync "Cadre" --frame "Cadre de Fabrice" --apply
+```
+
+**Make it automatic:** name the album↔frame mapping once, then let a systemd
+USER timer mirror it every night — headless, prompt-free, per-pair state:
+
+```bash
+uv run pushframe config pair add cadre --album Cadre --frame "Cadre de Fabrice"
+uv run pushframe schedule add nightly --pair cadre --every 1d
+```
+
+Only the one-time `google-link` needs a visible browser (on a server, connect
+with `ssh -X`); everything after that — `google-sync`, `schedule` — is
+headless by nature.
+
+→ Full details and real outputs:
+[`google-link` / `google-album`](#google-photos-albums--google-link--google-album) ·
+[`google-sync` mirror semantics](#google-sync--mirror-a-google-album-onto-a-frame) ·
+[pairs](docs/CLI.md#pairs--one-album--several-frames-and-back) ·
+[scheduling](docs/CLI.md#scheduling--systemd-user-timers-no-root)
 
 ## Requirements
 
@@ -188,18 +266,23 @@ Boolean variables accept `1`, `true`, `yes`, `on` (case-insensitive); anything e
 ## CLI Usage (`pushframe`)
 
 A CLI wraps the library (installed as the `pushframe` entry point by `uv sync`). There are
-eight commands:
+twelve commands — the Google trio is the flagship flow (see the
+[highlight](#highlight-mirror-a-google-photos-album-onto-your-frame) above):
 
 | Command | What it does | Writes? |
 |---------|--------------|---------|
+| `google-link` | Link (or re-link) your Google Photos account — one-time browser harvest | Vault write only (outside the repo) |
+| `google-album` | Select a Google Photos album and enumerate it exactly | No (read-only) |
+| `google-sync` | **Mirror a Google Photos album onto a frame** (dry run by default) | Yes, with `--apply` |
+| `schedule` | Install/list/remove systemd USER timers that run pairs unattended | systemd units |
+| `config` | Store credentials, pairs and settings once (wizard, `0600`) | Config file only |
 | `status` | Check credentials, log in, list your frames, show the Google link state | No |
+| `logout` | Delete the stored session token — email and settings stay | Config only |
+| `doctor` | One deliberate write probe: can THIS machine write TODAY? | One 4×4 test image |
 | `inspect` | Show one frame's photos and metadata | No |
 | `sync` | Make a frame **match** a local directory | Yes, with `--apply` |
 | `push` | Upload from a supply directory — **never** removes | Yes, with `--apply` |
 | `reconcile` | Report (and optionally remove) stuck placeholder rows on a frame | Only with `--apply` |
-| `google-link` | Link (or re-link) your Google Photos account | Vault write only (outside the repo) |
-| `google-album` | Select a Google Photos album and enumerate it exactly | No (read-only) |
-| `google-sync` | Mirror a Google Photos album onto a frame (dry run by default) | Yes, with `--apply` |
 
 **→ Full reference with every flag, real output, and known issues: [`docs/CLI.md`](docs/CLI.md)**
 
@@ -335,7 +418,9 @@ uv run pushframe push ./buffet/ --frame "Living Room" --apply --yes --limit 40
 ### Google Photos albums — `google-link` / `google-album`
 
 These commands read your **Google Photos** shared albums (a separate account from the Aura
-API). The mechanism is the browser-automation one proven in phase 16: a dedicated-profile
+API) — together with `google-sync` below they form the flagship mirror flow, summarized in
+the [highlight section](#highlight-mirror-a-google-photos-album-onto-your-frame). The
+mechanism is the browser-automation one proven in phase 16: a dedicated-profile
 browser harvests the session cookies once, and every later operation is plain authenticated
 HTTP over the internal `batchexecute` API — no browser runs again.
 
@@ -389,7 +474,9 @@ the account email, session usability — and never a cookie value or token.
 ### `google-sync` — mirror a Google album onto a frame
 
 One verb ties the Google side to the frame: enumerate the album, download what is missing,
-upload it, and mirror removals as **hides**. Start to finish:
+upload it, and mirror removals as **hides**. (This is the flagship flow — see the
+[highlight section](#highlight-mirror-a-google-photos-album-onto-your-frame) for the
+principle; here is the full walkthrough.) Start to finish:
 
 ```bash
 # One-time setup (or again whenever the Google session expires):
@@ -405,24 +492,24 @@ uv run pushframe google-sync "Cadre" --frame "Cadre de Fabrice" --apply   # one 
 uv run pushframe google-sync "Cadre" --frame "Cadre de Fabrice" --apply --yes
 ```
 
-A real first run against the live pair (album « Cadre », 24 photos, one of them already on
-the frame but hidden from an earlier experiment):
+A real **production run** against the live pair `cadre-venus` (album « Cadre », 95 photos,
+74 of them missing from the frame and 2 removed since the last sync):
 
 ```
-Plan: 23 to upload, 1 to re-show, 0 unchanged, 0 to hide, 0 already hidden
+Plan: 74 to upload, 0 to re-show, 21 unchanged, 2 to hide, 2 already hidden
 Videos skipped: 0 (metadata delta — videos are out of sync scope, never silently dropped)
-Upload candidates: 23 items, 129,680 → 8,847,782 bytes (sum ≈ 87.0 MiB)
+Upload candidates: 74 items …
 ```
 
-The re-show line is the md5 dedupe working across accounts: that photo's bytes were already
-on the frame, so the plan re-shows it instead of re-uploading it. After this apply the
-cache is pruned and the manifest persists — so a steady-state run costs one album listing
-and one frame listing, and **downloads and uploads nothing**:
+```text
+Applied: 74 uploaded, 2 hidden, 0 re-shown in 1:26   ·   cache pruned, 95 files, 0 failures
+```
 
-```
-Plan: 0 to upload, 0 to re-show, 23 unchanged, 0 to hide, 1 already hidden
-Videos skipped: 0 (metadata delta — videos are out of sync scope, never silently dropped)
-```
+The md5 dedupe also works **across accounts**: a photo whose bytes are already on the frame
+(uploaded from anywhere, under any name) is re-shown instead of re-uploaded. After an apply
+the cache is pruned and the manifest persists — so a steady-state run costs one album listing
+and one frame listing, and its `--apply` **downloads and uploads nothing**: the plan is all
+`unchanged` / `already hidden`, with zero counts everywhere else.
 
 #### Why the second run is free
 

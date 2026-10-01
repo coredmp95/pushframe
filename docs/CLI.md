@@ -769,10 +769,14 @@ same way.
 
 ## Google commands
 
-Three verbs mirror a Google Photos album onto a frame. The full narrative
+Three verbs mirror a Google Photos album onto a frame — **the flagship
+feature of pushframe** (one-time `google-link` → pick the album with
+`google-album` → mirror it with `google-sync`, schedulable nightly per
+[pair](#pairs--one-album--several-frames-and-back)). The full narrative
 (with a verified end-to-end walkthrough, cache/manifest internals and
-SAFE-01..04 semantics) lives in [README.md](../README.md); this is the
-command-level reference.
+SAFE-01..04 semantics) lives in the
+[README highlight section](../README.md#highlight-mirror-a-google-photos-album-onto-your-frame);
+this is the command-level reference.
 
 ### `google-link` — link (or re-link) Google Photos
 
@@ -829,8 +833,10 @@ the others; exit 1 if any failed). Exit codes: `0` dry-run/aborted
 confirmation, `1` failure, `2` usage/ambiguity (album not found,
 no pairs configured…).
 
-A real steady-state run prints `Applied: N uploaded, K hidden, R re-shown`,
-then prunes the staging cache — only manifest-backed progress survives.
+A real steady-state run prints `Applied: N uploaded, K hidden, R re-shown`
+(e.g. `Applied: 74 uploaded, 2 hidden, 0 re-shown` in 1:26 on the live
+95-photo production run), then prunes the staging cache — only
+manifest-backed progress survives.
 
 ## Choosing between `sync` and `push`
 
