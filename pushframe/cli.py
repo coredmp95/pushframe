@@ -212,10 +212,31 @@ def build_parser() -> argparse.ArgumentParser:
              'instead of proceeding (used by pushframe schedule units)')
     sched_parser = subparsers.add_parser(
         'schedule', help='Install/list/remove systemd USER timers '
-                         '(no root; runs from stored config, never prompts)')
+                         '(no root; runs from stored config, never prompts)',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            'WHAT GETS SCHEDULED\n'
+            '  --pair NAME     a named album<->frame pair (config pair add): the timer\n'
+            '                  runs `google-sync "<album>" --frame "<frame>" --apply\n'
+            '                  --yes --scheduled` — the Google Photos album is mirrored\n'
+            '                  onto the frame at each tick (the flagship flow).\n'
+            '  --album A --frame F       same google-sync run, without a named pair.\n'
+            '  --sync-dir DIR --frame F  run the local-directory `sync` instead.\n'
+            '  --at "OnCalendar"         explicit systemd calendar (e.g.\n'
+            '                  "Mon *-*-* 02:00") instead of --every Nmin|Nh|Nd.\n'
+            '\n'
+            'EXAMPLES\n'
+            '  pushframe schedule add nightly --pair cadre-venus --every 1d\n'
+            '  pushframe schedule add hourly --sync-dir /srv/photos --frame Salon --every 1h\n'
+            '  pushframe schedule list   |   pushframe schedule remove nightly\n'
+            '\n'
+            'Timers are systemd USER units (~/.config/systemd/user/pushframe-*.timer) —\n'
+            'no root. Headless host? `loginctl enable-linger $USER` once. Logs:\n'
+            '~/.local/state/pushframe/<job>.log'),
+    )
     sched_parser.add_argument('schedule_args', nargs='*', metavar='args',
-                              help='add <job> --pair <name> --every Nmin|Nh|Nd | '
-                                   'list | remove <job>')
+                              help='add | list | remove <job> (details and '
+                                   'examples below)')
     gsync_parser.add_argument(
         '--apply', action='store_true', default=False,
         help='Execute the plan (uploads + hides). Without it, only print the plan')

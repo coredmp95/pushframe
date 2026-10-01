@@ -217,9 +217,16 @@ pushframe schedule list
 pushframe schedule remove nightly
 ```
 
-Installs `pushframe-<job>.service/.timer` under `~/.config/systemd/user/`.
-Everything comes from stored config (token session, pair spec) — a timed
-run NEVER prompts. `Restart=no` on purpose: on failure (including the
+**What gets scheduled:** the timer runs a `google-sync` **of a Google Photos
+album onto a frame** — with `--pair NAME` it resolves the named pair (album →
+frame) and executes `pushframe google-sync "<album>" --frame "<frame>" --apply
+--yes --scheduled` at every tick: the album is mirrored onto the frame, exactly
+as a manual run. `--album A --frame F` schedules the same run without a named
+pair; `--sync-dir DIR --frame F` schedules the local-directory `sync` instead;
+`--at "OnCalendar"` (e.g. `"Mon *-*-* 02:00"`) replaces `--every Nmin|Nh|Nd`.
+Everything comes from stored config (token session, pair spec) — a timed run
+NEVER prompts. `pushframe schedule --help` prints the same summary with
+examples. `Restart=no` on purpose: on failure (including the
 anti-abuse trip, which pushframe detects and stops at the first refusal)
 the unit just ends; the next tick is the retry. Logs land in
 `~/.local/state/pushframe/<job>.log`.

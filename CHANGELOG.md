@@ -12,6 +12,17 @@ every channel.
 `pushframe` is an unofficial community CLI for Aura Frames digital photo
 frames; it is not affiliated with Aura Frames Inc.
 
+## [Unreleased]
+
+### Added
+
+- `pushframe schedule --help` now answers "what gets scheduled": the timer
+  runs a `google-sync` of the Google album onto the frame (`--pair NAME` →
+  `google-sync "<album>" --frame "<frame>" --apply --yes --scheduled`),
+  with the `--album/--frame`, `--sync-dir` (local-directory sync) and
+  `--at "OnCalendar"` alternatives plus copy-pasteable examples.
+  docs/CLI.md and the README spell out the same.
+
 ## [5.1.7] - 2026-10-01
 
 ### Fixed

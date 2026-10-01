@@ -87,7 +87,9 @@ uv run pushframe google-sync "Cadre" --frame "Cadre de Fabrice" --apply
 ```
 
 **Make it automatic:** name the album↔frame mapping once, then let a systemd
-USER timer mirror it every night — headless, prompt-free, per-pair state:
+USER timer mirror it every night — headless, prompt-free, per-pair state. The
+timer runs `google-sync --apply` of the album onto the frame at every tick
+(the same mirror as a manual run, driven entirely from stored config):
 
 ```bash
 uv run pushframe config pair add cadre --album Cadre --frame "Cadre de Fabrice"
@@ -283,7 +285,7 @@ rest alphabetically:
 | `logout` | Delete the stored session token — email and settings stay | Config only |
 | `push` | Upload from a supply directory — **never** removes | Yes, with `--apply` |
 | `reconcile` | Report (and optionally remove) stuck placeholder rows on a frame | Only with `--apply` |
-| `schedule` | Install/list/remove systemd USER timers that run pairs unattended | systemd units |
+| `schedule` | Install/list/remove systemd USER timers that run a Google album↔frame mirror unattended (`--pair`; `--sync-dir` for a local sync) | systemd units |
 | `status` | Check credentials, log in, list your frames, show the Google link state | No |
 | `sync` | Make a frame **match** a local directory | Yes, with `--apply` |
 
