@@ -29,7 +29,7 @@ talks to the frame over your local network — everything goes through your Aura
 
 ## Global usage
 
-One session path (phase 24): every command authenticates the same way —
+One session path: every command authenticates the same way —
 `PUSHFRAME_EMAIL`/`PUSHFRAME_PASSWORD` env (override; discouraged for
 humans), else the **stored token session** from `pushframe config` (no
 login call, no password), else ONE interactive password prompt whose token
@@ -187,7 +187,7 @@ run uploads the remainder once — never twice.
 
 ## Pairs — one album → several frames (and back)
 
-Named album↔frame mappings live in the config (phase 25):
+Named album↔frame mappings live in the config:
 
 ```bash
 pushframe config pair add family --album family --frame "Living Room"
@@ -203,7 +203,8 @@ pushframe google-sync "Album X" --all --apply --yes
 ```
 
 `--all` runs every pair in sorted-name order with **one shared write
-budget** capping the total (account-level SAFE-02). A failing pair is
+budget** capping the total (the account-level mass-hide guard applies
+across the whole run). A failing pair is
 reported and never blocks the others; exit 1 if any pair failed. Mirror
 state is **per pair** (manifest under `~/.config/pushframe/pairs/<name>/`,
 cache under `~/.local/state/pushframe/pairs/<name>/cache/`) — two pairs
@@ -233,8 +234,8 @@ the unit just ends; the next tick is the retry. Logs land in
 
 Two safety properties in scheduled mode:
 
-- **SAFE-02 flips to skip-and-log**: a plan that would mass-hide over the
-  threshold is NOT applied — the run logs `SKIPPED (--scheduled)` and exits
+- **A mass-hide is skipped, not applied**: a plan that would hide more
+  photos than the mass-hide threshold allows (20 % by default) is NOT applied — the run logs `SKIPPED (--scheduled)` and exits
   0 (review manually; the unit must not fail over a safety decision).
 - **Headless hosts** (servers, boxes without a desktop): timers fire without an active session
   only if you enable lingering once:
@@ -645,9 +646,8 @@ options:
                         when running non-interactively)
   --mechanism {remove,hard-delete,complete}
                         Which removal mechanism to attempt. 'remove' (the
-                        default) is confirmed working live as of 2026-09-03
-                        (plan 11-06); 'hard-delete' is unconfirmed; 'complete'
-                        is not yet implemented
+                        default) is confirmed working live; 'hard-delete' is
+                        unconfirmed; 'complete' is not yet implemented
   --max-age-hours MAX_AGE_HOURS
                         Minimum age in hours for a placeholder row to be
                         reported as stuck rather than recently created
@@ -695,7 +695,7 @@ way as a too-young row: reported, never removable. This is `inspect`'s single
 placeholder-count line in detail, computed by the exact same function so the two numbers can
 never disagree.
 
-**Why this matters more than it sounds (`--include-unknown-age`, plan 11-06).**
+**Why this matters more than it sounds (`--include-unknown-age`).**
 `/frames/{id}/assets.json` never sends a `created_at` key on this account at all (confirmed
 live 2026-09-03, against the raw JSON response, not just the parsed model) — so every
 placeholder row's creation time is unresolvable, unconditionally. Left unconditional, the
@@ -716,12 +716,12 @@ placeholders, since the two are indistinguishable from an API response alone.
 
 `--remove` is required to attempt any write; without it, `reconcile` cannot mutate anything.
 
-**`--mechanism remove` (the default) is confirmed working, live, 2026-09-03 (plan 11-06).**
+**`--mechanism remove` (the default) is confirmed working, live, 2026-09-03.**
 Against 3 rows promoted from `unknown_age` to `stuck` via `--include-unknown-age` (see above),
 `remove_asset` returned `HTTP 200 {"number_failed":0}` and a follow-up read confirmed all 3
-rows genuinely gone — not just acknowledged. This supersedes the earlier Phase 10 UAT finding
+rows genuinely gone — not just acknowledged. This supersedes the earlier finding
 that `remove_asset` returned "not found": that earlier probe never had a genuinely
-`stuck`-classified row to send, because the age guard's pre-11-06 unconditional form made
+`stuck`-classified row to send, because the age guard's old unconditional form made
 `result.stuck` permanently empty against this API (see [Known issues](#known-issues)).
 `--mechanism hard-delete` remains unconfirmed — the probe never needed it, since `remove`
 cleared every targeted row. `--mechanism complete` — reserved for treating a stuck row as an
@@ -754,10 +754,11 @@ About to attempt removal of 50 stuck row(s) on "Living Room" (id: 00000000-...) 
 Removed: 50 succeeded, 0 failed
 ```
 
-**Historical failure mode, pre-11-06:** before the age-guard opt-in existed, `--remove`
+**Historical failure mode:** before the age-guard opt-in existed, `--remove`
 (without a way to reach `unknown_age` rows) had nothing eligible to send on this account, so
-`remove_asset` was never re-probed against a genuinely `stuck` row here after Phase 10. The
-Phase 10 UAT session that first probed it got `404 Not Found` — a different result from the
+`remove_asset` was never re-probed against a genuinely `stuck` row after that earlier
+probe. The
+session that first probed it got `404 Not Found` — a different result from the
 `200 {"number_failed":0}` / confirmed-removed outcome above, from a different asset id shape.
 Neither result should be assumed to generalize to every account; `reconcile --remove` reports
 each attempt's real outcome rather than assuming either history.
@@ -788,7 +789,7 @@ feature of pushframe** (one-time `google-link` → pick the album with
 `google-album` → mirror it with `google-sync`, schedulable nightly per
 [pair](#pairs--one-album--several-frames-and-back)). The full narrative
 (with a verified end-to-end walkthrough, cache/manifest internals and
-SAFE-01..04 semantics) lives in the
+the mirror safety gates) lives in the
 [README highlight section](../README.md#highlight-mirror-a-google-photos-album-onto-your-frame);
 this is the command-level reference.
 
@@ -832,9 +833,9 @@ usage: pushframe google-sync [-h] [--frame FRAME] [--all] [--pair PAIR]
 
 Dry-run by default. `--apply` runs one y/N (echoing the resolved frame's
 name and id) then mirrors: uploads, and removals as **hides only** —
-this verb has no delete tier (SAFE-03). An empty or truncated album
-listing aborts instead of planning (SAFE-01); a plan whose removals
-exceed the mass-hide threshold needs an explicit confirmation (SAFE-02;
+this verb has no delete tier. An empty or truncated album
+listing aborts instead of planning (safety gate); a plan whose removals
+exceed the mass-hide threshold needs an explicit confirmation;
 skip-and-log instead when `--scheduled`); videos are counted and skipped,
 never silently dropped. Prerequisites: the cookie vault (`google-link`,
 checked named before anything else) and an Aura session (same one-session
@@ -909,7 +910,7 @@ overwrites them in the config file, which is the documented posture above.
 | Variable | Purpose |
 |---|---|
 | `PUSHFRAME_PROBE_CHROME_PROFILE` | Dedicated Chrome profile dir for `google-link` (precedence over the legacy `AURA_PROBE_CHROME_PROFILE`, then the built-in default created on demand) |
-| `PUSHFRAME_GOOGLE_SYNC_REMOVAL_THRESHOLD` | SAFE-02 mass-hide threshold for `google-sync` (fraction of the frame's photos; see README) |
+| `PUSHFRAME_GOOGLE_SYNC_REMOVAL_THRESHOLD` | Mass-hide threshold for `google-sync` (fraction of the frame's photos; see README) |
 | `PUSHFRAME_VAULT_PATH` | Override the Google cookie vault path (mainly for tests) |
 
 Booleans accept `1`, `true`, `yes`, `on` (case-insensitive); anything else is false.
@@ -954,12 +955,12 @@ ignores them. They also appear to be the cause of the count mismatch above.
 
 Run `pushframe reconcile --frame ...` to see exactly how many a frame has, split into stuck /
 recently-created / unknown-age. **`--remove --mechanism remove` (the default) is a confirmed
-working removal mechanism as of 2026-09-03 (plan 11-06)** — see the next paragraph and
+working removal mechanism as of 2026-09-03** — see the next paragraph and
 [`reconcile`](#reconcile--account-for-stuck-placeholder-rows) for the command and evidence.
 On an account where the assets endpoint never sends `created_at` (see below), reaching any
 row to remove requires the explicit `--include-unknown-age` opt-in.
 
-**Live-verified 2026-09-03 (plan 11-05):** on the account tested, the `stuck` bucket was, at
+**Live-verified 2026-09-03:** on the account tested, the `stuck` bucket was, at
 the time, unreachable. `/frames/{id}/assets.json` never sends a `created_at` key at all
 (confirmed against the raw JSON response, not just the parsed model) — every placeholder row
 therefore resolved to `unknown_age`, never `stuck`, regardless of `--max-age-hours`, because
@@ -968,12 +969,12 @@ the age guard treated an unresolvable creation time exactly like a too-young row
 assets, all in `unknown_age`** — a different count from the 58 stuck rows recorded when this
 issue was first found (2026-08-25); the delta was not explained and neither number should be
 assumed current. Because there were zero `stuck` candidates that day, no removal mechanism was
-attempted live — the `remove`/`hard-delete` results referenced then were Phase 10's historical
+attempted live — the `remove`/`hard-delete` results referenced then were the first probe session's historical
 findings, not freshly reconfirmed. Widening what counts as an eligible candidate (an explicit,
-opt-in `unknown_age` policy) was considered and deliberately deferred to a follow-up plan
-rather than decided inside 11-05.
+opt-in `unknown_age` policy) was considered and deliberately deferred to a follow-up
+change rather than decided inside that first live session.
 
-**Live-verified 2026-09-03 (plan 11-06), same day, later session:** the age guard's
+**Live-verified 2026-09-03, same day, later session:** the age guard's
 unconditional form was corrected — `find_placeholders` gained the `unknown_age_policy`
 opt-in (`--include-unknown-age` on the CLI) that promotes an unresolvable-creation-time row
 to `stuck` instead of parking it, with the default left byte-for-byte unchanged. Through that
@@ -982,8 +983,8 @@ corrected gate, a time-boxed probe targeted 3 rows (the hard cap for a first liv
 frame afterward (159 → 156 assets; the 3 targeted ids were genuinely absent, not merely
 acknowledged with a 200). A clean follow-up `reconcile` report then showed 156 assets scanned,
 50 placeholder rows, all still `unknown_age` by default (as expected — the default was
-unaffected by this run). This supersedes the Phase 10 UAT finding that `remove_asset` 404d:
+unaffected by this run). This supersedes the earlier finding that `remove_asset` 404d:
 that earlier probe never had a genuinely `stuck` row to send, for the same structural reason
-plan 11-05 diagnosed. `--mechanism hard-delete` and `--mechanism complete` were not needed and
-remain unconfirmed/unbuilt respectively — `remove` cleared every targeted row on its own. Full
-command transcript and raw HTTP evidence: `11-LIVE-FINDINGS.md`, "Plan 11-06" section.
+diagnosed the same morning. `--mechanism hard-delete` and `--mechanism complete` were not needed and
+remain unconfirmed/unbuilt respectively — `remove` cleared every targeted row on its own. The
+full command transcript and raw HTTP evidence are preserved in the project's internal planning notes.

@@ -158,6 +158,6 @@ def test_scheduled_threshold_breach_skips_and_logs(tmp_path, capsys):
                          manifest_path=tmp_path / "manifest.json")
     out = capsys.readouterr().out
     assert rc == 0                                   # unit does NOT fail
-    assert "SAFE-02" in out and "skip" in out.lower()
+    assert "mass-hide safety threshold" in out and "skip" in out.lower()
     # nothing was hidden
     assert "Applied" not in out

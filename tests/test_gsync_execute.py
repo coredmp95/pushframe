@@ -390,7 +390,7 @@ def test_safe02_threshold_gate_aborts_on_non_yes(tmp_path, capsys):
                          manifest_path=tmp_path / "manifest.json")
     out = capsys.readouterr().out
     assert rc == 0
-    assert "SAFE-02" in out and "9 of 10" in out
+    assert "mass-hide safety threshold" in out and "9 of 10" in out
     assert "Aborted." in out
     # nothing was planned-persisted: no manifest file written on abort
     assert not (tmp_path / "manifest.json").exists()

@@ -153,8 +153,7 @@ def build_parser() -> argparse.ArgumentParser:
     reconcile_parser.add_argument(
         '--mechanism', choices=['remove', 'hard-delete', 'complete'], default='remove',
         help="Which removal mechanism to attempt. 'remove' (the default) is confirmed working "
-             "live as of 2026-09-03 (plan 11-06); 'hard-delete' is unconfirmed; "
-             "'complete' is not yet implemented")
+             "live; 'hard-delete' is unconfirmed; 'complete' is not yet implemented")
     reconcile_parser.add_argument(
         '--max-age-hours', type=float, default=24.0, dest='max_age_hours',
         help='Minimum age in hours for a placeholder row to be reported as stuck rather than '
@@ -208,7 +207,8 @@ def build_parser() -> argparse.ArgumentParser:
         help='Run one named pair (album/frame from the config store)')
     gsync_parser.add_argument(
         '--scheduled', action='store_true', default=False,
-        help='Timed-run semantics: SAFE-02 threshold breach SKIPS AND LOGS '
+        help='Timed-run semantics: a plan hiding too many photos (over the '
+             'mass-hide safety threshold) SKIPS AND LOGS '
              'instead of proceeding (used by pushframe schedule units)')
     sched_parser = subparsers.add_parser(
         'schedule', help='Install/list/remove systemd USER timers '

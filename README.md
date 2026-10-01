@@ -61,12 +61,12 @@ Because the manifest persists, a steady-state run costs one album listing and
 one frame listing — **zero downloads, zero uploads**, and its `--apply` is
 effectively free.
 
-**Safety rails (SAFE-01..04):** an empty or truncated album listing aborts
-instead of planning a mass-hide (SAFE-01); a plan hiding more than 20 % of the
-frame's photos demands an explicit confirmation (SAFE-02); **this verb never
+**Safety rails:** an empty or truncated album listing aborts
+instead of planning a mass-hide; a plan hiding more than 20 % of the
+frame's photos demands an explicit confirmation; **this verb never
 deletes** — removal is hide-only, and the irreversible tiers stay with `sync`
-alone (SAFE-03); a failed download is retried next run and never uploaded as
-junk bytes (SAFE-04). Every frame write is paced by the client-side
+alone; a failed download is retried next run and never uploaded as
+junk bytes. Every frame write is paced by the client-side
 [write budget](#write-path-upload--status--anti-abuse-budget), and scheduled
 runs skip rather than fail on a mass-hide.
 
@@ -425,7 +425,7 @@ uv run pushframe push ./buffet/ --frame "Living Room" --apply --yes --limit 40
 These commands read your **Google Photos** shared albums (a separate account from the Aura
 API) — together with `google-sync` below they form the flagship mirror flow, summarized in
 the [highlight section](#highlight-mirror-a-google-photos-album-onto-your-frame). The
-mechanism is the browser-automation one proven in phase 16: a dedicated-profile
+mechanism is the browser-automation one proven against the live service: a dedicated-profile
 browser harvests the session cookies once, and every later operation is plain authenticated
 HTTP over the internal `batchexecute` API — no browser runs again.
 
@@ -530,16 +530,16 @@ and "removed from the album" stay distinguishable.
 - **Remove a photo from the Google album**, re-run with `--apply`: it is **hidden** on the
   frame (`exclude_asset`) — it stops displaying but stays. Re-add it to the album and the
   next run re-shows it **without re-uploading a byte**. Both halves were proven live (see
-  `18-UAT.md` in the planning tree).
+  both halves were exercised against the live album).
 - **Videos are skipped with a counted line** (the frame reports null md5 for videos, so
   content-hash diffing cannot see them) — never silently dropped.
 - An **empty or truncated album listing aborts** with an error instead of producing a plan
-  (SAFE-01) — a Google-side glitch can never read as "delete/hide everything".
+  — a Google-side glitch can never read as "delete/hide everything".
 - If a plan's removals exceed **20 % of the frame's photos**, an explicit confirmation
-  echoes both counts first (SAFE-02; threshold overridable via
+  echoes both counts first (threshold overridable via
   `PUSHFRAME_GOOGLE_SYNC_REMOVAL_THRESHOLD`).
 - **This verb never deletes.** Removal means hide; the gated `--delete`/`--hard-delete`
-  tiers stay with `sync` only (SAFE-03).
+  tiers stay with `sync` only.
 
 #### Headless servers (google-link without a screen)
 
@@ -552,7 +552,7 @@ writes survives logout, and every other command (`google-sync`,
 `schedule`) is headless by nature — the display is needed once, at
 link time.
 - A failed or partial download is reported as failed and retried next run — never uploaded
-  as junk bytes (SAFE-04).
+  as junk bytes.
 - Google-side downloads run concurrently (bounded pool); every frame write stays sequential
   and paced by the [write budget](#write-path-upload--status--anti-abuse-budget).
 
@@ -651,7 +651,7 @@ sequenceDiagram
 
 ## iOS/Android Device's Download/View Image Flow
 
-> **VERIFIED end-to-end this milestone** (READ-01..READ-04) — see
+> **VERIFIED end-to-end this milestone** — see
 > [`VERIFICATION-REPORT.md`](VERIFICATION-REPORT.md). `main.py` drives exactly this path.
 
 1. A frame is selected and the frame's data is retrieved from the API (`/frames/<frame_id>.json`).

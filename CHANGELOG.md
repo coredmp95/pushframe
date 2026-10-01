@@ -27,8 +27,7 @@ frames; it is not affiliated with Aura Frames Inc.
 
 ### Fixed
 
-- **The live progress bar names the primitive that actually runs** (D-07,
-  production, 2026-10-01): the removal loop of `execute_plan` emitted a
+- **The live progress bar names the primitive that actually runs** (2026-10-01): the removal loop of `execute_plan` emitted a
   hardcoded `delete` kind on every per-item progress callback, so a hide
   run's bar read `delete ok <asset>` mid-run even though the final summary
   correctly said `Hidden` — the wording contract held on plan headers and
@@ -75,7 +74,7 @@ frames; it is not affiliated with Aura Frames Inc.
 
 ### Removed
 
-- The phase-24 sweep's `gsync_no_creds` case: with the vault gate standing
+- The preflight sweep's `gsync_no_creds` case: with the vault gate standing
   BEFORE the Aura gate by design, a form-valid fake vault pushed the run
   past the gate onto the REAL Google network with a bogus cookie (the
   5.1.2 network guard covers pushd, not google.com). The Aura-side
@@ -91,8 +90,8 @@ frames; it is not affiliated with Aura Frames Inc.
   fired on every machine whose vault was perfectly healthy (a
   `google-link` seconds earlier had saved it) — and its shape check
   demanded a JSON object while the vault is a JSON list of cookie
-  records, so even the right path would have failed. Two stacked
-  phase-24 bugs, masked until now because CI has no vault either and the
+  records, so even the right path would have failed.  Two stacked
+  session-layer bugs, masked until now because CI has no vault either and the
   scheduled `--pair` branch skips this block entirely. One tell was in
   every transcript: `google-link` prints "existing Google session found"
   only when a vault READ succeeds. The preflight now expands the default
@@ -131,7 +130,7 @@ frames; it is not affiliated with Aura Frames Inc.
   with the 24h-silence protocol reserved for the case where the same
   body recurs on a genuinely fresh login. A 475/429 on the read prints a
   named WAIT (never a re-login suggestion). Every shape exits 1 named —
-  the PRF-02 no-traceback contract now holds on the token path's first
+  the no-traceback contract now holds on the token path's first
   authenticated call.
 
 ## [5.1.3] — 2026-09-30
@@ -177,8 +176,8 @@ frames; it is not affiliated with Aura Frames Inc.
 
 - **The `tests` workflow is green again** (red on master since v5.1.0 —
   not a 5.1.1 regression): the 9 offline tests of the 401-retry and
-  write-throttling suites relied on the pre-phase-24 re-login default
-  (`aura.login`); phase 24 made the default token-aware, which fails
+  write-throttling suites relied on the old unconditional re-login default
+  (`aura.login`); the token-first session work made the default token-aware, which fails
   named off-TTY without env credentials — exactly the CI case. A local
   `.env` with real credentials masked it locally. All 9 `execute_plan`
   call sites now pin `relogin=aura.login`; zero product code changed.
@@ -207,48 +206,48 @@ frames; it is not affiliated with Aura Frames Inc.
 
 ## [5.1.0] — 2026-09-29
 
-### Added (phase 25: Multi-frame & Scheduling)
+### Added
 
-- **Named pairs** (MTF-01): `pushframe config pair add/remove/list` —
+- **Named pairs**: `pushframe config pair add/remove/list` —
   `pairs` in config.json is a named dict (`{"family": {"album": …,
   "frame": …}}`); duplicates and unknown names fail named.
-- **`google-sync --pair <name>` / `--all`** (MTF-02/03): per-pair state
+- **`google-sync --pair <name>` / `--all`**: per-pair state
   (manifest `~/.config/pushframe/pairs/<name>/`, cache
   `~/.local/state/pushframe/pairs/<name>/cache/`); `--all` runs every pair
-  in sorted order with ONE shared write budget (account-level SAFE-02);
+  in sorted order with ONE shared write budget (the mass-hide guard applies account-wide);
   a failing pair is reported and never blocks the others; exit 1 if any
   failed.
-- **`pushframe schedule add/list/remove`** (TMR-01..03): systemd USER
+- **`pushframe schedule add/list/remove`**: systemd USER
   timers (no root) — `pushframe-<job>.service/.timer`, oneshot,
   `Restart=no` (the next tick is the retry), `RandomizedDelaySec`, per-job
   log at `~/.local/state/pushframe/<job>.log`. ExecStart is fully
-  non-interactive (token session); **`--scheduled` flips SAFE-02 to
-  skip-and-log** (a timed run never mass-hides silently and never fails
+  non-interactive (token session); **`--scheduled` flips the mass-hide
+  threshold to skip-and-log** (a timed run never mass-hides silently and never fails
   the unit over a safety decision). Preflight names the systemd user
   session requirement with the `loginctl enable-linger` remedy
   (documented; never executed by the tool).
 
 ## [5.0.7] — 2026-09-29
 
-### Added (phase 24: Token-First Sessions & Preflight Sweep)
+### Added (Token-First Sessions & Preflight Sweep)
 
-- **One session path for every command** (SEC-01/02): `inspect`,
+- **One session path for every command**: `inspect`,
   `reconcile`, `sync`, `push` and `google-sync` now run from the stored
   token session (0600) with no password and no login call; env vars stay
   the override; a terminal session gets ONE password prompt whose token is
-  persisted (SEC-01: the password is never written anywhere — file-content
+  persisted (the password is never written anywhere — file-content
   tested); non-interactive runs without credentials fail named.
-- **Token expiry** (D-01): a 401 while resuming the stored session prompts
+- **Token expiry**: a 401 while resuming the stored session prompts
   once in a terminal (new token persisted, command continues) and raises
   `SessionExpiredError` with the remedy in scheduled runs. `execute_plan`'s
   401-retry relogin is token-aware (it previously assumed a password).
-- **`pushframe logout`** (SEC-03, D-02): deletes the stored token (and only
+- **`pushframe logout`**: deletes the stored token (and only
   the token) — email and settings survive, mode stays 0600, idempotent.
-- **Preflights** (PRF-01, D-03): `google-sync` checks the vault up front
+- **Preflights**: `google-sync` checks the vault up front
   (remedy: `google-link` + the headless ssh -X recipe); `sync`/`push` fail
   named on a nonexistent source directory BEFORE any network call (an
   empty directory remains a friendly "nothing to do").
-- **The traceback-free sweep** (PRF-02): a parametrized test over the
+- **The traceback-free sweep**: a parametrized test over the
   failure-mode inventory proves every foreseeable mode ends named, with a
   remedy, and never a traceback.
 
@@ -270,7 +269,7 @@ frames; it is not affiliated with Aura Frames Inc.
 
 ### Added
 
-- **`pushframe config`** (v5.1, phase 23): interactive wizard that asks for
+- **`pushframe config`** (v5.1): interactive wizard that asks for
   the email + password (hidden input), **verifies the login against the real
   Aura API before writing anything**, and stores email + session token —
   never the password — in `~/.config/pushframe/config.json` (0600, atomic
@@ -463,7 +462,7 @@ Milestone summary — see `.planning/MILESTONES.md` for the full retros.
   `google-link` (dedicated Chrome profile, cookie vault `0600`),
   `google-album` (full walk, exact byte counts), `google-sync`
   (hide-by-default mirror semantics, pruned cache + persistent manifest,
-  SAFE-01..04 guards); live UAT two-run proof (upload run → zero-upload
+  mirror safety gates); live two-run proof (upload run → zero-upload
   steady state); debt closeout (AWS config out of code, single logger
   per process, transport seam).
 - **v3.0 — direct transport rewrite**: `Client` over `httpx` (HTTP/2),

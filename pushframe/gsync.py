@@ -64,33 +64,33 @@ class SafeSyncError(RuntimeError):
     @classmethod
     def empty_listing(cls) -> "SafeSyncError":
         return cls(
-            "album listing is EMPTY (SAFE-01) — an empty listing cannot be "
+            "album listing is EMPTY — an empty listing cannot be "
             "distinguished from a truncated one and must never be read as "
-            "'hide everything on the frame'; refusing to plan"
+            "'hide everything on the frame'; refusing to plan (safety gate)"
         )
 
     @classmethod
     def truncated_listing(cls) -> "SafeSyncError":
         return cls(
-            "album listing is NOT exhausted cleanly (SAFE-01) — a truncated "
+            "album listing is NOT exhausted cleanly — a truncated "
             "listing would understate demand and mass-hide the difference; "
-            "refusing to plan"
+            "refusing to plan (safety gate)"
         )
 
     @classmethod
     def empty_frame_listing(cls) -> "SafeSyncError":
         return cls(
-            "frame asset listing is EMPTY (SAFE-01) — indistinguishable from "
-            "the live-observed get_assets drift (16-LIVE-FINDINGS); verify "
-            "the frame's assets and re-run"
+            "frame asset listing is EMPTY — indistinguishable from "
+            "the live-observed get_assets drift; verify "
+            "the frame's assets and re-run (safety gate)"
         )
 
     @classmethod
     def manifest_drift(cls) -> "SafeSyncError":
         return cls(
             "manifest claims an upload was confirmed but the frame reports "
-            "no matching md5_hash (SAFE-01 drift guard) — the cache was "
-            "pruned on that claim; investigate before re-running"
+            "no matching md5_hash (state drift) — the cache was "
+            "pruned on that claim; investigate before re-running (safety gate)"
         )
 
 
@@ -456,12 +456,13 @@ def run_google_sync(album_target: str, frame_arg: str, *, apply: bool = False,
     if removal_count > effective_threshold * max(len(hash_bearing), 1):
         print(f'⚠ {removal_count} of {len(hash_bearing)} photos on '
               f'"{frame.name}" (id: {frame.id}) would be hidden — over the '
-              f'{effective_threshold:.0%} safety threshold (SAFE-02).')
+              f'{effective_threshold:.0%} mass-hide safety threshold.')
         if scheduled:
             # TMR-03: a timed run NEVER proceeds over the threshold — it
             # skips (exit 0 so the unit doesn't fail) and logs the reason;
             # the operator reads the job log and acts deliberately.
-            print(f'SKIPPED (--scheduled): SAFE-02 threshold breach — no '
+            print(f'SKIPPED (--scheduled): this plan would hide too many '
+                  f'photos (over the mass-hide safety threshold) — no '
                   f'photos were hidden. Run google-sync manually to review '
                   f'and confirm this plan.')
             return 0
