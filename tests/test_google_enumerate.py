@@ -79,7 +79,8 @@ class _GoogleRouter:
     def __init__(self, pages: list[int], *, page_key: str | None = PAGE_KEY,
                  rpc_status: int = 200, rpc_body: str | None = None,
                  albums_page: str | None = None,
-                 null_positions: set[int] | None = None) -> None:
+                 null_positions: set[int] | None = None,
+                 token_on_last_page: bool = False) -> None:
         self.pages = pages
         self.page_key = page_key
         self.rpc_status = rpc_status
@@ -88,6 +89,10 @@ class _GoogleRouter:
         # 1-based POST indices that answer the live-observed null-payload
         # transient instead of a page (a null consumes nothing).
         self.null_positions = null_positions or set()
+        # Live drift (2026-10-01, the 757-item "Cadre" album): Google emits
+        # a continuation token even on a SHORT final page; requesting past
+        # it answers the null-payload shape.
+        self.token_on_last_page = token_on_last_page
         self.albums_gets = 0
         self.post_count = 0
         self.nulls_served = 0
@@ -143,7 +148,11 @@ class _GoogleRouter:
             if page_idx >= len(self.pages):
                 return httpx.Response(400, text="too many pages requested")
             has_next = page_idx + 1 < len(self.pages)
-            next_token = _next_token(page_idx + 2) if has_next else None
+            if has_next or (self.token_on_last_page
+                            and page_idx + 1 == len(self.pages)):
+                next_token = _next_token(page_idx + 2)
+            else:
+                next_token = None
             self._expected_token = next_token
             return httpx.Response(200, text=_rpc_response(
                 _rpc_items(page_idx + 1, self.pages[page_idx]), next_token))
@@ -289,4 +298,19 @@ def test_null_retry_recovers_on_later_page_within_budget():
     assert listing.page_count == 2
     assert listing.exhausted_cleanly is True
     assert router.post_count == 3      # page 1, null, retried page 2
-    assert router.nulls_served == 1
+
+
+def test_short_page_is_terminal_even_when_google_mints_a_token():
+    """The 2026-10-01 live drift (the 757-item 'Cadre' album): Google emits
+    a continuation token even on a SHORT final page (157 < 300), and the
+    call past it answers the null-payload shape — which the old loop read
+    as the September transient, retried once, and failed loud, hard-blocking
+    the user. A short page IS the end of the listing: stop there, exhausted
+    cleanly, and never request the past-the-end page."""
+    router = _GoogleRouter([300, 300, 157], token_on_last_page=True)
+    listing = enumerate_album(_session(router), ALBUM_ID, page_key=PAGE_KEY)
+    assert len(listing.items) == 757            # 300 + 300 + 157, live counts
+    assert listing.exhausted_cleanly is True
+    assert listing.page_count == 3
+    assert router.post_count == 3               # the null page is never requested
+    assert router.nulls_served == 0

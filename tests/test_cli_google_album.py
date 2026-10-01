@@ -24,6 +24,7 @@ from pushframe.cli import (  # noqa: E402
     resolve_album,
     run_google_album,
 )
+from pushframe.google import enumerate as _enum  # noqa: E402
 from pushframe.google.client import GoogleSession  # noqa: E402
 from pushframe.google.parsers import AlbumSummary  # noqa: E402
 
@@ -156,7 +157,10 @@ def _session() -> GoogleSession:
                          transport=httpx.MockTransport(_router()))
 
 
-def test_google_album_by_name_full_enumeration_and_disk_weight(capsys):
+def test_google_album_by_name_full_enumeration_and_disk_weight(capsys, monkeypatch):
+    # The synthetic pages carry 5 items each — the full-page size, so the
+    # short-page-terminal rule (live drift 2026-10-01) never fires early.
+    monkeypatch.setattr(_enum, "PAGE_SIZE", 5)
     rc = run_google_album("corse", session=_session())
     assert rc == 0
     out = capsys.readouterr().out
@@ -189,9 +193,10 @@ def test_google_album_not_found_prints_albums_and_exits_2(capsys):
     assert "Famille 2024" in out
 
 
-def test_google_album_by_direct_link_resolves_and_enumerates(capsys):
+def test_google_album_by_direct_link_resolves_and_enumerates(capsys, monkeypatch):
     """A pasted share link works: the id is extracted and the page_key from
     the listing (when the link lacks one) comes from the /albums match."""
+    monkeypatch.setattr(_enum, "PAGE_SIZE", 5)   # synthetic full pages = 5 items
     rc = run_google_album(f"https://photos.google.com/share/{ALBUM_ID_1}",
                           session=_session())
     assert rc == 0

@@ -189,8 +189,10 @@ def enumerate_album(session, album_id: str, *, page_key: str | None = None,
     """Enumerate EVERY photo of an album (D-06) via the RPC-first protocol:
 
     batch-1 = snAcKc(album_id, None, None, page_key) → 300 items; swap the
-    LAST AH_ cursor per page until no token or a 0-item page. Fail-loud on
-    HTTP != 200 or a malformed envelope (never a silent partial listing).
+    LAST AH_ cursor per page until no token, a 0-item page, or a SHORT page
+    (< PAGE_SIZE — the live-proven terminal signal, see the loop below).
+    Fail-loud on HTTP != 200 or a malformed envelope (never a silent
+    partial listing).
 
     `album_id` is the SHARE token (the /share/<id> path segment — what the
     /albums listing carries and what the live proof used). `page_key` is
@@ -213,7 +215,16 @@ def enumerate_album(session, album_id: str, *, page_key: str | None = None,
         known = {i["id"] for i in listing.items}
         fresh = [i for i in page_items if i["id"] not in known]
         listing.items.extend(fresh)
-        if next_token is None or not page_items:
+        # A SHORT page (< PAGE_SIZE) is the end of the listing — even when
+        # Google still mints a continuation token on it. Live drift,
+        # 2026-10-01 (the 757-item "Cadre" album: 300+300+157, page 3 short
+        # WITH a token): requesting the past-the-end page answers the
+        # null-payload shape, which used to read as the September transient,
+        # burn the single retry and fail loud — blocking the user entirely.
+        # Stopping on the short page is the paginated-API convention and
+        # costs nothing: the items above are already the complete listing.
+        if (next_token is None or not page_items
+                or len(page_items) < PAGE_SIZE):
             listing.exhausted_cleanly = True
             return listing
         token = next_token

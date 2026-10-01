@@ -12,6 +12,21 @@ every channel.
 `pushframe` is an unofficial community CLI for Aura Frames digital photo
 frames; it is not affiliated with Aura Frames Inc.
 
+## [Unreleased]
+
+### Fixed
+
+- **`google-sync`/`google-album` no longer fail on albums whose final page is
+  short** (2026-10-01 live drift, the 757-item "Cadre" album): Google now
+  emits a continuation token even on a short final page (300+300+157), and
+  the past-the-end request answers the null-payload shape — which the loop
+  read as the September transient, burned its single retry on and failed
+  loud, hard-blocking every run on that album. The loop now treats a short
+  page (< 300 items) as terminal — the paginated-API convention — and never
+  requests past it; the single-retry transient recovery stays for the
+  genuine mid-listing case. One new test reproduces the drift with the live
+  page counts.
+
 ## [5.1.8] - 2026-10-01
 
 ### Changed
