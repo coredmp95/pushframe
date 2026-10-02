@@ -455,10 +455,13 @@ def run_config(wizard_args=None, stdin_isatty: bool | None = None) -> int:
         if not sub or sub[0] == 'list':
             pairs_mod.pair_list()
             return 0
-        if sub[0] == 'add' and len(sub) >= 2 and '--album' in sub and '--frame' in sub:
-            name = sub[1]
-            album = sub[sub.index('--album') + 1]
-            frame = sub[sub.index('--frame') + 1]
+        if sub[0] == 'add':
+            if len(sub) > 1 and sub[1] in ('-h', '--help'):
+                _print_pair_help()
+                return 0
+            rc, name, album, frame = _parse_pair_add(sub)
+            if rc != 0:
+                return rc
             try:
                 pairs_mod.pair_add(name, album=album, frame=frame)
             except Exception as e:
@@ -471,6 +474,10 @@ def run_config(wizard_args=None, stdin_isatty: bool | None = None) -> int:
                   f'(or `schedule add nightly --pair {name} --every 1d`)')
             return 0
         if sub[0] == 'remove' and len(sub) >= 2:
+            if sub[1].startswith('--'):
+                print('pair remove: needs a pair name — '
+                      '`pushframe config pair list` shows the configured ones')
+                return 2
             if pairs_mod.pair_remove(sub[1]):
                 print(f'pair "{sub[1]}" removed (its state files, if any, '
                       f'are left in place under pairs/{sub[1]}/ — delete '
@@ -1046,6 +1053,16 @@ def _schedule_status_section() -> list[str]:
     return lines
 
 
+def _frame_flag_needs_value(rest: list[str], flag: str) -> bool:
+    """True when `flag` is present but dangling (last token, or followed by
+    another --flag) — the ExecStart parser's guard against indexing past
+    the end of a hand-written unit."""
+    if flag not in rest:
+        return False
+    j = rest.index(flag)
+    return j + 1 >= len(rest) or rest[j + 1].startswith('--')
+
+
 def _describe_exec_start(exec_line: str) -> str:
     """Human summary of an ExecStart= line: verb + what flows where."""
     import shlex
@@ -1062,19 +1079,24 @@ def _describe_exec_start(exec_line: str) -> str:
     verb = tokens[verb_idx]
     rest = tokens[verb_idx + 1:]
     if verb == 'google-sync':
-        pair = rest[rest.index('--pair') + 1] if '--pair' in rest else None
+        pair = rest[rest.index('--pair') + 1] \
+            if '--pair' in rest and not _frame_flag_needs_value(rest,
+                                                                '--pair') \
+            else None
         if pair:
             return f'mirror album→frame for pair "{pair}"'
         if '--all' in rest:
             return 'mirror every configured pair'
         album = rest[0] if rest and not rest[0].startswith('-') else '?'
         frame = rest[rest.index('--frame') + 1] \
-            if '--frame' in rest else '?'
+            if '--frame' in rest \
+            and not _frame_flag_needs_value(rest, '--frame') else '?'
         return f'mirror album "{album}" → frame "{frame}"'
     if verb == 'sync':
         src = rest[0] if rest and not rest[0].startswith('-') else '?'
         frame = rest[rest.index('--frame') + 1] \
-            if '--frame' in rest else '?'
+            if '--frame' in rest \
+            and not _frame_flag_needs_value(rest, '--frame') else '?'
         return f'sync local "{src}" → frame "{frame}"'
     return f'{verb} (scheduled)'
 
@@ -2077,6 +2099,66 @@ def _parse_schedule_add(sub: list[str]) -> tuple[int, dict | None]:
                'every': opts.get('--every'), 'at': opts.get('--at'),
                'batch_size': batch_size, 'report': opts.get('--report'),
                'report_to': opts.get('--report-to')}
+
+
+_PAIR_ADD_USAGE = ('usage: pushframe config pair add <name> --album ALBUM '
+                   '--frame FRAME')
+
+
+def _parse_pair_add(sub: list[str]) -> tuple[int, str | None, str | None,
+                                             str | None]:
+    """Strict parse of `config pair add <name> --album A --frame F` — a
+    named usage error (exit 2) on any malformed tail, never a crash and
+    never a pair literally named `--album` (audit 2026-10-02: the loose
+    `sub[1]` + `sub.index(flag)+1` pair did both)."""
+    if len(sub) < 2 or sub[1].startswith('--'):
+        print('pair add: the pair name is missing — it must come right '
+              'after `add`, before any --flag')
+        print(_PAIR_ADD_USAGE)
+        print('run `pushframe config pair --help` for what a pair is and '
+              'how to use it')
+        return 2, None, None, None
+    name = sub[1]
+    opts: dict[str, str] = {}
+    i = 2
+    while i < len(sub):
+        tok = sub[i]
+        if not tok.startswith('--'):
+            print(f'pair add: unexpected "{tok}" — every option is a '
+                  '--flag VALUE pair')
+            print(_PAIR_ADD_USAGE)
+            return 2, None, None, None
+        if tok not in ('--album', '--frame'):
+            print(f'pair add: unknown option "{tok}" — known ones: '
+                  '--album, --frame')
+            print(_PAIR_ADD_USAGE)
+            print('run `pushframe config pair --help` for what a pair is '
+                  'and how to use it')
+            return 2, None, None, None
+        if tok in opts:
+            print(f'pair add: {tok} given twice — one value per flag')
+            print(_PAIR_ADD_USAGE)
+            print('run `pushframe config pair --help` for what a pair is '
+                  'and how to use it')
+            return 2, None, None, None
+        if i + 1 >= len(sub) or sub[i + 1].startswith('--'):
+            print(f'pair add: {tok} needs a value — a flag left dangling '
+                  'breaks the command')
+            print(_PAIR_ADD_USAGE)
+            print('run `pushframe config pair --help` for what a pair is '
+                  'and how to use it')
+            return 2, None, None, None
+        opts[tok] = sub[i + 1]
+        i += 2
+    if '--album' not in opts or '--frame' not in opts:
+        missing = '--frame' if '--album' in opts else '--album'
+        print(f'pair add: {missing} is missing — a pair maps an album to a '
+              'frame, both are required')
+        print(_PAIR_ADD_USAGE)
+        print('run `pushframe config pair --help` for what a pair is '
+              'and how to use it')
+        return 2, None, None, None
+    return 0, name, opts['--album'], opts['--frame']
 
 
 def _main(argv=None) -> int:

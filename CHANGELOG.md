@@ -12,6 +12,22 @@ every channel.
 `pushframe` is an unofficial community CLI for Aura Frames digital photo
 frames; it is not affiliated with Aura Frames Inc.
 
+## [5.1.23] - 2026-10-02
+
+### Fixed
+
+- CLI audit (2026-10-02, same family as the 5.1.22 `schedule add` fix):
+  `config pair add` no longer crashes on a malformed tail. A dangling
+  `--frame` used to die with a raw `IndexError`; a missing job-name guard
+  meant `pair add --album A --frame F` silently created a pair literally
+  named `--album`. Every malformed tail now produces a named usage error
+  (exit 2) naming the exact token — unknown options list the valid ones,
+  and the album→frame mapping refuses to install half-mapped.
+- `status`'s ExecStart description no longer IndexErrors on a
+  hand-written unit whose `--frame`/`--pair` flag dangles: the line now
+  degrades per-field (`frame "?"`) instead of falling back to
+  `(unreadable unit)`.
+
 ## [5.1.22] - 2026-10-02
 
 ### Fixed

@@ -70,6 +70,13 @@ twice.
 | Budget exhausted / `--max-wait` reached | The configured wait ceiling was hit | Re-run later, or raise `PUSHFRAME_WRITE_BUDGET_MAX_WAIT` |
 | A geo guard mismatch | The account country doesn't match the expected one | Set `PUSHFRAME_COUNTRY` (e.g. `FR`) or check the account |
 
+## Config & pairs
+
+| Message | What it means | What to do |
+|---|---|---|
+| `pair add: the pair name is missing — …` / `--album needs a value` / `unknown option "…"` / `… given twice` / `--frame is missing` | The `config pair add` tail is malformed — a dangling flag, a typo (valid ones are listed), a duplicate, or a missing required half of the album→frame mapping. Fixed after the 2026-10-02 audit — these used to crash with a raw traceback, or worse: silently create a pair literally named `--album` | Read the message: it names the exact token; the usage line below shows the full shape |
+| `pair add: pair "…" already exists …` | The name is taken (the message shows its album/frame) | `config pair remove <name>` first, or choose another name |
+
 ## Scheduling
 
 | Message | What it means | What to do |

@@ -94,6 +94,25 @@ def test_status_schedule_section_covers_all_and_sync_shapes(
         'ExecStart=' + exe + 'sync "/srv/p" --frame "Salon" --apply --yes')
 
 
+def test_describe_exec_start_dangling_flag_degrades_not_crashes():
+    """Audit 2026-10-02: a hand-written unit ending in `--frame` (or with a
+    flag dangling before another flag) used to IndexError inside the ExecStart
+    parser — the status section's try/except caught it, but the line degraded
+    to '(unreadable unit)' instead of answering what it could."""
+    from pushframe.cli import _describe_exec_start
+    exe = '/usr/bin/pushframe '
+    out = _describe_exec_start(
+        'ExecStart=' + exe + 'google-sync "A" --frame')
+    assert 'album "A"' in out and 'frame "?"' in out
+    out = _describe_exec_start(
+        'ExecStart=' + exe + 'google-sync --pair --apply')
+    assert 'pair "--apply"' not in out          # the guard must NOT pair
+    assert 'album' in out                        # …and still describe the rest
+    out = _describe_exec_start(
+        'ExecStart=' + exe + 'sync "/srv/p" --frame --apply')
+    assert 'frame "?"' in out
+
+
 def test_status_schedule_section_empty_and_degraded(unit_dir, cfg_path,
                                                     monkeypatch):
     from pushframe.cli import _schedule_status_section

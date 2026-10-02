@@ -156,3 +156,61 @@ def test_cli_config_pair_dispatch(cfg_path, capsys, monkeypatch):
     assert run_config(wizard_args=["pair", "remove", "p1"],
                       stdin_isatty=True) == 0
     assert config_store.load()["pairs"] == {}
+
+
+# --- pair add dispatch: malformed tails are named errors, never crashes ------
+
+def test_pair_add_dangling_flag_is_a_named_error_not_a_crash(cfg_path,
+                                                             capsys):
+    """Audit 2026-10-02: `config pair add p1 --album A --frame` died with a
+    raw IndexError — same family as the `schedule add --pair` venus
+    crash fixed in 5.1.22."""
+    from pushframe.cli import run_config
+    assert run_config(wizard_args=["pair", "add", "p1", "--album", "A",
+                                   "--frame"], stdin_isatty=True) == 2
+    out = capsys.readouterr().out
+    assert "IndexError" not in out
+    assert "--frame needs a value" in out
+    assert "config pair --help" in out
+
+
+def test_pair_add_flag_in_name_slot_is_refused(cfg_path, capsys):
+    """Audit 2026-10-02, live-confirmed: `pair add --album A --frame F`
+    silently created a pair literally named `--album`."""
+    from pushframe.cli import run_config
+    assert run_config(wizard_args=["pair", "add", "--album", "A",
+                                   "--frame", "F"], stdin_isatty=True) == 2
+    out = capsys.readouterr().out
+    assert "pair name is missing" in out
+    assert "--album" not in config_store.load().get("pairs", {})
+
+
+def test_pair_add_unknown_and_duplicated_flags_are_named_errors(cfg_path,
+                                                                capsys):
+    from pushframe.cli import run_config
+    assert run_config(wizard_args=["pair", "add", "p1", "--albun", "A",
+                                   "--frame", "F"], stdin_isatty=True) == 2
+    out = capsys.readouterr().out
+    assert 'unknown option "--albun"' in out
+    capsys.readouterr()                         # reset
+    assert run_config(wizard_args=["pair", "add", "p1", "--album", "A",
+                                   "--album", "B", "--frame", "F"],
+                      stdin_isatty=True) == 2
+    assert "--album given twice" in capsys.readouterr().out
+
+
+def test_pair_add_missing_required_flag_is_a_named_error(cfg_path, capsys):
+    from pushframe.cli import run_config
+    assert run_config(wizard_args=["pair", "add", "p1", "--album", "A"],
+                      stdin_isatty=True) == 2
+    out = capsys.readouterr().out
+    assert "--frame is missing" in out
+    assert config_store.load().get("pairs", {}) == {}
+
+
+def test_pair_remove_flag_is_a_named_error(cfg_path, capsys):
+    from pushframe.cli import run_config
+    assert run_config(wizard_args=["pair", "remove", "--now"],
+                      stdin_isatty=True) == 2
+    out = capsys.readouterr().out
+    assert "pair remove: needs a pair name" in out
