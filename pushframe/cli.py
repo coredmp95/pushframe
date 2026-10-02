@@ -187,6 +187,9 @@ def build_parser() -> argparse.ArgumentParser:
     album_parser.add_argument(
         '--list', action='store_true', default=False,
         help='List the account\'s shared albums and exit (discovery aid)')
+    album_parser.add_argument(
+        '--verbose', action='store_true', default=False,
+        help='Also print the per-item table (one line per photo)')
     # Phase 18 (CSE-01..08, SAFE-01..04): album → frame mirror sync. Dry-run
     # is the structural default; --apply is gated (SAFE-02 mass-hide threshold
     # + y/N) and removal is hide-only (CSE-06) — no delete tier on this verb.
@@ -870,12 +873,17 @@ def _print_album_candidates(candidates: list, numbered: bool = False,
 
 
 def run_google_album(target: str, *, debug: bool = False, session=None,
-                     list_all: bool = False) -> int:
+                     list_all: bool = False, verbose: bool = False) -> int:
     """google-album command handler (LGS-04/LGS-05, D-05/D-06): resolve an
     album by share URL, id, or title substring — ambiguity prints a numbered
     list and exits 2 (no silent pick, no per-photo picking anywhere) — then
     enumerate EVERY item (continuation until exhaustion) and print the exact
     disk weight (1-byte Range GETs).
+
+    Default output is a summary (item count, page/exhaustion state, total
+    weight with min/max/avg); `--verbose` additionally prints the per-item
+    table — for a large album that is hundreds of opaque id lines an
+    operator almost never wants.
 
     `session` is the DI seam (TEST-02): tests inject a GoogleSession over a
     MockTransport; without injection the session comes from the vault.
@@ -953,12 +961,15 @@ def run_google_album(target: str, *, debug: bool = False, session=None,
     print(f'Disk weight: {total:,} bytes = {total / 1024 / 1024:.1f} MiB '
           f'(min {min(sizes):,}, max {max(sizes):,}, '
           f'avg {total // max(len(sizes), 1):,})')
-    print('Per-item (index | id shape | WxH | bytes):')
-    for idx, (item, size) in enumerate(zip(listing.items, sizes), 1):
-        w = item.get('width') if item.get('width') is not None else '?'
-        h = item.get('height') if item.get('height') is not None else '?'
-        id_shape = redact_link(item['id'])
-        print(f'  {idx:4d} | {id_shape} | {w}x{h} | {size:,}')
+    if verbose:
+        print('Per-item (index | id shape | WxH | bytes):')
+        for idx, (item, size) in enumerate(zip(listing.items, sizes), 1):
+            w = item.get('width') if item.get('width') is not None else '?'
+            h = item.get('height') if item.get('height') is not None else '?'
+            id_shape = redact_link(item['id'])
+            print(f'  {idx:4d} | {id_shape} | {w}x{h} | {size:,}')
+    else:
+        print('(per-item detail: re-run with --verbose)')
 
     return 0
 
@@ -1634,7 +1645,8 @@ def _main(argv=None) -> int:
     if args.command == 'google-link':
         return run_google_link(debug=args.debug)
     if args.command == 'google-album':
-        return run_google_album(args.target, list_all=args.list, debug=args.debug)
+        return run_google_album(args.target, list_all=args.list,
+                                verbose=args.verbose, debug=args.debug)
     if args.command == 'google-sync':
         from pushframe.gsync import run_google_sync
         if not args.all_pairs and not args.frame:

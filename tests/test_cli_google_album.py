@@ -169,11 +169,24 @@ def test_google_album_by_name_full_enumeration_and_disk_weight(capsys, monkeypat
     assert "Items: 10" in out          # 5 + 5 across 2 snAcKc pages
     assert "exhausted: cleanly" in out
     assert "Disk weight:" in out and "MiB" in out
-    # Per-item table with redacted id shapes only.
-    assert "Per-item" in out
+    # Default is a summary: no per-item table (hundreds of opaque id lines
+    # on a real album), just a pointer to --verbose.
+    assert "Per-item" not in out
+    assert "--verbose" in out
     assert ALBUM_ID_1 not in out       # full tokens never print
     assert "AF1QipRPC01" + "0" * 32 not in out
+
+
+def test_google_album_verbose_prints_per_item_table(capsys, monkeypatch):
+    """--verbose restores the per-item table: one redacted line per photo
+    (index | id shape | WxH | bytes), exactly the old default."""
+    monkeypatch.setattr(_enum, "PAGE_SIZE", 5)
+    rc = run_google_album("corse", session=_session(), verbose=True)
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "Per-item (index | id shape | WxH | bytes):" in out
     assert "AF1Qip…" in out            # the redacted shape does print
+    assert out.count("AF1Qip…") >= 10  # one line per item, all 10 present
 
 
 def test_google_album_ambiguous_prints_numbered_and_exits_2(capsys):

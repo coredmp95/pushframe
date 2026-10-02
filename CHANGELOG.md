@@ -16,6 +16,10 @@ frames; it is not affiliated with Aura Frames Inc.
 
 ### Changed
 
+- `google-album` prints a summary by default (item count, page/exhaustion
+  state, total disk weight with min/max/avg) instead of dumping the
+  per-item table — hundreds of opaque id lines on a real album. The table
+  moves behind `--verbose`.
 - `status` now names where the credentials come from — `Config: stored
   session (~/.config/pushframe/config.json — created by `pushframe
   config`, no password needed)` or `Config: environment

@@ -812,13 +812,27 @@ precedence: `PUSHFRAME_PROBE_CHROME_PROFILE` > legacy
 ### `google-album` — inspect a shared album
 
 ```
-usage: pushframe google-album [-h] [--list] [target]
+usage: pushframe google-album [-h] [--list] [--verbose] [target]
 ```
 
 `--list` lists the account's shared albums (discovery aid). With a
 `target` (share URL, `AF1Qip…` id, or album-name substring — ambiguity
 prints a numbered list and exits 2), enumerates every item with its exact
 disk weight. Read-only.
+
+Default output is a summary — item count, page/exhaustion state, and the
+total weight with min/max/avg:
+
+```
+Album: Vacances (id shape: AF1Qip…)
+Items: 757 (pages: 3, exhausted: cleanly)
+Disk weight: 2,171,848,640 bytes = 2071.2 MiB (min …, max …, avg …)
+(per-item detail: re-run with --verbose)
+```
+
+`--verbose` adds the per-item table (one line per photo: index, id shape,
+WxH, bytes) — hundreds of opaque id lines on a real album, so it is
+opt-in.
 
 ### `google-sync` — mirror an album onto a frame
 
