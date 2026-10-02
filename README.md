@@ -30,18 +30,25 @@ every run — manual or scheduled nightly — makes the frame **match the album*
   frame — no downloads, no uploads. That makes scheduling it every night a
   non-event.
 
-Set it up in three commands:
+From zero to a mirrored frame:
 
 ```bash
-# 1. One-time: link your Google account. A browser window opens; log into
+# 1. One-time: connect your Aura account — the wizard asks for your email
+#    and password (hidden input), tests the login, then stores the session.
+pushframe config
+
+# 2. List your frames — you'll use the exact name with --frame below.
+pushframe status
+
+# 3. One-time: link your Google account. A browser window opens; log into
 #    Google inside it, the rest is automatic (re-linking is the same command).
 pushframe google-link
 
-# 2. Find your album and preview what would happen (nothing is written yet):
+# 4. Find your album and preview what would happen (nothing is written yet):
 pushframe google-album --list
 pushframe google-sync family --frame "Living Room"
 
-# 3. Mirror it (one confirmation, echoing the frame's name so you can check):
+# 5. Mirror it (one confirmation, echoing the frame's name so you can check):
 pushframe google-sync family --frame "Living Room" --apply
 ```
 
@@ -291,10 +298,11 @@ a single photo:
 Album: Holidays 2026 (id shape: photos.google.com/share/AF1Qip…0001)
 Items: 24 (pages: 1, exhausted: cleanly)
 Disk weight: 90,813,552 bytes = 86.6 MiB (min 512,331, max 8,120,444, avg 3,783,898)
-Per-item (index | id shape | WxH | bytes):
-     1 | AF1Qip…base1 | 4898x3265 | 3,412,350
-     ...
+(per-item detail: re-run with --verbose)
 ```
+
+`--verbose` adds the per-item table — one line per photo (index, id shape,
+WxH, bytes) — for when you actually want to inspect items individually.
 
 **Privacy posture:** session cookies live only in the `0600` vault outside the
 repository; album capability URLs are secrets-like and are always printed
@@ -308,7 +316,9 @@ One verb ties the Google side to the frame: enumerate the album, download what
 is missing, upload it, and mirror removals as **hides**. Start to finish:
 
 ```bash
-# One-time setup (or again whenever the Google session expires):
+# Prerequisites (one-time, from scratch): `pushframe config` (Aura account)
+# then `pushframe status` (shows your frame names) — see the quickstart at the top.
+# Google-side setup (or again whenever the Google session expires):
 pushframe google-link
 
 # Find the album, then mirror it:
