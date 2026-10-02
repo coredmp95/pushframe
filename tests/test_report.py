@@ -467,6 +467,38 @@ def test_config_set_report_key_stores_in_report_block(cfg_path, capsys):
     assert 'report --test' in out                     # names the next step
 
 
+def test_config_set_help_explains_every_key_group(cfg_path, capsys):
+    """`config set --help` is the per-key reference the doc mirrors: every
+    accepted key appears, grouped by purpose, with the redaction and
+    precedence contracts named."""
+    from pushframe.cli import run_config
+    assert run_config(wizard_args=['set', '--help']) == 0
+    out = capsys.readouterr().out
+    assert 'usage: pushframe config set KEY VALUE' in out
+    for key in ('default_frame', 'debug', 'report_to', 'smtp_host',
+                'smtp_port', 'smtp_user', 'smtp_password', 'report_from',
+                'AURA_COUNTRY', 'AURA_GEO_FAIL_OPEN',
+                'AURA_WRITE_BUDGET_CAPACITY', 'AURA_WRITE_BUDGET_REFILL_PER_MIN',
+                'AURA_WRITE_BUDGET_WAIT', 'AURA_WRITE_BUDGET_MAX_WAIT',
+                'DEVICE_IDENTIFIER', 'USER_AGENT', 'LOCALE',
+                'AURA_APP_IDENTIFIER', 'AURA_API_BASE_URL',
+                'AURA_STATE_DIR', 'AWS_S3_BUCKET'):
+        assert key in out, f'{key} missing from config set --help'
+    assert '587' in out and '465' in out              # port semantics
+    assert 'uuidgen' in out                           # the DEVICE_IDENTIFIER remedy
+    assert '***' in out                               # password redaction contract
+    assert 'docs/CLI.md' in out
+
+
+def test_config_set_usage_and_unknown_key_point_to_the_help(cfg_path, capsys):
+    from pushframe.cli import run_config
+    assert run_config(wizard_args=['set']) == 1
+    assert 'config set --help' in capsys.readouterr().out
+    rc = run_config(wizard_args=['set', 'NOT_A_KEY', 'x'])
+    assert rc == 1
+    assert 'config set --help' in capsys.readouterr().out
+
+
 def test_config_set_smtp_password_is_redacted_in_output(cfg_path, capsys):
     from pushframe.cli import run_config
     assert run_config(wizard_args=['set', 'smtp_password', 's3cret']) == 0  # noqa: S105

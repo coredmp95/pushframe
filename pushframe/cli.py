@@ -354,7 +354,8 @@ def _print_config_help() -> None:
         '  path              Print the config file path\n'
         '  import [--file F] Adopt a .env file (default: .env) as config\n'
         '  set KEY VALUE     Store one setting (validated; e.g.\n'
-        '                    config set DEFAULT_FRAME "Living Room")\n'
+        '                    config set DEFAULT_FRAME "Living Room") —\n'
+        '                    `config set --help` explains every key\n'
         '  get KEY           Print one setting and where it comes from\n'
         '  pair list         List named album→frame pairs\n'
         '  pair add NAME --album A --frame F\n'
@@ -479,6 +480,9 @@ def run_config(wizard_args=None, stdin_isatty: bool | None = None) -> int:
         return _config_import(args[1:])
     if args and args[0] == 'set':
         argv = args[1:]
+        if argv and argv[0] in ('--help', '-h', 'help'):
+            _print_set_help()
+            return 0
         if argv and argv[0] in _REPORT_KEY_ALIASES:
             return _config_report_set(argv[0], argv[1:])
         return _config_set(argv)
@@ -507,7 +511,8 @@ def run_config(wizard_args=None, stdin_isatty: bool | None = None) -> int:
             print(f'{name} = {shown!r}  (source: {source})')
             return 0
         if name not in settings.known_keys() and name not in ('email', 'default_frame', 'debug'):
-            print(f'unknown key {name!r}. Known settings: '
+            print(f'unknown key {name!r}. Run `pushframe config set --help` '
+                  f'for every key, explained. Known settings: '
                   f'{", ".join(sorted(settings.known_keys()))}, or report '
                   f'transport keys: {", ".join(sorted(_REPORT_KEY_ALIASES))}')
             return 1
@@ -767,6 +772,61 @@ def _config_import(argv: list[str]) -> int:
     return 0
 
 
+def _print_set_help() -> None:
+    """`pushframe config set --help` — every accepted key, explained."""
+    print(
+        'usage: pushframe config set KEY VALUE\n'
+        '\n'
+        'Keys are grouped: the settings table, the wizard-managed keys, and\n'
+        'the email-report transport. Precedence is always environment →\n'
+        'config file → default; `config show` labels each value\'s source.\n'
+        '\n'
+        'Wizard-managed (config set refuses email/auth_token — the wizard\n'
+        'login-tests them; default_frame/debug are accepted):\n'
+        '  default_frame   Frame name preselected in prompts and used as the\n'
+        '                  --frame default when a verb allows omitting it\n'
+        '  debug           True/False — verbose request/response logging by default\n'
+        '\n'
+        'Email-report transport (consumed by `schedule add … --report`;\n'
+        'PUSHFRAME_REPORT_TO / PUSHFRAME_SMTP_* override at use time):\n'
+        '  report_to       Recipient address of the run reports\n'
+        '  smtp_host       SMTP relay hostname (e.g. smtp.example.com)\n'
+        '  smtp_port       SMTP port — 587 STARTTLS (default), 465 SSL\n'
+        '  smtp_user       Login for relays that require authentication\n'
+        '  smtp_password   Its password (stored 0600, printed as ***)\n'
+        '  report_from     From address (defaults to smtp_user)\n'
+        '\n'
+        'Anti-abuse / write budget (token bucket paced before any write):\n'
+        '  AURA_COUNTRY    Your account\'s country code (e.g. FR) — enables\n'
+        '                  the geo pre-flight; unset skips the check\n'
+        '  AURA_GEO_FAIL_OPEN        true/false — on a country-lookup failure,\n'
+        '                            continue (true) or block (false)\n'
+        '  AURA_WRITE_BUDGET_CAPACITY     Burst size in write requests (30)\n'
+        '  AURA_WRITE_BUDGET_REFILL_PER_MIN  Refill per minute (0.75)\n'
+        '  AURA_WRITE_BUDGET_WAIT     true/false — wait for refill (true)\n'
+        '                            or stop when the bucket is dry\n'
+        '  AURA_WRITE_BUDGET_MAX_WAIT Max seconds a run will wait (3600)\n'
+        '\n'
+        'Client identity (what the API sees — read docs/CLI.md "Client\n'
+        'identity" before touching):\n'
+        '  DEVICE_IDENTIFIER  Unique id per install — MUST be changed from\n'
+        '                     the shared all-zeros default: config set\n'
+        '                     DEVICE_IDENTIFIER "$(uuidgen)"\n'
+        '  USER_AGENT         App version string presented to the API\n'
+        '  LOCALE             Locale presented to the API (en-US)\n'
+        '  AURA_APP_IDENTIFIER  App bundle id presented to the API\n'
+        '\n'
+        'Advanced / endpoint overrides (leave alone unless you know why):\n'
+        '  AURA_API_BASE_URL, AURA_API_VERSION, AURA_STATE_DIR,\n'
+        '  IMAGE_PROXY_BASE_URL, AWS_S3_BUCKET, AWS_UPLOAD_IDENTITY_POOL_ID,\n'
+        '  AWS_SQS_IDENTITY_POOL_ID\n'
+        '\n'
+        'Unknown keys are rejected with the list of known ones. Full per-key\n'
+        'reference: '
+        'https://github.com/coredmp95/pushframe/blob/master/docs/CLI.md'
+    )
+
+
 def _config_report_set(op_name: str, argv: list[str]) -> int:
     """`config set <report-key> <value>` — store under the config's `report`
     block (the same block `schedule report --to ...` writes)."""
@@ -790,13 +850,16 @@ def _config_report_set(op_name: str, argv: list[str]) -> int:
 def _config_set(argv: list[str]) -> int:
     if len(argv) < 2:
         print('usage: pushframe config set <key> <value>')
+        print('run `pushframe config set --help` for every key, explained')
         return 1
     name, value = argv[0], argv[1]
     if name in ('email', 'auth_token'):
         print(f'{name!r} is managed by the wizard: run `pushframe config`.')
         return 1
     if name not in settings.DEFAULTS:
-        print(f'unknown key {name!r}. Known settings: {", ".join(settings.known_keys())}')
+        print(f'unknown key {name!r}. Run `pushframe config set --help` for '
+              f'every key, explained. Known settings: '
+              f'{", ".join(sorted(settings.known_keys()))}')
         return 1
     data = config_store.load()
     data.setdefault('settings', {})[name] = value  # stored raw; cast on resolve

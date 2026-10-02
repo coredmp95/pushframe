@@ -12,6 +12,16 @@ every channel.
 `pushframe` is an unofficial community CLI for Aura Frames digital photo
 frames; it is not affiliated with Aura Frames Inc.
 
+## [Unreleased]
+
+### Added
+
+- `pushframe config set --help` — every accepted key, explained, grouped
+  by purpose (wizard-managed, email-report transport, anti-abuse/write
+  budget, client identity, endpoint overrides) with the same reference
+  added to docs/CLI.md as "Every `config set` key, explained". The
+  unknown-key error and the bare `config set` usage now point to it.
+
 ## [5.1.17] - 2026-10-02
 
 ### Changed

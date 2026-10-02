@@ -981,6 +981,24 @@ to adopt one.
 | `AURA_DEVICE_IDENTIFIER` | `0000000000000000` |
 | `AURA_USER_AGENT` | `Aura/4.7.4271 (Android 36; Client)` |
 
+These are **what the Aura API sees as your client** — treat them as an
+identity, not a preference:
+
+- `AURA_LOCALE` — locale string presented at login. Leave unless Aura
+  serves you a wrong-language experience.
+- `AURA_APP_IDENTIFIER` — the app bundle id presented at login
+  (`com.pushd.client` is the phone app's). Changing it changes what class
+  of client the server thinks you are.
+- `AURA_DEVICE_IDENTIFIER` — **the one that matters**: it must be unique
+  per install. The all-zeros default is what every unprovisioned
+  pushframe shares, and the server reads it as a non-phone client (the
+  2026-09-30 lesson: reads stayed green for months while writes were
+  401-refused). `pushframe config` provisions a unique one automatically;
+  or `config set DEVICE_IDENTIFIER "$(uuidgen)"`.
+- `AURA_USER_AGENT` — the app version string. Its default tracks a
+  current Play build (5.1.1 bumped it for exactly that reason); only
+  touch it if Aura starts refusing the shipped one.
+
 The client-identity defaults are the ones a fresh install ships with —
 `config set DEVICE_IDENTIFIER "$(uuidgen)"` (and optionally `USER_AGENT`)
 overwrites them in the config file, which is the documented posture above.
@@ -992,6 +1010,74 @@ overwrites them in the config file, which is the documented posture above.
 | `PUSHFRAME_PROBE_CHROME_PROFILE` | Dedicated Chrome profile dir for `google-link` (precedence over the legacy `AURA_PROBE_CHROME_PROFILE`, then the built-in default created on demand) |
 | `PUSHFRAME_GOOGLE_SYNC_REMOVAL_THRESHOLD` | Mass-hide threshold for `google-sync` (fraction of the frame's photos; see README) |
 | `PUSHFRAME_VAULT_PATH` | Override the Google cookie vault path (mainly for tests) |
+
+**Optional — email-report transport** (same values as the config's `report`
+block; see [Email run reports](#email-run-reports--schedule-report--google-sync---report))
+
+| Variable | Purpose |
+|---|---|
+| `PUSHFRAME_REPORT_TO` | Report recipient address (overrides config `report_to`) |
+| `PUSHFRAME_SMTP_HOST` | SMTP relay hostname (overrides `smtp_host`) |
+| `PUSHFRAME_SMTP_PORT` | SMTP port — 587 STARTTLS by default, 465 = SSL (overrides `smtp_port`) |
+| `PUSHFRAME_SMTP_USER` | Login for relays that require authentication (overrides `smtp_user`) |
+| `PUSHFRAME_SMTP_PASSWORD` | Its password — never stored in the config when this is set (overrides `smtp_password`) |
+| `PUSHFRAME_SMTP_FROM` | From address, defaulting to `smtp_user` (overrides `report_from`) |
+
+## Every `config set` key, explained
+
+`pushframe config set KEY VALUE` accepts exactly these keys (anything else
+is rejected with the list); `pushframe config set --help` prints the same
+guide from the terminal. Wizard-managed `email`/`auth_token` are refused —
+the wizard login-tests them. Precedence is always environment → config file
+→ default, and `config show` labels every value's source.
+
+**Wizard-managed**
+
+| Key | Meaning |
+|---|---|
+| `default_frame` | Frame name preselected in prompts and used as the `--frame` default where a verb allows omitting it |
+| `debug` | `True`/`False` — verbose request/response logging on every run, without `--debug` |
+
+**Email-report transport** (consumed by `schedule add … --report`; env
+spellings in the table above)
+
+| Key | Meaning |
+|---|---|
+| `report_to` | Recipient address of the run reports |
+| `smtp_host` | SMTP relay hostname (e.g. `smtp.example.com`, or your own server) |
+| `smtp_port` | SMTP port — `587` STARTTLS (default), `465` SSL |
+| `smtp_user` | Login for relays that require authentication; absent = relay without login |
+| `smtp_password` | Its password — stored in the `0600` config, printed as `***` everywhere |
+| `report_from` | From address (defaults to `smtp_user`) |
+
+**Anti-abuse / write budget** (a token bucket paced before any write;
+see [Write budget and geo guard](#write-budget-and-geo-guard))
+
+| Key | Meaning |
+|---|---|
+| `AURA_COUNTRY` | Your account's country code (e.g. `FR`) — enables the geo pre-flight that blocks writes from a mismatched exit IP (VPN). Unset = check skipped |
+| `AURA_GEO_FAIL_OPEN` | `true`/`false` — when the country lookup itself fails, continue (`true`, default) or block (`false`) |
+| `AURA_WRITE_BUDGET_CAPACITY` | Burst size, in write requests (default 30) — how much the bucket holds |
+| `AURA_WRITE_BUDGET_REFILL_PER_MIN` | Refill rate per minute (default 0.75) — how fast a long run may keep writing |
+| `AURA_WRITE_BUDGET_WAIT` | `true` (default) — wait for refill when dry; `false` — stop instead of waiting |
+| `AURA_WRITE_BUDGET_MAX_WAIT` | Max seconds a run will wait for a refill before giving up (default 3600) |
+
+**Client identity** (what the API sees — read the client-identity notes
+above before touching any of these)
+
+| Key | Meaning |
+|---|---|
+| `DEVICE_IDENTIFIER` | **Unique id per install — the one key you should set.** `config set DEVICE_IDENTIFIER "$(uuidgen)"`; the wizard does it automatically |
+| `USER_AGENT` | App version string presented to the API; the default tracks a current Play build |
+| `LOCALE` | Locale string presented to the API (`en-US`) |
+| `AURA_APP_IDENTIFIER` | App bundle id presented to the API (`com.pushd.client`) |
+
+**Advanced / endpoint overrides** — leave alone unless you know why you
+need them: `AURA_API_BASE_URL`, `AURA_API_VERSION`, `AURA_STATE_DIR`
+(where the write budget persists), `IMAGE_PROXY_BASE_URL`,
+`AWS_S3_BUCKET`, `AWS_UPLOAD_IDENTITY_POOL_ID`, `AWS_SQS_IDENTITY_POOL_ID`
+(the AWS trio is baked into the reverse-engineered protocol; changing
+them points uploads at a different S3/SQS stack).
 
 Booleans accept `1`, `true`, `yes`, `on` (case-insensitive); anything else is false.
 
