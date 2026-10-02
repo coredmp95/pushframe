@@ -472,7 +472,7 @@ def test_second_run_zero_uploads_and_zero_downloads(tmp_path, capsys):
                     session=_google_session(_GoogleRouter(item_bodies=bodies)),
                     aura=aura, s3_client=_FakeS3(), sqs_client=_FakeSQS(),
                     cache_dir=tmp_path / "cache", manifest_path=mpath)
-    # run 2: same album, same frame
+    # run 2: same album, same frame — a no-op plan reports and stops
     router2 = _GoogleRouter(item_bodies=bodies)
     rc = run_google_sync("Cadre", "Fabrice", apply=True, yes=True,
                          session=_google_session(router2), aura=aura,
@@ -480,5 +480,55 @@ def test_second_run_zero_uploads_and_zero_downloads(tmp_path, capsys):
                          cache_dir=tmp_path / "cache", manifest_path=mpath)
     out = capsys.readouterr().out
     assert rc == 0
-    assert "Applied: 0 uploaded" in out
+    assert "Nothing to do" in out
+    assert "Applied:" not in out  # no empty apply machinery
     assert router2.download_requests == []  # zero Google downloads (criterion 3)
+
+
+def test_noop_plan_reports_and_stops_without_confirmation(tmp_path, capsys, monkeypatch):
+    """A plan with nothing to do is a success, not a decision: report it and
+    stop — no y/N, no empty Applying bar, no execute_plan call (before the
+    fix, the steady-state run still ran the full mutating machinery on zero
+    items, asking an operator to confirm an empty plan)."""
+    import pushframe.sync as sync_mod
+
+    def boom(*a, **k):
+        raise AssertionError("execute_plan must not run on a no-op plan")
+
+    def no_prompt(*a, **k):
+        raise AssertionError("no-op plan must not prompt")
+
+    monkeypatch.setattr(sync_mod, 'execute_plan', boom)
+    aura = _FakeAura(_assets_for(3))  # frame already holds all 3 album items
+    rc = run_google_sync("Cadre", "Fabrice", apply=True, yes=True,
+                         input_fn=no_prompt,
+                         session=_google_session(_GoogleRouter()),
+                         aura=aura, s3_client=_FakeS3(), sqs_client=_FakeSQS(),
+                         cache_dir=tmp_path / "cache",
+                         manifest_path=tmp_path / "manifest.json")
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "Nothing to do" in out
+    assert "3 unchanged" in out
+    assert "Applied:" not in out
+    # already-held persistence + prune still run (the apply path's tail)
+    manifest = json.loads((tmp_path / "manifest.json").read_text())
+    assert set(manifest) == {_gid(1), _gid(2), _gid(3)}
+    assert list((tmp_path / "cache").iterdir()) == []
+
+
+def test_noop_non_interactive_apply_needs_no_yes(tmp_path, capsys):
+    """The --yes gate protects mutations; a no-op plan mutates nothing, so a
+    non-interactive apply of an empty plan must succeed — a scheduled
+    steady-state night cannot be born failing."""
+    aura = _FakeAura(_assets_for(3))
+    rc = run_google_sync("Cadre", "Fabrice", apply=True, yes=False,
+                         is_interactive=False,
+                         session=_google_session(_GoogleRouter()),
+                         aura=aura, s3_client=_FakeS3(), sqs_client=_FakeSQS(),
+                         cache_dir=tmp_path / "cache",
+                         manifest_path=tmp_path / "manifest.json")
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "Nothing to do" in out
+    assert "--apply requires --yes" not in out

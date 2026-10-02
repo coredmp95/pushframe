@@ -419,8 +419,13 @@ def run_google_sync(album_target: str, frame_arg: str, *, apply: bool = False,
     # --- downloads (CSE-01: Google side only) + plan (pure half) ---
     manifest = GoogleManifest.load(manifest_path)
     cdir = Path(cache_dir) if cache_dir else default_cache_dir(album.album_id)
-    with tqdm(total=len(listing.items), desc='Downloading', unit='photo',
-              disable=not sys.stderr.isatty()) as bar:
+    # The bar counts only what can actually download this run — manifest-
+    # backed items are skipped entirely (steady state = zero downloads), so
+    # a 0/757 bar over the full listing would read like a stalled transfer.
+    to_download = sum(1 for item in listing.items
+                      if manifest.entry_for(item['id']) is None)
+    with tqdm(total=to_download, desc='Downloading', unit='photo',
+              disable=not sys.stderr.isatty() or to_download == 0) as bar:
         def _dl_progress(gid: str, ok: bool) -> None:
             bar.update(1)
             bar.set_postfix_str(f'{redact_link(gid)} {"ok" if ok else "FAIL"}')
@@ -442,6 +447,32 @@ def run_google_sync(album_target: str, frame_arg: str, *, apply: bool = False,
 
     if not apply:
         return 0  # structural dry-run default — nothing above mutated anything
+
+    # A no-op plan (nothing to upload, re-show, or hide) is a success, not a
+    # decision: report it and stop — no y/N, no empty apply bar. This also
+    # lets a scheduled non-interactive run end its steady-state night without
+    # --yes, since it never reaches the mutating gate below.
+    if not (plan.to_upload or plan.to_reshow or plan.to_delete):
+        print(f'Nothing to do — the frame already mirrors the album '
+              f'({plan.unchanged} unchanged, {plan.already_hidden} already hidden).')
+        # Same already-held persistence as the apply path: an item re-added
+        # to the album under a fresh Google id whose bytes the frame already
+        # holds gets its manifest entry, so the next run downloads nothing.
+        frame_md5s = {a.md5_hash for a in frame_assets if a.md5_hash}
+        added = 0
+        for s in staged.staged:
+            gid = s['google_media_id']
+            if manifest.entry_for(gid) is None and s['md5_hash'] in frame_md5s:
+                manifest.add(gid, md5_hash=s['md5_hash'],
+                             size_bytes=s['size_bytes'],
+                             album_share_token=album.album_id)
+                added += 1
+        if added or manifest.entries:
+            manifest.save(manifest_path)
+        pruned = prune_cache(cdir, set(manifest.entries))
+        print(f'Cache pruned: {pruned} file(s) removed; '
+              f'{len(staged.failed)} failed download(s) kept for retry')
+        return 0
 
     # ---- every path below is mutating ----
 

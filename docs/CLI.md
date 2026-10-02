@@ -842,10 +842,15 @@ the others; exit 1 if any failed). Exit codes: `0` dry-run/aborted
 confirmation, `1` failure, `2` usage/ambiguity (album not found,
 no pairs configured…).
 
-A real steady-state run prints `Applied: N uploaded, K hidden, R re-shown`
-(e.g. `Applied: 74 uploaded, 2 hidden, 0 re-shown` in 1:26 on the live
-95-photo production run), then prunes the staging cache — only
-manifest-backed progress survives.
+After an apply, the run prints `Applied: N uploaded, K hidden, R re-shown`
+(e.g. `Applied: 74 uploaded, 2 hidden, 0 re-shown` on the first live
+95-photo run), then prunes the staging cache — only manifest-backed
+progress survives. When the frame already mirrors the album, the run stops
+right after the plan with `Nothing to do — the frame already mirrors the
+album (…)` — no confirmation, no write calls, and no `--yes` needed even
+non-interactively. Downloads follow the same rule: every album item the
+manifest already covers is skipped entirely, so a steady-state run
+transfers zero photos.
 
 ## Choosing between `sync` and `push`
 

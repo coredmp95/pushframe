@@ -12,6 +12,19 @@ every channel.
 `pushframe` is an unofficial community CLI for Aura Frames digital photo
 frames; it is not affiliated with Aura Frames Inc.
 
+## [Unreleased]
+
+### Changed
+
+- `google-sync --apply` with a plan that has nothing to do now reports
+  `Nothing to do — the frame already mirrors the album (…)` and stops: no
+  y/N confirmation, no empty apply bar, no write calls — and a
+  non-interactive or scheduled run no longer fails for lack of `--yes`
+  (a steady-state night was previously asked to confirm an empty plan).
+- The `Downloading` bar counts only the items that actually need
+  downloading (manifest-backed items are skipped entirely), so a
+  steady-state run no longer shows a stalled-looking `0/757` transfer.
+
 ## [5.1.12] - 2026-10-01
 
 ### Fixed

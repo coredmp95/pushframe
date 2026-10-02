@@ -336,7 +336,13 @@ Applied: 74 uploaded, 2 hidden, 0 re-shown in 1:26   ·   cache pruned, 95 files
 After an apply the staging cache is pruned and a small manifest persists — so
 a steady-state run costs one album listing and one frame listing, and its
 `--apply` **downloads and uploads nothing**: the plan is all `unchanged` /
-`already hidden`, with zero counts everywhere else.
+`already hidden`, with zero counts everywhere else. And when the plan has
+nothing to do at all, the run simply reports it and exits — no confirmation,
+no writes:
+
+```text
+Nothing to do — the frame already mirrors the album (757 unchanged, 8 already hidden).
+```
 
 #### Mirror semantics
 
