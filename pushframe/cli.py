@@ -2012,6 +2012,73 @@ def main(argv=None) -> int:
     return rc
 
 
+_SCHEDULE_ADD_FLAGS = ('--pair', '--album', '--frame', '--sync-dir',
+                       '--every', '--at', '--batch-size', '--report',
+                       '--report-to')
+
+_SCHEDULE_ADD_USAGE = ('usage: pushframe schedule add <job> --pair NAME '
+                       '--every Nmin|Nh|Nd [--report DEBUG|INFO|ERROR]')
+
+
+def _schedule_add_usage_hint() -> None:
+    print(_SCHEDULE_ADD_USAGE)
+    print('run `pushframe schedule --help` for the full map '
+          '(what gets scheduled, email reports, examples)')
+
+
+def _parse_schedule_add(sub: list[str]) -> tuple[int, dict | None]:
+    """Strict parse of `schedule add <job> --flag VALUE …` — a named usage
+    error (exit 2) on any malformed tail, never a crash (5.1.21 regression:
+    the `_opt` indexer died with a raw IndexError on a dangling flag, and a
+    flag right after `add` silently became the job name)."""
+    if len(sub) < 2 or sub[1].startswith('--'):
+        print('schedule add: the job name is missing — it must come right '
+              'after `add`, before any --flag')
+        _schedule_add_usage_hint()
+        return 2, None
+    job = sub[1]
+    opts: dict[str, str] = {}
+    i = 2
+    while i < len(sub):
+        tok = sub[i]
+        if not tok.startswith('--'):
+            print(f'schedule add: unexpected "{tok}" — every option is a '
+                  '--flag VALUE pair')
+            _schedule_add_usage_hint()
+            return 2, None
+        if tok not in _SCHEDULE_ADD_FLAGS:
+            print(f'schedule add: unknown option "{tok}" — known ones: '
+                  + ', '.join(_SCHEDULE_ADD_FLAGS))
+            _schedule_add_usage_hint()
+            return 2, None
+        if tok in opts:
+            print(f'schedule add: {tok} given twice — one value per flag')
+            _schedule_add_usage_hint()
+            return 2, None
+        if i + 1 >= len(sub) or sub[i + 1].startswith('--'):
+            print(f'schedule add: {tok} needs a value — a flag left '
+                  'dangling breaks the command')
+            _schedule_add_usage_hint()
+            return 2, None
+        opts[tok] = sub[i + 1]
+        i += 2
+    batch_size = None
+    if '--batch-size' in opts:
+        try:
+            batch_size = int(opts['--batch-size'])
+        except ValueError:
+            print(f'schedule add: --batch-size must be a number, '
+                  f'got "{opts["--batch-size"]}"')
+            _schedule_add_usage_hint()
+            return 2, None
+    return 0, {'job': job, 'pair': opts.get('--pair'),
+               'album': opts.get('--album'), 'frame': opts.get('--frame'),
+               'sync_dir': opts.get('--sync-dir'),
+               'every': opts.get('--every'), 'at': opts.get('--at'),
+               'batch_size': batch_size, 'report': opts.get('--report'),
+               'report_to': opts.get('--report-to')}
+
+
 def _main(argv=None) -> int:
     load_dotenv()
     # IDN-03 (phase 20): first run on an existing auraframes install migrates
@@ -2080,26 +2147,24 @@ def _main(argv=None) -> int:
         if sub[0] == 'report':
             from pushframe import report as report_mod
             return report_mod.configure(sub[1:])
-        if sub[0] == 'add' and len(sub) >= 2:
-            job = sub[1]
-            def _opt(flag, default=None):
-                return sub[sub.index(flag) + 1] if flag in sub else default
-            return sch.schedule_add(job, pair=_opt('--pair'),
-                                    album=_opt('--album'),
-                                    frame=_opt('--frame'),
-                                    sync_dir=_opt('--sync-dir'),
-                                    every=_opt('--every'), at=_opt('--at'),
-                                    batch_size=int(_opt('--batch-size'))
-                                    if _opt('--batch-size') else None,
-                                    report=_opt('--report'),
-                                    report_to=_opt('--report-to'))
+        if sub[0] == 'add':
+            if len(sub) > 1 and sub[1] in ('-h', '--help'):
+                parser.parse_args(['schedule', '--help'])
+            rc, add = _parse_schedule_add(sub)
+            if rc != 0:
+                return rc
+            return sch.schedule_add(**add)
         if sub[0] == 'remove' and len(sub) >= 2:
+            if sub[1].startswith('--'):
+                print('schedule remove: needs a job name — '
+                      '`pushframe schedule list` shows the installed ones')
+                return 2
             return sch.schedule_remove(sub[1])
         if sub[0] == 'help':
             # Caught upstream too; this branch keeps the contract local.
             parser.parse_args(['schedule', '--help'])
-        print('usage: pushframe schedule add <job> --pair <name> --every Nmin|Nh|Nd '
-              '| schedule list | schedule remove <job>')
+        print('usage: pushframe schedule add <job> … | schedule list | '
+              'schedule remove <job>')
         print('run `pushframe schedule --help` for the full map '
               '(what gets scheduled, email reports, examples)')
         return 1

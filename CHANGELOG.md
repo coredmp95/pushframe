@@ -12,6 +12,19 @@ every channel.
 `pushframe` is an unofficial community CLI for Aura Frames digital photo
 frames; it is not affiliated with Aura Frames Inc.
 
+## [5.1.22] - 2026-10-02
+
+### Fixed
+
+- `pushframe schedule add` no longer crashes on a malformed command line.
+  `schedule add --pair` used to die with a raw `IndexError` traceback (the
+  flag landed in the job-name slot and the option indexer ran off the end
+  of the tail); any dangling flag, unknown option, duplicated flag or
+  stray word now produces a named usage error (exit 2) that names the
+  exact token — unknown options list the valid ones. Also: `schedule add
+  --pair X` used to install a job literally named `--pair`; the job name
+  must now come right after `add`, before any `--flag`.
+
 ## [5.1.21] - 2026-10-02
 
 ### Fixed

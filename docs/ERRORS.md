@@ -76,6 +76,8 @@ twice.
 |---|---|---|
 | `schedule: no systemd USER session available … loginctl enable-linger $USER` | The user systemd session isn't available for timers | Run `loginctl enable-linger $USER` once (headless hosts), or log in once on the machine |
 | `schedule: job name "…" must be alphanumeric/dashes` | The job name is used in unit filenames | Pick a name like `nightly` or `living-room-nightly` |
+| `schedule add: the job name is missing — …` | The job name must come right after `add`, before any `--flag` (`schedule add --pair X` puts the flag in the name slot) | `schedule add nightly --pair X --every 1d` — the usage line below the message shows the shape |
+| `schedule add: --FLAG needs a value` / `unknown option "…"` / `… given twice` / `unexpected "…"` | The `schedule add` tail is malformed — a dangling flag, a typo in a flag name (they are listed), a duplicated flag, or a stray word | Read the message: it names the exact token and, for unknown options, lists the valid ones. Fixed in 5.1.22 — these used to crash with a raw traceback (pre-5.1.22) |
 | A timer "fails" repeatedly | Read the job log | `~/.local/state/pushframe/<job>.log`; the unit ends on the first failure on purpose — the next tick is the retry |
 
 ## Anything else

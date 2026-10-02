@@ -343,6 +343,67 @@ def test_schedule_add_report_sync_dir_is_refused(unit_dir, cfg_path,
     assert 'google-sync' in capsys.readouterr().out
 
 
+# --- schedule add CLI dispatch: malformed tails are errors, never crashes -----
+
+def test_schedule_add_dangling_flag_is_a_named_error_not_a_crash(
+        cfg_path, capsys):
+    """venus report on 5.1.21 (latent since the passthrough existed):
+    `pushframe schedule add --pair` died with a raw IndexError traceback —
+    the flag landed in the job-name slot and the `_opt` indexer ran off
+    the end of the tail."""
+    from pushframe.cli import main
+    rc = main(['schedule', 'add', '--pair'])
+    out = capsys.readouterr().out
+    assert rc == 2
+    assert 'IndexError' not in out
+    assert 'job name is missing' in out
+    assert '--pair' in out
+    assert 'pushframe schedule --help' in out
+    capsys.readouterr()                         # reset
+    # the dangling-value flavor: a flag LAST, after a job name
+    assert main(['schedule', 'add', 'nightly', '--pair']) == 2
+    out = capsys.readouterr().out
+    assert 'needs a value' in out
+
+
+def test_schedule_add_missing_job_name_is_a_named_error(cfg_path, capsys):
+    from pushframe.cli import main
+    assert main(['schedule', 'add', '--pair', 'cadre-venus']) == 2
+    out = capsys.readouterr().out
+    assert 'job name is missing' in out
+
+
+def test_schedule_add_unknown_and_duplicated_flags_are_named_errors(
+        cfg_path, capsys):
+    from pushframe.cli import main
+    assert main(['schedule', 'add', 'nightly', '--pairx', 'x']) == 2
+    out = capsys.readouterr().out
+    assert 'unknown option "--pairx"' in out
+    assert '--pair' in out                      # the known ones are listed
+    capsys.readouterr()                         # reset
+    assert main(['schedule', 'add', 'nightly', '--pair', 'a',
+                 '--pair', 'b']) == 2
+    out = capsys.readouterr().out
+    assert 'given twice' in out
+
+
+def test_schedule_add_still_parses_a_valid_tail(cfg_path, monkeypatch,
+                                                capsys):
+    """The strict parser must not break the happy path."""
+    _patch_systemd(monkeypatch)
+    _pair()
+    from pushframe.cli import main
+    assert main(['schedule', 'add', 'nightly', '--pair', 'cadre-venus',
+                 '--every', '1d', '--report', 'ERROR']) == 0
+    svc = (unit_dir_path() / 'pushframe-nightly.service').read_text()
+    assert '--report ERROR' in svc and '--report-tag "nightly"' in svc
+
+
+def unit_dir_path():
+    from pushframe import schedule as sch
+    return sch.UNIT_DIR
+
+
 # --- `schedule report` configurator ------------------------------------------
 
 def test_report_configure_show_when_empty(cfg_path, monkeypatch, capsys):
