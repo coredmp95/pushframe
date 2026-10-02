@@ -187,19 +187,23 @@ run uploads the remainder once — never twice.
 
 ## Pairs — one album → several frames (and back)
 
-Named album↔frame mappings live in the config:
+A **pair** is a named album↔frame mapping stored in the config file: name it
+once, then every command refers to it by name instead of retyping the album
+and the frame. `pushframe config pair --help` summarizes the whole system;
+`pair list` shows your mappings plus how to run them.
 
 ```bash
 pushframe config pair add family --album family --frame "Living Room"
-pushframe config pair list          # name → album → frame (+ state paths)
+pushframe config pair list          # name → album → frame, plus usage
 pushframe config pair remove family
 ```
 
-Run one pair or every pair:
+Run one pair or every pair — with `--pair`/`--all` the album and frame come
+from the config, so no positional album argument is needed:
 
 ```bash
-pushframe google-sync "Album X" --pair family --apply --yes
-pushframe google-sync "Album X" --all --apply --yes
+pushframe google-sync --pair family --apply --yes    # just this pair
+pushframe google-sync --all --apply --yes            # every pair, sorted
 ```
 
 `--all` runs every pair in sorted-name order with **one shared write
@@ -300,7 +304,8 @@ it is the value a command would actually use).
 
 Named album↔frame mappings consumed by `google-sync --pair` / `--all` and by
 the systemd timers: `add NAME --album A --frame F`, `list` (name → album →
-frame + state paths), `remove NAME`. Full semantics in
+frame, plus how to run each pair), `remove NAME`. `pushframe config pair
+--help` explains what a pair is with examples. Full semantics in
 [Pairs](#pairs--one-album--several-frames-and-back).
 
 ## `status` — check credentials and list frames
@@ -845,7 +850,7 @@ opt-in.
 usage: pushframe google-sync [-h] [--frame FRAME] [--all] [--pair PAIR]
                              [--scheduled] [--apply] [--yes] [--debug]
                              [--batch-size BATCH_SIZE]
-                             album
+                             [album]
 ```
 
 Dry-run by default. `--apply` runs one y/N (echoing the resolved frame's
@@ -858,12 +863,14 @@ never silently dropped. Prerequisites: the cookie vault (`google-link`,
 checked named before anything else) and an Aura session (same one-session
 path as every verb).
 
-Frame targeting: `--frame "Name"` for one album→frame pair, `--pair NAME`
-for a named pair from the config, or `--all` for every configured pair in
-sorted order with one shared write budget (a failing pair never blocks
-the others; exit 1 if any failed). Exit codes: `0` dry-run/aborted
-confirmation, `1` failure, `2` usage/ambiguity (album not found,
-no pairs configured…).
+Frame targeting: `--frame "Name"` for one album→frame pair (with the album
+as positional), `--pair NAME` for a named pair from the config, or `--all`
+for every configured pair in sorted order with one shared write budget (a
+failing pair never blocks the others; exit 1 if any failed). With
+`--pair`/`--all` the album and frame come from the config — omit the
+positional (`pushframe google-sync --pair family --apply`). Exit codes: `0`
+dry-run/aborted confirmation, `1` failure, `2` usage/ambiguity (album not
+found, no pairs configured…).
 
 After an apply, the run prints `Applied: N uploaded, K hidden, R re-shown`
 (e.g. `Applied: 74 uploaded, 2 hidden, 0 re-shown` on the first live

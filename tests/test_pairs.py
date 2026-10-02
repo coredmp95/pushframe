@@ -33,6 +33,73 @@ def test_add_list_roundtrip(cfg_path, capsys):
     out = capsys.readouterr().out
     assert "cadre-venus" in out and "Cadre de Fabrice" in out
     assert "salon" in out
+    # The footer names the consuming commands — a bare mapping list
+    # explained nothing (2026-10-02 report).
+    assert "2 pairs:" in out
+    assert "google-sync --pair cadre-venus" in out
+    assert "google-sync --all" in out
+    assert "schedule add nightly --pair" in out
+
+
+def test_list_empty_explains_how_to_add_and_use(cfg_path, capsys):
+    pairs_mod.pair_list()
+    out = capsys.readouterr().out
+    assert "no pairs configured" in out
+    assert "config pair add <name> --album A --frame F" in out
+    assert "google-sync --pair <name>" in out
+    assert "schedule add nightly --pair <name>" in out
+
+
+def test_pair_help_and_unknown_subcommand(cfg_path, capsys):
+    """`config pair --help` maps the pair system; a typo exits 2 with the
+    same pointer (it used to print one usage line and exit 1)."""
+    from pushframe.cli import run_config
+    assert run_config(wizard_args=["pair", "--help"], stdin_isatty=True) == 0
+    out = capsys.readouterr().out
+    assert "usage: pushframe config pair list" in out
+    assert "A pair is a named album↔frame mapping" in out
+    assert "google-sync --pair family" in out
+    assert "docs/CLI.md#pairs" in out
+
+    assert run_config(wizard_args=["pair", "shwo"], stdin_isatty=True) == 2
+    out = capsys.readouterr().out
+    assert "usage: pushframe config pair list" in out
+    assert "config pair --help" in out
+
+
+def test_gsync_pair_parses_without_positional_album(cfg_path, monkeypatch, capsys):
+    """`pushframe google-sync --pair name --apply` must parse without the
+    positional album — the pair supplies it. It used to die in argparse
+    with "the following arguments are required: album", which forced the
+    confusing `google-sync "Album X" --pair name` workaround."""
+    from pushframe import gsync as gsync_mod
+    captured = {}
+
+    def fake_run(album_target, frame_arg, **kw):
+        captured['album'] = album_target
+        captured['frame'] = frame_arg
+        captured.update(kw)
+        return 0
+
+    monkeypatch.setattr(gsync_mod, 'run_google_sync', fake_run)
+    from pushframe.cli import main
+    rc = main(['google-sync', '--pair', 'cadre-venus', '--apply'])
+    assert rc == 0
+    assert captured['album'] is None
+    assert captured['pair'] == 'cadre-venus'
+    assert captured['apply'] is True
+    assert 'note:' not in capsys.readouterr().out
+
+    # a positional album WITH --pair is accepted but named as ignored
+    rc = main(['google-sync', 'Album X', '--pair', 'cadre-venus'])
+    assert rc == 0
+    assert 'note: with --pair/--all' in capsys.readouterr().out
+
+    # nothing to resolve at all: usage error naming all three ways
+    rc = main(['google-sync'])
+    assert rc == 2
+    out = capsys.readouterr().out
+    assert '--pair NAME' in out and '--all' in out
 
 
 def test_add_duplicate_is_named_error(cfg_path):

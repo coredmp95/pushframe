@@ -16,6 +16,15 @@ frames; it is not affiliated with Aura Frames Inc.
 
 ### Changed
 
+- The pair system explains itself: `pushframe config pair --help` maps
+  what a pair is and every command that consumes it; `pair`/`pair list`
+  output ends with those run-it examples; `pair add` names the next
+  command to run. An unknown pair subcommand exits `2` with the pointer.
+- `pushframe google-sync --pair NAME` (and `--all`) no longer requires a
+  dummy positional album argument — it used to die in argparse, forcing
+  the confusing `google-sync "Album X" --pair name` workaround. Passing a
+  positional album or `--frame` alongside `--pair`/`--all` prints a note
+  that the config supplies them.
 - `pushframe config --help` (`-h`, `config help`) prints a one-screen map
   of the config family — subcommands, examples, docs link — instead of
   falling through into the interactive wizard (argparse never saw the

@@ -61,14 +61,35 @@ def pair_resolve(name: str) -> dict:
 
 
 def pair_list() -> None:
-    """One line per pair: name → album → frame (+ state paths hint)."""
+    """One line per pair, then the how-to-use footer.
+
+    The bare mapping list explained nothing to a first-time operator (the
+    2026-10-02 "pairing system is not easy to understand" report): the
+    footer names the commands that consume a pair, so the output is
+    self-sufficient. `pushframe config pair --help` carries the full map.
+    """
     stored = all_pairs()
     if not stored:
-        print('no pairs configured — add one with '
+        print('no pairs configured yet — add one with '
               '`pushframe config pair add <name> --album A --frame F`')
+        print()
+        print('Then run it by name (each pair keeps its own sync state):')
+        print('  pushframe google-sync --pair <name>            # dry-run plan')
+        print('  pushframe google-sync --pair <name> --apply    # mirror it')
+        print('  pushframe google-sync --all                    # every pair, sorted')
+        print('  pushframe schedule add nightly --pair <name> --every 1d')
         return
+    count = len(stored)
+    print(f'{count} pair{"s" if count > 1 else ""}:')
     for name, spec in stored.items():
-        print(f'{name}: album "{spec["album"]}" → frame "{spec["frame"]}"')
+        print(f'  {name}: album "{spec["album"]}" → frame "{spec["frame"]}"')
+    print()
+    first = next(iter(stored))
+    print('Run a pair by name (each pair keeps its own sync state):')
+    print(f'  pushframe google-sync --pair {first}            # dry-run plan')
+    print(f'  pushframe google-sync --pair {first} --apply    # mirror it')
+    print('  pushframe google-sync --all                    # every pair, sorted')
+    print('  pushframe schedule add nightly --pair <name> --every 1d')
 
 
 def pair_state_paths(name: str) -> tuple[Path, Path]:

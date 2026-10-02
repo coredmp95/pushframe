@@ -196,7 +196,9 @@ def build_parser() -> argparse.ArgumentParser:
     gsync_parser = subparsers.add_parser(
         'google-sync', help='Mirror a Google Photos album onto one frame (dry-run by default; hide-by-default removals)')
     gsync_parser.add_argument(
-        'album', help='Album share URL, AF1Qip… id, or album-name substring')
+        'album', nargs='?', default=None,
+        help='Album share URL, AF1Qip… id, or album-name substring '
+             '(omit when using --pair or --all — the config supplies it)')
     gsync_parser.add_argument(
         '--frame', default=None,
         help='Target frame name substring or id (single album→frame pair). '
@@ -350,6 +352,38 @@ def _print_config_help() -> None:
     )
 
 
+def _print_pair_help() -> None:
+    """`pushframe config pair --help` — what a pair IS, then how to use it.
+
+    A bare mapping list explained nothing to a first-time operator (the
+    "pairing system is not easy to understand" report, 2026-10-02); this
+    spells out the one-time naming step and the commands that consume it.
+    """
+    print(
+        'usage: pushframe config pair list\n'
+        '       pushframe config pair add <name> --album ALBUM --frame FRAME\n'
+        '       pushframe config pair remove <name>\n'
+        '\n'
+        'A pair is a named album↔frame mapping stored in the config file.\n'
+        'Name it once, then every command can refer to it by name instead\n'
+        'of retyping the album and the frame:\n'
+        '\n'
+        '  pushframe config pair add family --album "Album X" --frame "Living Room"\n'
+        '  pushframe google-sync --pair family              # dry-run plan\n'
+        '  pushframe google-sync --pair family --apply      # mirror it\n'
+        '  pushframe google-sync --all                      # every pair, sorted\n'
+        '  pushframe schedule add nightly --pair family --every 1d\n'
+        '\n'
+        'With --pair/--all the album and frame come from the config — the\n'
+        'positional album argument is not needed. Each pair keeps its own\n'
+        'sync state (manifest + cache) under its name, so pairs never\n'
+        'interfere; `pair list` shows the mappings.\n'
+        '\n'
+        'Full reference: https://github.com/coredmp95/pushframe/blob/master/'
+        'docs/CLI.md#pairs--one-album--several-frames-and-back'
+    )
+
+
 def run_config(wizard_args=None, stdin_isatty: bool | None = None) -> int:
     """pushframe config — the command family (CFG-01..04).
 
@@ -381,6 +415,9 @@ def run_config(wizard_args=None, stdin_isatty: bool | None = None) -> int:
         # Phase 25 (MTF-01): the named-pair store (add/remove/list).
         from pushframe import pairs as pairs_mod
         sub = args[1:]
+        if sub and sub[0] in ('--help', '-h', 'help'):
+            _print_pair_help()
+            return 0
         if not sub or sub[0] == 'list':
             pairs_mod.pair_list()
             return 0
@@ -396,6 +433,8 @@ def run_config(wizard_args=None, stdin_isatty: bool | None = None) -> int:
             m, c = pairs_mod.pair_state_paths(name)
             print(f'pair "{name}" saved (album "{album}" → frame "{frame}")')
             print(f'  state: {m.parent} (+ cache {c})')
+            print(f'  run it: pushframe google-sync --pair {name} [--apply] '
+                  f'(or `schedule add nightly --pair {name} --every 1d`)')
             return 0
         if sub[0] == 'remove' and len(sub) >= 2:
             if pairs_mod.pair_remove(sub[1]):
@@ -407,7 +446,9 @@ def run_config(wizard_args=None, stdin_isatty: bool | None = None) -> int:
             return 0
         print('usage: pushframe config pair list | pair add <name> --album A '
               '--frame F | pair remove <name>')
-        return 1
+        print('run `pushframe config pair --help` for what a pair is and how '
+              'to use it')
+        return 2
 
     if args and args[0] == 'show':
         return _config_show()
@@ -1702,10 +1743,14 @@ def _main(argv=None) -> int:
                                 verbose=args.verbose, debug=args.debug)
     if args.command == 'google-sync':
         from pushframe.gsync import run_google_sync
-        if not args.all_pairs and not args.frame:
-            print('google-sync: give --frame FRAME (one pair) or --all '
-                  '(every configured pair)')
+        if not args.all_pairs and not args.pair and not args.frame:
+            print('google-sync: give --frame FRAME (one album→frame), '
+                  '--pair NAME (a named pair), or --all (every configured '
+                  'pair)')
             return 2
+        if (args.pair or args.all_pairs) and (args.album or args.frame):
+            print('note: with --pair/--all the album and frame come from the '
+                  'config — the positional album and --frame are ignored')
         return run_google_sync(args.album, args.frame or '--all',
                                apply=args.apply, yes=args.yes,
                                debug=args.debug, batch_size=args.batch_size,
