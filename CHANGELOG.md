@@ -14,6 +14,16 @@ frames; it is not affiliated with Aura Frames Inc.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The doc links on PyPI's project page work** — the README doubles as
+  the PyPI long_description, and its relative links (`docs/CLI.md`,
+  `CHANGELOG.md`, …) resolved against pypi.org there: dead ends. A build
+  hook now rewrites them to absolute GitHub URLs in the built artifacts
+  (wheel METADATA and sdist PKG-INFO both verified) and restores the
+  repo's README after the build — GitHub keeps its pretty relative
+  links.
+
 ### Changed
 
 - The email-report vocabulary is now identical across all six surfaces

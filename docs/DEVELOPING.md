@@ -105,6 +105,15 @@ updates in the same PR.
 
 ## Releasing
 
+> Build note: `hatch_build.py` rewrites the README's relative doc links to
+> absolute GitHub URLs while a wheel/sdist is being built (PyPI renders the
+> README with no repository context — relative links are dead ends there)
+> and restores the file when the build process exits. The repo README stays
+> relative; if you ever see `.README-orig.md` left behind, a build was
+> killed hard — just delete it.
+
+
+
 A release is one tag shipped to three channels simultaneously —
 [PyPI](https://pypi.org/project/pushframe/), a signed
 [APT repository](https://coredmp95.github.io/pushframe/) (GitHub Pages), and
