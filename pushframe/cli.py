@@ -597,17 +597,19 @@ def run_status(aura=None, debug: bool = False, google_session=None) -> int:
     built from the cookie vault — vault absent means `linked: no` with no
     network call.
     """
-    # Config health check (D-07) — must run first; never print the password
-    # value, only the literal set/NOT SET. IDN-04: PUSHFRAME_* primary,
-    # AURA_* legacy fallback.
+    # Config health check (D-07) — must run first. Name WHERE the
+    # credentials come from instead of raw env-var presence: a stored-
+    # session host (the common `pushframe config` install) is fully
+    # working with no PUSHFRAME_* variables at all, and the old
+    # "PUSHFRAME_EMAIL: NOT SET" lines read like a fault there. Same
+    # source vocabulary as `config show` (env / file). Never a secret.
+    # IDN-04: PUSHFRAME_* primary, AURA_* legacy fallback.
     email_set = bool(os.getenv('PUSHFRAME_EMAIL') or os.getenv('AURA_EMAIL'))
     password_set = bool(os.getenv('PUSHFRAME_PASSWORD') or os.getenv('AURA_PASSWORD'))
-    print(f"PUSHFRAME_EMAIL: {'set' if email_set else 'NOT SET'}")
-    print(f"PUSHFRAME_PASSWORD: {'set' if password_set else 'NOT SET'}")
-
     if email_set and password_set:
         # env path (roadmap §23 criterion 2: env overrides the file) — a
         # real login with the env credentials.
+        print('Config: environment (PUSHFRAME_EMAIL/PUSHFRAME_PASSWORD)')
         session = ('env', os.getenv('PUSHFRAME_EMAIL') or os.getenv('AURA_EMAIL'))
     else:
         # stored-session path (phase 23, criterion 1): no password-bearing
@@ -625,6 +627,8 @@ def run_status(aura=None, debug: bool = False, google_session=None) -> int:
             print('no credentials: set PUSHFRAME_EMAIL/PUSHFRAME_PASSWORD '
                   'or run `pushframe config`')
             return 1
+        print(f'Config: stored session ({Path(settings.CONFIG_PATH)} — '
+              f'created by `pushframe config`, no password needed)')
         session = ('stored', stored)
 
     aura = aura or Aura()

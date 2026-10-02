@@ -16,6 +16,12 @@ frames; it is not affiliated with Aura Frames Inc.
 
 ### Changed
 
+- `status` now names where the credentials come from — `Config: stored
+  session (~/.config/pushframe/config.json — created by `pushframe
+  config`, no password needed)` or `Config: environment
+  (PUSHFRAME_EMAIL/PUSHFRAME_PASSWORD)` — instead of printing
+  `PUSHFRAME_EMAIL/PASSWORD: NOT SET`, which read like a fault on the
+  common stored-session install where everything is in fact healthy.
 - `google-sync --apply` with a plan that has nothing to do now reports
   `Nothing to do — the frame already mirrors the album (…)` and stops: no
   y/N confirmation, no empty apply bar, no write calls — and a

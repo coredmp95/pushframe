@@ -319,19 +319,23 @@ pushframe status
 ```
 
 ```
-PUSHFRAME_EMAIL: set
-PUSHFRAME_PASSWORD: set
+Config: stored session (/home/you/.config/pushframe/config.json — created by `pushframe config`, no password needed)
 Logged in as you@example.com
 1 frames:
   - Living Room (id: 00000000-0000-0000-0000-000000000000)
 ```
 
-The credential check runs **before** any network call, and prints only `set` / `NOT SET` —
-never the password itself. If either is missing, it stops there and exits `1`:
+The first line names where the credentials come from: `Config: stored
+session (…)` after a `pushframe config` setup (the common install — no
+password is stored or needed, the session token is resumed), or
+`Config: environment (PUSHFRAME_EMAIL/PUSHFRAME_PASSWORD)` when env
+variables are set (they take precedence over the stored config; `config
+show` details per-setting sources). The check runs **before** any network
+call and never prints a secret; with no credentials at all it stops there
+and exits `1`:
 
 ```
-PUSHFRAME_EMAIL: set
-PUSHFRAME_PASSWORD: NOT SET
+no credentials: set PUSHFRAME_EMAIL/PUSHFRAME_PASSWORD or run `pushframe config`
 ```
 
 ## `inspect` — look at one frame

@@ -166,8 +166,9 @@ def test_status_missing_creds_exits_nonzero_no_network(monkeypatch, capsys):
 
     assert rc == 1
     out = capsys.readouterr().out
-    assert 'PUSHFRAME_EMAIL: NOT SET' in out
-    assert 'PUSHFRAME_PASSWORD: NOT SET' in out
+    assert 'no credentials' in out
+    assert 'pushframe config' in out
+    assert 'Config:' not in out  # no source line when nothing resolves
 
 
 def test_status_success_lists_frames_and_never_prints_password(monkeypatch, capsys):
@@ -178,8 +179,7 @@ def test_status_success_lists_frames_and_never_prints_password(monkeypatch, caps
 
     assert rc == 0
     out = capsys.readouterr().out
-    assert 'PUSHFRAME_EMAIL: set' in out
-    assert 'PUSHFRAME_PASSWORD: set' in out
+    assert 'Config: environment (PUSHFRAME_EMAIL/PUSHFRAME_PASSWORD)' in out
     assert 'Logged in as you@example.invalid' in out
     assert '1 frames:' in out
     assert 'Fake Frame' in out
@@ -222,6 +222,9 @@ def test_status_works_from_stored_session_without_env(tmp_path, monkeypatch, cap
 
     assert rc == 0
     out = capsys.readouterr().out
+    assert 'Config: stored session' in out
+    assert str(tmp_path / 'config.json') in out  # the config's origin, named
+    assert 'NOT SET' not in out  # a stored session is healthy, not a fault
     assert 'Logged in as vaulted@example.invalid' in out
     assert '1 frames:' in out and 'Fake Frame' in out
     assert 'tok-123' not in out
