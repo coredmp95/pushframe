@@ -627,6 +627,10 @@ def test_schedule_bare_help_still_prints_the_full_map(capsys):
     assert 'EMAIL REPORTS' in out
     assert 'EXAMPLES' in out
     assert 'schedule add nightly --pair family --every 1d --report INFO' in out
+    # 5.1.21: WHERE the --pair name comes from is spelled out in the epilog
+    # (the 2026-10-02 "how do I determine the name?" operator report).
+    assert 'config pair add <name> --album A --frame F' in out
+    assert 'pushframe config pair list' in out
 
 
 def test_gsync_report_level_error_silent_on_success(cfg_path, monkeypatch,

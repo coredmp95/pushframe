@@ -236,10 +236,15 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             'WHAT GETS SCHEDULED\n'
-            '  --pair NAME     a named album<->frame pair (config pair add): the timer\n'
+            '  --pair NAME     a named album<->frame pair: the timer\n'
             '                  runs `google-sync "<album>" --frame "<frame>" --apply\n'
             '                  --yes --scheduled` — the Google Photos album is mirrored\n'
             '                  onto the frame at each tick (the flagship flow).\n'
+            '                  NAME is the label YOU chose at install time:\n'
+            '                  `pushframe config pair add <name> --album A --frame F`;\n'
+            '                  list existing names with `pushframe config pair list`.\n'
+            '                  An unknown name is refused (the error lists the known\n'
+            '                  ones). No pair yet? --album/--frame works inline.\n'
             '  --album A --frame F       same google-sync run, without a named pair.\n'
             '  --sync-dir DIR --frame F  run the local-directory `sync` instead.\n'
             '  --at "OnCalendar"         explicit systemd calendar (e.g.\n'

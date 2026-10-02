@@ -54,8 +54,8 @@ def pair_resolve(name: str) -> dict:
     """The pair's {album, frame} spec; unknown names list the known ones."""
     stored = all_pairs()
     if name not in stored:
-        known = ', '.join(stored) if stored else '(none configured — '
-        'add one with `pushframe config pair add`)'
+        known = (', '.join(stored) if stored else
+                 '(none configured — add one with `pushframe config pair add`)')
         raise PairError(f'unknown pair "{name}". Known pairs: {known}')
     return stored[name]
 

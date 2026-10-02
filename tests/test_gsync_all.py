@@ -77,6 +77,10 @@ def test_run_by_unknown_pair_is_named_error(tmp_path, cfg_path, capsys):
     assert rc == 2
     out = capsys.readouterr().out
     assert 'unknown pair "ghost"' in out
+    # 5.1.21: the "none configured" remedy used to be truncated (the second
+    # half of the string literal sat orphaned on the next line).
+    assert 'none configured' in out
+    assert 'add one with `pushframe config pair add`' in out
 
 
 # --- --all: shared budget, continue-on-failure, exit codes -------------------

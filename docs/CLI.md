@@ -226,9 +226,17 @@ pushframe schedule remove nightly
 album onto a frame** — with `--pair NAME` it resolves the named pair (album →
 frame) and executes `pushframe google-sync "<album>" --frame "<frame>" --apply
 --yes --scheduled` at every tick: the album is mirrored onto the frame, exactly
-as a manual run. `--album A --frame F` schedules the same run without a named
-pair; `--sync-dir DIR --frame F` schedules the local-directory `sync` instead;
-`--at "OnCalendar"` (e.g. `"Mon *-*-* 02:00"`) replaces `--every Nmin|Nh|Nd`.
+as a manual run.
+
+Where does `NAME` come from? It is the label **you chose** when you created
+the pair (`pushframe config pair add <name> --album A --frame F`) — nothing
+to compute, just a name to remember. List the existing ones with
+`pushframe config pair list` (the `pairs:` line of `pushframe config show`
+summarizes them too); an unknown name is refused with the known ones listed,
+so a typo never installs a broken timer. No pair yet? `--album A --frame F`
+schedules the same run without a named pair; `--sync-dir DIR --frame F`
+schedules the local-directory `sync` instead; `--at "OnCalendar"` (e.g.
+`"Mon *-*-* 02:00"`) replaces `--every Nmin|Nh|Nd`.
 Everything comes from stored config (token session, pair spec) — a timed run
 NEVER prompts. `pushframe schedule --help` prints the same summary with
 examples. `Restart=no` on purpose: on failure (including the

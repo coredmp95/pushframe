@@ -501,7 +501,9 @@ pushframe schedule remove nightly
 The timer runs a `google-sync` **of the Google album onto the frame** at every
 tick (`--pair` resolves the named pair; `--sync-dir DIR --frame F` schedules a
 local-directory `sync` instead; `--at "OnCalendar"` allows exact times like
-`"Mon *-*-* 02:00"`). Units live under `~/.config/systemd/user/` — no root.
+`"Mon *-*-* 02:00"`). The pair NAME is the label you chose at
+`pushframe config pair add <name> --album A --frame F` — list existing names
+with `pushframe config pair list`. Units live under `~/.config/systemd/user/` — no root.
 Everything comes from stored config (session, pair), so a timed run **never
 prompts**. On failure the unit just ends and the next tick is the retry; logs
 land in `~/.local/state/pushframe/<job>.log`. In scheduled mode the mass-hide

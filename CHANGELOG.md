@@ -12,6 +12,24 @@ every channel.
 `pushframe` is an unofficial community CLI for Aura Frames digital photo
 frames; it is not affiliated with Aura Frames Inc.
 
+## [5.1.21] - 2026-10-02
+
+### Fixed
+
+- `unknown pair` error message with zero pairs configured no longer drops
+  its remedy — a multi-line string literal used to orphan half of it, so
+  the message read `Known pairs: (none configured —` and stopped there.
+  It now ends with `add one with \`pushframe config pair add\``.
+
+### Changed
+
+- Documentation: `schedule --help`, README and `docs/CLI.md` now state
+  WHERE the `--pair NAME` of `schedule add` comes from — the label chosen
+  at `config pair add <name> --album A --frame F`, listed by
+  `config pair list` — and that an unknown name is refused (the error
+  lists the known pairs). Answers the 2026-10-02 operator report "how do
+  I determine the pair name?".
+
 ## [5.1.20] - 2026-10-02
 
 ### Added
