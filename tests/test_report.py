@@ -385,6 +385,21 @@ def test_schedule_subcommand_flags_reach_the_verb(cfg_path, monkeypatch,
     assert 'smtp.example.com' in capsys.readouterr().out
 
 
+def test_schedule_bare_help_still_prints_the_full_map(capsys):
+    """5.1.13 regression: the tail stripping swallowed bare `schedule
+    --help` — it printed one usage line instead of the WHAT GETS SCHEDULED
+    / EMAIL REPORTS / EXAMPLES epilog. Bare --help stays argparse's."""
+    with pytest.raises(SystemExit) as exc:
+        from pushframe.cli import main
+        main(['schedule', '--help'])
+    assert exc.value.code == 0
+    out = capsys.readouterr().out
+    assert 'WHAT GETS SCHEDULED' in out
+    assert 'EMAIL REPORTS' in out
+    assert 'EXAMPLES' in out
+    assert 'schedule add nightly --pair family --every 1d --report INFO' in out
+
+
 def test_gsync_report_level_error_silent_on_success(cfg_path, monkeypatch,
                                                     capsys):
     _clean_env(monkeypatch)

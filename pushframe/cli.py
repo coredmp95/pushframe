@@ -1757,15 +1757,30 @@ def _main(argv=None) -> int:
         i = argv_list.index('schedule')
         schedule_tail = argv_list[i + 1:]
         argv_list = argv_list[:i + 1]
+        if schedule_tail and schedule_tail[0] in ('-h', '--help'):
+            # argparse owns bare --help (the epilog map): re-attach it and
+            # let the normal path print it (the 5.1.13 stripping swallowed
+            # `schedule --help` into a bare usage line). The word `help`
+            # stays in the tail — the dispatcher prints the map for it.
+            argv_list = argv_list + [schedule_tail[0]]
+            schedule_tail = []
     elif argv_list is None and 'schedule' in (sys.argv[1:] or []):
         i = sys.argv.index('schedule')
         schedule_tail = sys.argv[i + 1:]
         sys.argv = sys.argv[:i + 1]
+        if schedule_tail and schedule_tail[0] in ('-h', '--help'):
+            sys.argv = sys.argv + [schedule_tail[0]]
+            schedule_tail = []
     args = parser.parse_args(argv_list)
     if args.command == 'config' and config_tail:
         args.config_args = config_tail
     if args.command == 'schedule':
         args.schedule_args = schedule_tail
+        if schedule_tail and schedule_tail[0] == 'help':
+            # The word (bare `schedule help`) prints the same full map as
+            # `schedule --help` — the tail stripping means argparse never
+            # saw it.
+            parser.parse_args(['schedule', '--help'])
 
     if args.command == 'config':
         return run_config(wizard_args=getattr(args, 'config_args', []) or [])
@@ -1796,8 +1811,13 @@ def _main(argv=None) -> int:
                                     report_to=_opt('--report-to'))
         if sub[0] == 'remove' and len(sub) >= 2:
             return sch.schedule_remove(sub[1])
+        if sub[0] == 'help':
+            # Caught upstream too; this branch keeps the contract local.
+            parser.parse_args(['schedule', '--help'])
         print('usage: pushframe schedule add <job> --pair <name> --every Nmin|Nh|Nd '
               '| schedule list | schedule remove <job>')
+        print('run `pushframe schedule --help` for the full map '
+              '(what gets scheduled, email reports, examples)')
         return 1
     if args.command == 'logout':
         return run_logout()
