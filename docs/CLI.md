@@ -284,11 +284,7 @@ output), `config set report_from …` — and `config show` lists the transport
 `PUSHFRAME_REPORT_TO` overrides, password as `***`). `config get <key>`
 reads one back.)
 
-Then pick a level per job:
-
-```bash
-pushframe schedule add nightly --pair cadre-venus --every 1d --report INFO
-```
+The levels, everywhere the same contract:
 
 | Level | Emails… |
 |---|---|
@@ -299,12 +295,10 @@ pushframe schedule add nightly --pair cadre-venus --every 1d --report INFO
 The subject names the outcome at a glance: `[pushframe] nightly: OK — Applied:
 111 uploaded, 2 hidden, 0 re-shown`, `[pushframe] nightly: FAILED — …reason…`,
 `[pushframe] nightly: ATTENTION — …skip reason…` on an ERROR-level problem
-with exit 0. A manual run can email too: `pushframe google-sync --pair
-cadre-venus --apply --report INFO`. The SMTP settings live in the config file
-(`0600`; the password is prompted hidden, or `PUSHFRAME_SMTP_PASSWORD`), and
-`PUSHFRAME_REPORT_TO` / `PUSHFRAME_SMTP_*` override at use time. A delivery
-problem is printed as a warning and never changes the run's exit code — and a
-run with nothing to do simply emails `OK — nothing to do` at DEBUG/INFO.
+with exit 0. The SMTP settings live in the config file (`0600`; the password
+is prompted hidden, or `PUSHFRAME_SMTP_PASSWORD`). A delivery problem is
+printed as a warning and never changes the run's exit code — and a run with
+nothing to do simply emails `OK — nothing to do` at DEBUG/INFO.
 
 ## `config` — set up credentials and settings once
 

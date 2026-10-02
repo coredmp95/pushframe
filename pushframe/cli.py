@@ -217,10 +217,13 @@ def build_parser() -> argparse.ArgumentParser:
              'instead of proceeding (used by pushframe schedule units)')
     gsync_parser.add_argument(
         '--report', default=None,
-        help='Email a run report at DEBUG (every run, traces), INFO (every '
-             'run, summary) or ERROR (only on failure / potential problem). '
-             'Transport setup: `pushframe schedule report --to ... '
-             '--smtp-host ...`')
+        help='Email a run report. DEBUG: every run (full output + the run\'s '
+             'log tail — precise traces when something is not quite '
+             'right); INFO: every run (the summary — frames synced, photos, '
+             'actions); ERROR: only when a run failed or carries a '
+             'potential problem (silence means healthy). Transport '
+             '(one-time): `pushframe schedule report --to ... --smtp-host '
+             '...`')
     gsync_parser.add_argument(
         '--report-to', default=None, dest='report_to',
         help='Override the configured report recipient')
@@ -242,13 +245,18 @@ def build_parser() -> argparse.ArgumentParser:
             '  --at "OnCalendar"         explicit systemd calendar (e.g.\n'
             '                  "Mon *-*-* 02:00") instead of --every Nmin|Nh|Nd.\n'
             '\n'
-            'EMAIL REPORTS (--report on a google-sync job)\n'
+            'EMAIL REPORTS (scheduled google-sync jobs can email their run report)\n'
+            '  Two halves: `schedule report` configures WHERE the emails go (a\n'
+            '  one-time transport setup); `--report LEVEL` on the job decides\n'
+            '  WHICH runs email and how much detail.\n'
             '  pushframe schedule report --to you@example.com --smtp-host smtp.example.com\n'
             '                  [--smtp-port 587] [--smtp-user U]   one-time setup\n'
             '  pushframe schedule report --test    send a trial email now\n'
-            '  --report DEBUG    every run, full traces (something looks off)\n'
-            '  --report INFO     every run, the summary (frames, photos, actions)\n'
-            '  --report ERROR    only when a run failed or looks wrong\n'
+            '  --report DEBUG    every run: full output + the run\'s log tail\n'
+            '                    (precise traces when something is not quite right)\n'
+            '  --report INFO     every run: the summary (frames synced, photos, actions)\n'
+            '  --report ERROR    only when a run failed or carries a potential\n'
+            '                    problem — silence means healthy\n'
             '\n'
             'EXAMPLES\n'
             '  pushframe schedule add nightly --pair family --every 1d --report INFO\n'
@@ -787,7 +795,8 @@ def _print_set_help() -> None:
         '                  --frame default when a verb allows omitting it\n'
         '  debug           True/False — verbose request/response logging by default\n'
         '\n'
-        'Email-report transport (consumed by `schedule add … --report`;\n'
+        'Email-report transport — WHERE the report emails go (consumed by\n'
+        '`schedule add … --report`, which decides WHICH runs email;\n'
         'PUSHFRAME_REPORT_TO / PUSHFRAME_SMTP_* override at use time):\n'
         '  report_to       Recipient address of the run reports\n'
         '  smtp_host       SMTP relay hostname (e.g. smtp.example.com)\n'

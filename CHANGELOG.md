@@ -12,6 +12,18 @@ every channel.
 `pushframe` is an unofficial community CLI for Aura Frames digital photo
 frames; it is not affiliated with Aura Frames Inc.
 
+## [Unreleased]
+
+### Changed
+
+- The email-report vocabulary is now identical across all six surfaces
+  (docs, schedule --help epilog, schedule report --help, config set
+  --help, the --report flag help, and report.py's level table): the
+  WHERE-transport vs WHICH-level distinction leads everywhere, and each
+  level states the same contract — DEBUG every run with full output + log
+  tail, INFO every run with the summary, ERROR only on a problem (silence
+  means healthy).
+
 ## [5.1.18] - 2026-10-02
 
 ### Added
