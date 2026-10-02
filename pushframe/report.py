@@ -276,6 +276,9 @@ def configure(args: list[str], *, stdin_isatty: bool | None = None,
     i = 0
     while i < len(args):
         arg = args[i]
+        if arg in ('--help', '-h', 'help'):
+            print(_USAGE)
+            return 0
         if arg in _SET_FLAGS:
             if i + 1 >= len(args):
                 print(f'schedule report: {arg} needs a value')

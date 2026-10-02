@@ -409,6 +409,19 @@ def test_report_configure_unknown_argument_prints_usage(cfg_path, capsys):
     assert 'usage: pushframe schedule report' in capsys.readouterr().out
 
 
+def test_report_configure_help_prints_the_map(cfg_path, capsys):
+    """`schedule report --help` explains the whole configurator without
+    touching anything (it used to be just the unknown-argument usage)."""
+    from pushframe.report import configure
+    assert configure(['--help']) == 0
+    out = capsys.readouterr().out
+    assert 'usage: pushframe schedule report' in out
+    assert 'DEBUG' in out and 'INFO' in out and 'ERROR' in out
+    assert '--test' in out and '--disable' in out
+    # `help` (the word) takes the same path
+    assert configure(['help']) == 0
+
+
 # --- CLI plumbing ------------------------------------------------------------
 
 def test_gsync_report_flag_sends_and_keeps_exit_code(cfg_path, monkeypatch,

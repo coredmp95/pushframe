@@ -247,22 +247,42 @@ Two safety properties in scheduled mode:
 
 ### Email run reports — `schedule report` + `google-sync --report`
 
-Scheduled jobs can email their report. Configure the transport once:
+Scheduled jobs can email their report. There are two halves to keep apart:
+
+- **`schedule report`** configures **WHERE the emails go** (the SMTP
+  transport) — a one-time setup, stored in the config;
+- **`--report LEVEL`** (on `schedule add`) decides **WHICH runs email and
+  how much detail** — chosen per job at install time.
+
+The whole story, end to end:
 
 ```bash
+# 1. One-time: where the emails go (transport). Both keys are needed;
+#    if the relay wants a login, add --smtp-user/--smtp-password.
 pushframe schedule report --to you@example.com --smtp-host smtp.example.com
-pushframe schedule report --test        # a trial email lands in the inbox
-pushframe schedule report               # show what is configured
-pushframe schedule report --disable     # forget it
+
+# 2. One-time: make sure it actually reaches the inbox.
+pushframe schedule report --test
+
+# 3. Install the job AND pick what you want to hear:
+pushframe schedule add nightly --pair cadre-venus --every 1d --report ERROR
+
+# Later: what's configured? / turn the feature off?
+pushframe schedule report               # show the transport
+pushframe schedule report --disable     # forget it (jobs keep running, silently)
+
+# A manual run can email too, same levels:
+pushframe google-sync --pair cadre-venus --apply --report INFO
 ```
 
-The same settings are plain config keys — `pushframe config set report_to
+(`schedule report --help` prints this map from the terminal. The same
+settings are plain config keys — `pushframe config set report_to
 you@example.com`, `config set smtp_host …`, `config set smtp_port …`,
 `config set smtp_user …`, `config set smtp_password …` (redacted in every
 output), `config set report_from …` — and `config show` lists the transport
 (whether it came from the file or from `PUSHFRAME_SMTP_*` /
-`PUSHFRAME_REPORT_TO` overrides, password as `***`) with the trial-email
-next step. `config get <key>` reads one back.
+`PUSHFRAME_REPORT_TO` overrides, password as `***`). `config get <key>`
+reads one back.)
 
 Then pick a level per job:
 
