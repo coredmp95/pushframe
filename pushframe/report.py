@@ -31,14 +31,39 @@ from pathlib import Path
 
 LEVELS = ('DEBUG', 'INFO', 'ERROR')
 
-# Strings OUR OWN run output uses to flag a problem on a zero exit
-# (curated from gsync.py's messages — keep in sync with them).
+# Strings OUR OWN run output uses to flag a problem on a zero exit — one
+# entry per real message, named after the gsync.py line that prints it
+# (tests/test_report.py pins one test per marker; keep both in sync with
+# gsync.py):
 _PROBLEM_MARKERS = (
-    'failed:',                        # 'google-sync failed: …' / 'Login failed:'
-    'FAILED',                         # upload(s) FAILED / [FAILED] pair
-    'failed and were NOT synced',     # download failures
-    'SKIPPED (--scheduled)',          # mass-hide skip on a timer
-    ' Aborted:',                      # rate-limit abort
+    # 'google-sync failed: …' / 'Login failed: …' /
+    # 'google-sync failed: apply aborted: …' (all exit 1 — broad net in
+    # case a future path forgets to propagate the failure)
+    'failed:',
+    # '{n} upload(s) FAILED — no manifest entry written; they will retry next run'
+    'upload(s) FAILED',
+    # '--- --all report ---' then '  [FAILED] pair-name' (--all exits 1;
+    # the marker keeps the email working even if that contract drifts)
+    '[FAILED]',
+    # '{n} download(s) failed and were NOT synced (they will retry next run)'
+    'download(s) failed',
+    # TMR-03: 'SKIPPED (--scheduled): this plan would hide too many photos
+    # (over the mass-hide safety threshold) — no photos were hidden.' —
+    # exit 0 BY DESIGN (the unit must not fail over a safety decision),
+    # but the operator must hear about it
+    'SKIPPED (--scheduled)',
+    # 'google-sync stopped: {e}' — the anti-abuse trip (gsync exits 1;
+    # marker is the safety net)
+    'google-sync stopped:',
+    # '⚠ {n} of {m} photos on "{frame}" … would be hidden — over the
+    # {t}% mass-hide safety threshold.' — printed when an over-threshold
+    # plan IS applied (interactive y, or --yes): a deliberate but
+    # potentially destructive action worth an ERROR email
+    '⚠',
+    # 'Aborted: {error}' — the RateLimitError abort. 'Aborted.' PLAIN
+    # (period, no colon) is a deliberate operator decline at a
+    # confirmation: NOT a problem — and it does not contain this marker.
+    'Aborted:',
 )
 
 _USAGE = (

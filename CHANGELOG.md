@@ -12,6 +12,18 @@ every channel.
 `pushframe` is an unofficial community CLI for Aura Frames digital photo
 frames; it is not affiliated with Aura Frames Inc.
 
+## [Unreleased]
+
+### Changed
+
+- The ERROR report level's problem detection is now a precise, tested
+  marker list — one per real message: failed/aborted/stopped prefixes,
+  `upload(s) FAILED`, `[FAILED]` pair lines, `download(s) failed`, the
+  scheduled mass-hide `SKIPPED (--scheduled)`, the `⚠` over-threshold
+  plan-applied warning, and `Aborted: <error>` (rate-limit abort) — while
+  the plain `Aborted.` of an operator declining a confirmation stays
+  silent. One test per marker pins the contract.
+
 ## [5.1.14] - 2026-10-02
 
 ### Fixed

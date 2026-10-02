@@ -97,7 +97,78 @@ def test_should_send_contract():
     assert should_send('ERROR', 0, OK_OUT) is False    # healthy run: silent
     assert should_send('ERROR', 1, FAIL_OUT) is True   # failure
     assert should_send('ERROR', 0, TRIP_OUT) is True   # potential problem
-    assert should_send('ERROR', 0, '2 upload(s) FAILED — no manifest') is True
+
+
+# --- one test per ERROR-level marker (markers mirror gsync.py's prints) ------
+
+def test_error_marker_sync_failed_prefix():
+    """'google-sync failed: …' — every named failure path in gsync prints
+    this prefix; broad net in case a future path forgets to propagate the
+    non-zero exit."""
+    from pushframe.report import should_send
+    assert should_send('ERROR', 1, 'google-sync failed: reading frame '
+                                      'assets failed: 401') is True
+    assert should_send('ERROR', 0, 'Login failed: bad credentials') is True
+
+
+def test_error_marker_uploads_failed():
+    """'{n} upload(s) FAILED — no manifest entry written; they will retry
+    next run' — the MPO-era partial failure: the run exits 0 (retry next
+    run) but photos are missing from the frame."""
+    from pushframe.report import should_send
+    out = '2 upload(s) FAILED — no manifest entry written; they will retry next run'
+    assert should_send('ERROR', 0, out) is True
+
+
+def test_error_marker_all_report_pair_failed():
+    """'  [FAILED] pair-name' — the --all per-pair report line."""
+    from pushframe.report import should_send
+    out = '--- --all report ---\n  [ok] a-first\n  [FAILED] b-second'
+    assert should_send('ERROR', 0, out) is True
+
+
+def test_error_marker_downloads_failed():
+    """'{n} download(s) failed and were NOT synced (they will retry next
+    run)' — SAFE-04's fail-closed download path."""
+    from pushframe.report import should_send
+    out = '1 download(s) failed and were NOT synced (they will retry next run)'
+    assert should_send('ERROR', 0, out) is True
+
+
+def test_error_marker_scheduled_mass_hide_skip():
+    """'SKIPPED (--scheduled): this plan would hide too many photos …' —
+    TMR-03's exit-0-by-design skip: the unit must not fail over a safety
+    decision, but the operator must hear about it."""
+    from pushframe.report import should_send
+    assert should_send('ERROR', 0, TRIP_OUT) is True
+
+
+def test_error_marker_anti_abuse_stop():
+    """'google-sync stopped: …' — the anti-abuse trip body signature."""
+    from pushframe.report import should_send
+    out = ('google-sync stopped: Client error \'401 Unauthorized\'\n'
+           '3 item(s) confirmed written and ARE on the frame; …')
+    assert should_send('ERROR', 0, out) is True
+
+
+def test_error_marker_over_threshold_plan_applied():
+    """'⚠ {n} of {m} photos … over the 20% mass-hide safety threshold.' —
+    printed when an over-threshold plan IS applied (interactive y or
+    --yes): deliberate, but worth hearing about."""
+    from pushframe.report import should_send
+    out = ('⚠ 9 of 10 photos on "Living Room" (id: 00000000) would be '
+           'hidden — over the 20% mass-hide safety threshold.')
+    assert should_send('ERROR', 0, out) is True
+
+
+def test_error_marker_rate_limit_abort_but_not_a_decline():
+    """'Aborted: {error}' (with colon) is the RateLimitError abort — a
+    problem. 'Aborted.' PLAIN (no colon) is the operator's deliberate 'n'
+    at a confirmation prompt — NOT a problem: no email."""
+    from pushframe.report import should_send
+    assert should_send('ERROR', 0,
+                       'Aborted: Client error \'429 Too Many Requests\'') is True
+    assert should_send('ERROR', 0, 'Plan: 3 to upload\nAborted.') is False
 
 
 def test_normalize_level():

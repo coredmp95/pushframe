@@ -266,7 +266,7 @@ pushframe schedule add nightly --pair cadre-venus --every 1d --report INFO
 |---|---|
 | `--report DEBUG` | **every run**, full run output **plus the last 100 lines of the run's log file** — for when something is not quite right and you need precise traces |
 | `--report INFO` | **every run**, the summary: plan counts, `Applied: …`, per-pair sections — knowing what happened (frames synced, photos, actions) |
-| `--report ERROR` | **only when a run failed or carries a potential problem**: non-zero exit, failed uploads/downloads, a scheduled mass-hide skip, an aborted run |
+| `--report ERROR` | **only when a run failed or carries a potential problem** — precisely: any non-zero exit, `upload(s) FAILED` (partial uploads, retried next run), a `[FAILED]` pair in an `--all` report, `download(s) failed` (SAFE-04), the scheduled mass-hide `SKIPPED (--scheduled)`, the anti-abuse `google-sync stopped:`, an over-threshold plan actually applied (`⚠ …`), or `Aborted: <error>` (a rate-limit abort — NOT the plain `Aborted.` of an operator declining a confirmation, which emails nothing) |
 
 The subject names the outcome at a glance: `[pushframe] nightly: OK — Applied:
 111 uploaded, 2 hidden, 0 re-shown`, `[pushframe] nightly: FAILED — …reason…`,
