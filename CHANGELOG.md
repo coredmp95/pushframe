@@ -12,6 +12,15 @@ every channel.
 `pushframe` is an unofficial community CLI for Aura Frames digital photo
 frames; it is not affiliated with Aura Frames Inc.
 
+## [5.1.14] - 2026-10-02
+
+### Fixed
+
+- Bare `schedule --help` / `-h` / `help` print the full map again (WHAT
+  GETS SCHEDULED / EMAIL REPORTS / EXAMPLES) — the 5.1.13 argument
+  passthrough for schedule's flags had swallowed them into a one-line
+  usage. Regression caught on the live install right after 5.1.13.
+
 ## [5.1.13] - 2026-10-02
 
 ### Added
