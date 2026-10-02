@@ -12,6 +12,35 @@ every channel.
 `pushframe` is an unofficial community CLI for Aura Frames digital photo
 frames; it is not affiliated with Aura Frames Inc.
 
+## [Unreleased]
+
+### Fixed
+
+- `schedule report` no longer mis-stores a malformed tail silently:
+  `--to --test` used to store the literal `--test` as the report recipient
+  (and swallow the `--test` action — discovered only when the first email
+  failed), and `--to a --to b` used to let the second value win without a
+  word. Both are now named usage errors (exit 2), nothing stored. The
+  configurator runs on the ONE strict tail parser
+  (`_parse_flag_value_tail`), extended with a nameless mode and valueless
+  boolean flags (`--show` / `--test` / `--disable`) for the job — the
+  unknown-argument shape now lists every valid flag too.
+- `config import` parses its tail with the same engine: a dangling
+  `--file` (which used to fall back to importing `.env` silently — you
+  thought you imported your file), an unknown token (silently ignored
+  before), a duplicated `--file` (the first used to win without a word)
+  and a stray positional are now named usage errors (exit 2). The bare
+  `config import` form and `--file PATH` are unchanged.
+- The small verbs no longer swallow extras silently: `config set KEY
+  VALUE extra`, `config get KEY extra`, `config pair remove NAME extra`,
+  `schedule remove JOB extra` and `schedule list extra` fail with a named
+  usage error (exit 2) instead of ignoring the word; a value starting
+  with `--` is refused by `config set` (a missing KEY used to be stored
+  as a setting). And the argv router matches the `config`/`schedule`
+  verb word at position one only — a frame literally named `config`
+  (`google-sync "config" --frame config`) used to truncate the command
+  line at the name and die in argparse on the dangling `--frame`.
+
 ## [5.1.24] - 2026-10-02
 
 ### Changed

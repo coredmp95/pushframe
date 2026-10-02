@@ -300,6 +300,50 @@ def test_import_golden_same_effective_config_as_env_path(cfg_path, monkeypatch, 
     assert settings.AURA_COUNTRY == store.setting("AURA_COUNTRY")
 
 
+def test_import_dangling_file_flag_is_named_error(cfg_path, capsys):
+    """`--file` with no value used to fall back to importing `.env`
+    silently — you thought you imported your file. Now a named usage
+    error (exit 2), nothing touched."""
+    from pushframe.cli import run_config
+    assert run_config(wizard_args=['import', '--file']) == 2
+    out = capsys.readouterr().out
+    assert '--file needs a value' in out
+    assert 'usage: pushframe config import' in out
+    assert not cfg_path.exists()
+
+
+def test_import_unknown_token_and_stray_word_are_named_errors(cfg_path, capsys):
+    """Unknown tokens used to be ignored silently (the default `.env`
+    import still ran); a stray positional was swallowed too."""
+    from pushframe.cli import run_config
+    assert run_config(wizard_args=['import', '--fille', 'x']) == 2
+    out = capsys.readouterr().out
+    assert 'unknown option "--fille"' in out
+    assert '--file' in out                       # the valid one is listed
+    assert run_config(wizard_args=['import', 'myenv']) == 2
+    assert 'unexpected "myenv"' in capsys.readouterr().out
+    assert not cfg_path.exists()
+
+
+def test_import_duplicated_file_flag_is_named_error(cfg_path, capsys):
+    """Two `--file` flags used to let the FIRST win silently."""
+    from pushframe.cli import run_config
+    assert run_config(
+        wizard_args=['import', '--file', 'a.env', '--file', 'b.env']) == 2
+    assert 'given twice' in capsys.readouterr().out
+    assert not cfg_path.exists()
+
+
+def test_import_bare_without_env_file_fails_named(cfg_path, monkeypatch, capsys,
+                                                 tmp_path):
+    """The bare `config import` form is unchanged: no `.env` in cwd →
+    named exit 1, nothing stored."""
+    from pushframe.cli import run_config
+    monkeypatch.chdir(tmp_path)
+    assert run_config(wizard_args=['import']) == 1
+    assert '.env not found' in capsys.readouterr().out
+
+
 def test_set_get_path_and_unknown_key(cfg_path, capsys):
     from pushframe.cli import run_config
     assert run_config(wizard_args=["set", "AURA_WRITE_BUDGET_CAPACITY", "60"]) == 0
@@ -311,6 +355,46 @@ def test_set_get_path_and_unknown_key(cfg_path, capsys):
     assert "LOCALE" in capsys.readouterr().out  # known keys listed
     # auth_token is wizard-only
     assert run_config(wizard_args=["set", "auth_token", "x"]) == 1  # noqa: S105
+
+
+def test_set_extra_word_and_flaglike_value_are_named_errors(cfg_path, capsys):
+    """`config set KEY VALUE extra` used to ignore `extra` silently; a
+    value starting with `--` used to be stored without a word (almost
+    always a missing KEY)."""
+    from pushframe.cli import run_config
+    assert run_config(
+        wizard_args=["set", "AURA_WRITE_BUDGET_CAPACITY", "60", "extra"]) == 2
+    out = capsys.readouterr().out
+    assert 'unexpected "extra"' in out
+    assert 'usage: pushframe config set <key> <value>' in out
+    assert run_config(
+        wizard_args=["set", "--VALUE", "60"]) == 2
+    assert 'starts with "--"' in capsys.readouterr().out
+    assert not cfg_path.exists()
+
+
+def test_report_set_extra_word_and_flaglike_value_are_named_errors(
+        cfg_path, capsys):
+    """The report-key spelling gets the same guards."""
+    from pushframe.cli import run_config
+    assert run_config(
+        wizard_args=["set", "report_to", "me@example.com", "oops"]) == 2
+    out = capsys.readouterr().out
+    assert 'unexpected "oops"' in out
+    assert 'usage: pushframe config set report_to <value>' in out
+    assert run_config(
+        wizard_args=["set", "report_to", "--oops"]) == 2
+    assert 'looks like a flag, not a value' in capsys.readouterr().out
+    assert not cfg_path.exists()
+
+
+def test_get_extra_word_is_a_named_error(cfg_path, capsys):
+    """`config get KEY extra` used to ignore `extra` silently."""
+    from pushframe.cli import run_config
+    assert run_config(wizard_args=["get", "LOCALE", "extra"]) == 2
+    out = capsys.readouterr().out
+    assert 'unexpected "extra"' in out
+    assert 'usage: pushframe config get <key>' in out
 
 
 def test_config_help_prints_the_subcommand_map_not_the_wizard(capsys):

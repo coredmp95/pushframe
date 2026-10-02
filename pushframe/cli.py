@@ -478,6 +478,10 @@ def run_config(wizard_args=None, stdin_isatty: bool | None = None) -> int:
                 print('pair remove: needs a pair name — '
                       '`pushframe config pair list` shows the configured ones')
                 return 2
+            if len(sub) > 2:
+                print(f'pair remove: unexpected "{sub[2]}" — '
+                      'usage: pushframe config pair remove <name>')
+                return 2
             if pairs_mod.pair_remove(sub[1]):
                 print(f'pair "{sub[1]}" removed (its state files, if any, '
                       f'are left in place under pairs/{sub[1]}/ — delete '
@@ -510,6 +514,10 @@ def run_config(wizard_args=None, stdin_isatty: bool | None = None) -> int:
         if len(args) < 2:
             print('usage: pushframe config get <key>')
             return 1
+        if len(args) > 2:
+            print(f'config get: unexpected "{args[2]}" — '
+                  'usage: pushframe config get <key>')
+            return 2
         name = args[1]
         if name in _REPORT_KEY_ALIASES:
             from pushframe import report as report_mod
@@ -747,11 +755,19 @@ def _config_import(argv: list[str]) -> int:
     """CFG-03: migrate an .env into the config file — storing only keys the
     environment does NOT already resolve (never store what env provides)."""
     import json as _json
-    file_arg = None
-    if '--file' in argv:
-        i = argv.index('--file')
-        file_arg = argv[i + 1] if i + 1 < len(argv) else None
-    path = Path(file_arg or '.env')
+    # The same ONE strict tail parser as schedule add / pair add / report
+    # (nameless mode): a malformed tail is a named usage error (exit 2) —
+    # a dangling `--file` used to fall back to importing `.env` silently,
+    # unknown tokens were ignored, and the first of two `--file` flags won
+    # without a word.
+    rc, _name, opts = _parse_flag_value_tail(
+        argv, prefix='config import', flags=('--file',),
+        usage='usage: pushframe config import [--file FILE]',
+        next_cmd='pushframe config --help', next_note='for the config family',
+        name_label=None)
+    if rc != 0:
+        return rc
+    path = Path(opts.get('--file') or '.env')
     if not path.exists():
         print(f'config import: {path} not found.')
         return 1
@@ -773,8 +789,6 @@ def _config_import(argv: list[str]) -> int:
         if name is None:
             # keep the documented settings spelling in the error
             name = raw_key
-            skipped[raw_key] = 'unknown setting'
-            continue
             skipped[raw_key] = 'unknown setting'
             continue
         if settings.shadowed_keys({name: value}):
@@ -854,6 +868,14 @@ def _config_report_set(op_name: str, argv: list[str]) -> int:
     if not argv:
         print(f'usage: pushframe config set {op_name} <value>')
         return 1
+    if len(argv) > 1:
+        print(f'config set {op_name}: unexpected "{argv[1]}" — '
+              f'usage: pushframe config set {op_name} <value>')
+        return 2
+    if argv[0].startswith('--'):
+        print(f'config set {op_name}: "{argv[0]}" looks like a flag, not a '
+              'value — set takes exactly KEY VALUE')
+        return 2
     from pushframe import config_store
     data = config_store.load()
     stored = data.get('report', {}) or {}
@@ -874,6 +896,20 @@ def _config_set(argv: list[str]) -> int:
         print('run `pushframe config set --help` for every key, explained')
         return 1
     name, value = argv[0], argv[1]
+    if name.startswith('--'):
+        print(f'config set: the key "{name}" starts with "--" — '
+              'that looks like a flag, not a key (set takes exactly '
+              'KEY VALUE)')
+        return 2
+    if len(argv) > 2:
+        print(f'config set: unexpected "{argv[2]}" — '
+              'usage: pushframe config set <key> <value>')
+        return 2
+    if value.startswith('--'):
+        print(f'config set: the value for {name!r} starts with "--" — '
+              'that looks like a flag, not a value (set takes exactly '
+              'KEY VALUE)')
+        return 2
     if name in ('email', 'auth_token'):
         print(f'{name!r} is managed by the wizard: run `pushframe config`.')
         return 1
@@ -2044,20 +2080,29 @@ _SCHEDULE_ADD_USAGE = ('usage: pushframe schedule add <job> --pair NAME '
 
 def _parse_flag_value_tail(
         tail: list[str], *, prefix: str, flags: tuple[str, ...], usage: str,
-        next_cmd: str, next_note: str, name_label: str = 'job',
+        next_cmd: str, next_note: str, name_label: str | None = 'job',
         required: tuple[str, ...] = (), required_note: str = '',
         int_flags: tuple[str, ...] = (),
+        bool_flags: tuple[str, ...] = (),
 ) -> tuple[int, str | None, dict | None]:
     """The ONE strict engine for `<name> --flag VALUE …` tails — shared by
     `schedule add` and `config pair add` (factored 2026-10-02; both used to
-    hand-roll the same indexer, and both could crash on a malformed tail).
+    hand-roll the same indexer, and both could crash on a malformed tail)
+    and by the nameless `schedule report` configurator.
 
     A named usage error (exit 2, nothing installed) on: a missing name
     (it must come right after the verb, before any --flag), a stray word,
     an unknown flag (valid ones listed), a duplicated flag, a dangling
     flag, a non-integer int_flags value, or a missing `required` flag.
     Every error prints the usage line and the next-step pointer.
-    Returns (rc, name, opts): opts values are str, with int_flags cast.
+    Returns (rc, name, opts): opts values are str, with int_flags cast;
+    `bool_flags` land as True and take no value (a bool flag followed by
+    another flag is two flags, never a value — so `--to --test` is still
+    a dangling `--to`, not a recipient called "--test").
+
+    `name_label=None` parses a NAMELESS tail (`--flag VALUE …` from index
+    0) for configurators with no positional; every other contract holds
+    unchanged.
     """
 
     def _fail(msg: str) -> tuple[int, None, None]:
@@ -2066,12 +2111,16 @@ def _parse_flag_value_tail(
         print(f'run `{next_cmd}` {next_note}')
         return 2, None, None
 
-    if len(tail) < 2 or tail[1].startswith('--'):
-        return _fail(f'the {name_label} name is missing — it must come '
-                     'right after `add`, before any --flag')
-    name = tail[1]
+    if name_label is None:
+        name = None
+        i = 0
+    else:
+        if len(tail) < 2 or tail[1].startswith('--'):
+            return _fail(f'the {name_label} name is missing — it must come '
+                         'right after `add`, before any --flag')
+        name = tail[1]
+        i = 2
     opts: dict = {}
-    i = 2
     while i < len(tail):
         tok = tail[i]
         if not tok.startswith('--'):
@@ -2082,6 +2131,10 @@ def _parse_flag_value_tail(
                          + ', '.join(flags))
         if tok in opts:
             return _fail(f'{tok} given twice — one value per flag')
+        if tok in bool_flags:
+            opts[tok] = True
+            i += 1
+            continue
         if i + 1 >= len(tail) or tail[i + 1].startswith('--'):
             return _fail(f'{tok} needs a value — a flag left dangling '
                          'breaks the command')
@@ -2160,31 +2213,35 @@ def _main(argv=None) -> int:
     argv_list = list(argv) if argv is not None else None
     config_tail = []
     schedule_tail = []
-    if argv_list is not None and 'config' in argv_list:
-        i = argv_list.index('config')
-        config_tail = argv_list[i + 1:]
-        argv_list = argv_list[:i + 1]
-    elif argv_list is None and 'config' in (sys.argv[1:] or []):
-        i = sys.argv.index('config')
-        config_tail = sys.argv[i + 1:]
-        sys.argv = sys.argv[:i + 1]
-    elif argv_list is not None and 'schedule' in argv_list:
-        i = argv_list.index('schedule')
-        schedule_tail = argv_list[i + 1:]
-        argv_list = argv_list[:i + 1]
+    # The verb word is matched at argv POSITION ONE only (`pushframe
+    # config …`): matching it anywhere used to truncate the command line
+    # at a literal frame/job name — `google-sync "Cadre" --frame config`
+    # (a frame named "config") left argparse a dangling --frame.
+    verb = (argv_list[0] if argv_list is not None
+            else (sys.argv[1] if len(sys.argv) > 1 else None))
+    if verb == 'config':
+        if argv_list is not None:
+            config_tail = argv_list[1:]
+            argv_list = argv_list[:1]
+        else:
+            config_tail = sys.argv[2:]
+            sys.argv = sys.argv[:2]
+    elif verb == 'schedule':
+        schedule_tail = list(argv_list[1:] if argv_list is not None
+                             else sys.argv[2:])
+        if argv_list is not None:
+            argv_list = argv_list[:1]
+        else:
+            sys.argv = sys.argv[:2]
         if schedule_tail and schedule_tail[0] in ('-h', '--help'):
             # argparse owns bare --help (the epilog map): re-attach it and
             # let the normal path print it (the 5.1.13 stripping swallowed
             # `schedule --help` into a bare usage line). The word `help`
             # stays in the tail — the dispatcher prints the map for it.
-            argv_list = argv_list + [schedule_tail[0]]
-            schedule_tail = []
-    elif argv_list is None and 'schedule' in (sys.argv[1:] or []):
-        i = sys.argv.index('schedule')
-        schedule_tail = sys.argv[i + 1:]
-        sys.argv = sys.argv[:i + 1]
-        if schedule_tail and schedule_tail[0] in ('-h', '--help'):
-            sys.argv = sys.argv + [schedule_tail[0]]
+            if argv_list is not None:
+                argv_list = argv_list + [schedule_tail[0]]
+            else:
+                sys.argv = sys.argv + [schedule_tail[0]]
             schedule_tail = []
     args = parser.parse_args(argv_list)
     if args.command == 'config' and config_tail:
@@ -2207,6 +2264,10 @@ def _main(argv=None) -> int:
         from pushframe import schedule as sch
         sub = list(args.schedule_args or [])
         if not sub or sub[0] == 'list':
+            if len(sub) > 1:
+                print(f'schedule list: unexpected "{sub[1]}" — '
+                      '`pushframe schedule list` takes no arguments')
+                return 2
             return sch.schedule_list()
         if sub[0] == 'report':
             from pushframe import report as report_mod
@@ -2222,6 +2283,10 @@ def _main(argv=None) -> int:
             if sub[1].startswith('--'):
                 print('schedule remove: needs a job name — '
                       '`pushframe schedule list` shows the installed ones')
+                return 2
+            if len(sub) > 2:
+                print(f'schedule remove: unexpected "{sub[2]}" — '
+                      'usage: pushframe schedule remove <job>')
                 return 2
             return sch.schedule_remove(sub[1])
         if sub[0] == 'help':

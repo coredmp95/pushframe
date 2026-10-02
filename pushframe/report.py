@@ -264,6 +264,20 @@ def deliver(level, *, command: str, rc: int, output: str, duration_s: float,
 
 _SET_FLAGS = ('--to', '--smtp-host', '--smtp-port', '--smtp-user',
               '--smtp-password', '--from')
+_BOOL_FLAGS = ('--show', '--test', '--disable')
+_KNOWN_FLAGS = _SET_FLAGS + ('--level',) + _BOOL_FLAGS
+
+
+def _wants_help(args: list[str]) -> bool:
+    """`--help` / `-h` / `help` wins wherever a FLAG may sit — value slots
+    are consumed first, so `--to help` still stores the literal `help`."""
+    i = 0
+    while i < len(args):
+        tok = args[i]
+        if tok in ('--help', '-h', 'help'):
+            return True
+        i += 2 if (tok in _SET_FLAGS or tok == '--level') else 1
+    return False
 
 
 def configure(args: list[str], *, stdin_isatty: bool | None = None,
@@ -272,41 +286,31 @@ def configure(args: list[str], *, stdin_isatty: bool | None = None,
     import sys as _sys
     import getpass
     from pushframe import config_store
+    from pushframe.cli import _parse_flag_value_tail
     is_tty = _sys.stdin.isatty() if stdin_isatty is None else stdin_isatty
 
-    opts: dict[str, str] = {}
-    flags: list[str] = []
-    i = 0
-    while i < len(args):
-        arg = args[i]
-        if arg in ('--help', '-h', 'help'):
-            print(_USAGE)
-            return 0
-        if arg in _SET_FLAGS:
-            if i + 1 >= len(args):
-                print(f'schedule report: {arg} needs a value')
-                return 2
-            opts[arg] = args[i + 1]
-            i += 2
-        elif arg in ('--show', '--disable', '--test'):
-            flags.append(arg)
-            i += 1
-        elif arg == '--level':
-            if i + 1 >= len(args):
-                print('schedule report: --level needs a value')
-                return 2
-            opts['--level'] = args[i + 1]
-            i += 2
-        else:
-            print(f'schedule report: unknown argument {arg!r}')
-            print(_USAGE)
-            return 2
+    # The same ONE strict tail parser as `schedule add` / `config pair add`
+    # (nameless mode, boolean actions): a malformed tail is a named usage
+    # error (exit 2), never a silent mis-store — `--to --test` used to store
+    # the literal `--test` as the recipient (swallowing the `--test`
+    # action), and `--to a --to b` used to let the second value win without
+    # a word.
+    if _wants_help(args):
+        print(_USAGE)
+        return 0
+    rc, _name, opts = _parse_flag_value_tail(
+        args, prefix='schedule report', flags=_KNOWN_FLAGS, usage=_USAGE,
+        next_cmd='pushframe schedule report --help', next_note='for the map',
+        name_label=None, bool_flags=_BOOL_FLAGS)
+    if rc != 0:
+        return rc
 
-    if flags.count('--disable') + flags.count('--test') + flags.count('--show') > 1:
+    if (bool(opts.get('--show')) + bool(opts.get('--test'))
+            + bool(opts.get('--disable'))) > 1:
         print('schedule report: --show / --test / --disable are exclusive')
         return 2
 
-    if '--disable' in flags:
+    if opts.get('--disable'):
         data = config_store.load()
         if not data.get('report'):
             print('report config: already disabled (nothing stored).')
@@ -316,11 +320,12 @@ def configure(args: list[str], *, stdin_isatty: bool | None = None,
         print('report config removed — scheduled jobs stop emailing.')
         return 0
 
-    if not opts and '--test' not in flags:
+    value_opts = {k: v for k, v in opts.items() if v is not True}
+    if not value_opts and not opts.get('--test'):
         return _show_config()
 
-    updates = {k.lstrip('-').replace('-', '_'): v for k, v in opts.items()
-               if k in _SET_FLAGS}
+    updates = {k.lstrip('-').replace('-', '_'): v
+               for k, v in value_opts.items() if k in _SET_FLAGS}
     if updates:
         data = config_store.load()
         stored = data.get('report', {}) or {}
@@ -328,7 +333,7 @@ def configure(args: list[str], *, stdin_isatty: bool | None = None,
         if ('smtp_user' in updates or 'smtp_host' in updates) \
                 and not stored.get('smtp_password') \
                 and not os.getenv('PUSHFRAME_SMTP_PASSWORD') \
-                and '--test' not in flags:
+                and not opts.get('--test'):
             if is_tty:
                 stored['smtp_password'] = getpass.getpass(
                     'SMTP password (input hidden, empty to skip): ')
@@ -343,7 +348,7 @@ def configure(args: list[str], *, stdin_isatty: bool | None = None,
               '`schedule add ... --report DEBUG|INFO|ERROR` turns it on per job.')
         return 0
 
-    if '--test' in flags:
+    if opts.get('--test'):
         lvl = normalize_level(opts.get('--level')) or 'INFO'
         cfg = load_config()
         missing = [k for k in ('to', 'smtp_host') if not cfg.get(k)]

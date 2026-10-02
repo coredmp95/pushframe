@@ -399,6 +399,39 @@ def test_schedule_add_still_parses_a_valid_tail(cfg_path, monkeypatch,
     assert '--report ERROR' in svc and '--report-tag "nightly"' in svc
 
 
+def test_schedule_remove_extra_word_is_a_named_error(cfg_path, capsys):
+    """`schedule remove nightly extra` used to ignore `extra` silently."""
+    from pushframe.cli import main
+    assert main(['schedule', 'remove', 'nightly', 'extra']) == 2
+    out = capsys.readouterr().out
+    assert 'unexpected "extra"' in out
+    assert 'usage: pushframe schedule remove <job>' in out
+
+
+def test_schedule_list_extra_word_is_a_named_error(cfg_path, capsys):
+    """`schedule list whatever` used to ignore the word silently."""
+    from pushframe.cli import main
+    assert main(['schedule', 'list', 'whatever']) == 2
+    assert 'unexpected "whatever"' in capsys.readouterr().out
+
+
+def test_verb_word_is_matched_at_position_one_only(cfg_path, capsys,
+                                                   monkeypatch):
+    """The argv router used to match the verb word ANYWHERE: a frame
+    literally named `config` (`google-sync "config" --frame config`)
+    truncated the command line at the name, leaving argparse a dangling
+    --frame. The verb is matched at position one only now — the sync runs
+    its real path (here: failing named on the missing Google vault, not
+    on a mangled command line)."""
+    monkeypatch.setenv('PUSHFRAME_VAULT_PATH',
+                       str(cfg_path.parent / 'no-vault.json'))
+    from pushframe.cli import main
+    assert main(['google-sync', 'config', '--frame', 'config']) == 1
+    out = capsys.readouterr().out
+    assert 'no Google session vault' in out   # the sync's own preflight
+    assert 'unrecognized arguments' not in out
+
+
 def unit_dir_path():
     from pushframe import schedule as sch
     return sch.UNIT_DIR
@@ -481,6 +514,56 @@ def test_report_configure_help_prints_the_map(cfg_path, capsys):
     assert '--test' in out and '--disable' in out
     # `help` (the word) takes the same path
     assert configure(['help']) == 0
+
+
+def test_report_configure_flag_in_value_slot_is_named_error(cfg_path, capsys):
+    """`--to --test` used to store the literal `--test` as the report
+    recipient AND swallow the `--test` action — discovered only when the
+    first email failed. Now a named usage error (exit 2), nothing stored."""
+    from pushframe.report import configure
+    assert configure(['--to', '--test']) == 2
+    out = capsys.readouterr().out
+    assert '--to needs a value' in out
+    assert 'usage: pushframe schedule report' in out
+    # nothing stored: the config file is never even created
+    assert not cfg_path.exists() or \
+        not json.loads(cfg_path.read_text()).get('report')
+
+
+def test_report_configure_duplicated_flag_is_named_error(cfg_path, capsys):
+    """`--to a --to b` used to let the second value win without a word.
+    Now a named error (exit 2), nothing stored — and the same contract
+    covers the boolean actions."""
+    from pushframe.report import configure
+    assert configure(['--to', 'a@example.com', '--to', 'b@example.com']) == 2
+    out = capsys.readouterr().out
+    assert 'given twice' in out
+    # nothing stored: the config file is never even created
+    assert not cfg_path.exists() or \
+        not json.loads(cfg_path.read_text()).get('report')
+    assert configure(['--test', '--test']) == 2
+    assert 'given twice' in capsys.readouterr().out
+
+
+def test_report_configure_bool_flag_then_word_is_named_error(cfg_path, capsys):
+    """A boolean action takes no value — `--test now` is a stray word
+    after the flag, named (exit 2), never a silently half-parsed line."""
+    from pushframe.report import configure
+    assert configure(['--test', 'now']) == 2
+    assert 'unexpected "now"' in capsys.readouterr().out
+
+
+def test_parse_flag_value_tail_nameless_and_bool_modes():
+    """The engine's new modes, pinned directly: a nameless tail parses from
+    index 0 and boolean flags land as True taking no value."""
+    from pushframe.cli import _parse_flag_value_tail
+    rc, name, opts = _parse_flag_value_tail(
+        ['--to', 'x@example.com', '--test'],
+        prefix='p', flags=('--to', '--test'), usage='u',
+        next_cmd='c', next_note='n',
+        name_label=None, bool_flags=('--test',))
+    assert (rc, name) == (0, None)
+    assert opts == {'--to': 'x@example.com', '--test': True}
 
 
 # --- CLI plumbing ------------------------------------------------------------
