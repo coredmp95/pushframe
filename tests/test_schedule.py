@@ -52,6 +52,62 @@ def test_service_unit_is_oneshot_noninteractive_norestart(unit_dir, cfg_path):
     assert "nightly.log" in unit and "append:" in unit   # TMR-03 per-job log
 
 
+def test_status_names_scheduled_jobs_with_target_and_next_fire(
+        unit_dir, cfg_path, monkeypatch, capsys):
+    """`status` must answer "what does this machine do on its own?": one
+    line per timer naming WHAT flows where (parsed from the unit's
+    ExecStart) and WHEN it next fires (from list-timers) — not just unit
+    names."""
+    from pushframe import schedule as sch
+    from pushframe.cli import _schedule_status_section
+    _pair()
+    monkeypatch.setattr(sch, 'systemd_user_session_ok', lambda: True)
+    monkeypatch.setattr(sch, 'run_systemctl', lambda *a: ('', ''))
+    sch.schedule_add('nightly', pair='cadre-venus', every='1d')
+    # the real list-timers shape (NEXT LEFT LAST PASSED UNIT ACTIVATES)
+    monkeypatch.setattr(
+        sch, 'run_systemctl',
+        lambda *a: ('NEXT                         LEFT LAST PASSED '
+                    'UNIT                    ACTIVATES\n'
+                    'Sat 2026-10-03 00:03 CEST  13h -         - '
+                    'pushframe-nightly.timer pushframe-nightly.service\n',
+                    ''))
+    lines = _schedule_status_section()
+    body = '\n'.join(lines)
+    assert 'nightly:' in body
+    assert 'mirror album "Cadre" → frame "Cadre de Fabrice"' in body
+    assert 'next: Sat 2026-10-03 00:03' in body
+    assert 'schedule list' in body          # the detail pointer
+
+
+def test_status_schedule_section_covers_all_and_sync_shapes(
+        unit_dir, cfg_path, monkeypatch):
+    from pushframe.cli import _describe_exec_start
+    exe = '/usr/bin/pushframe '
+    assert 'pair "fam"' in _describe_exec_start(
+        'ExecStart=' + exe + 'google-sync --pair fam --apply --yes')
+    assert 'every configured pair' in _describe_exec_start(
+        'ExecStart=' + exe + 'google-sync --all --apply --yes')
+    assert 'album "A" → frame "F"' in _describe_exec_start(
+        'ExecStart=' + exe + 'google-sync "A" --frame "F" --apply --yes')
+    assert 'sync local "/srv/p" → frame "Salon"' in _describe_exec_start(
+        'ExecStart=' + exe + 'sync "/srv/p" --frame "Salon" --apply --yes')
+
+
+def test_status_schedule_section_empty_and_degraded(unit_dir, cfg_path,
+                                                    monkeypatch):
+    from pushframe.cli import _schedule_status_section
+    from pushframe import schedule as sch
+    # no units: the remedy
+    lines = _schedule_status_section()
+    assert any('none' in l and 'schedule add' in l for l in lines)
+    # systemctl unavailable: honest degradation, never a raise
+    monkeypatch.setattr(sch, 'run_systemctl',
+                        lambda *a: (_ for _ in ()).throw(RuntimeError('x')))
+    lines = _schedule_status_section()
+    assert any('unavailable' in l for l in lines)
+
+
 def test_exec_start_uses_absolute_executable(unit_dir, cfg_path, monkeypatch):
     """User systemd services get a minimal PATH (~/.local/bin absent), so a
     bare `pushframe` ExecStart dies with 203/EXEC (found live, 2026-10-02,

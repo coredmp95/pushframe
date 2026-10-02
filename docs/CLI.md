@@ -398,6 +398,13 @@ Config: stored session (/home/you/.config/pushframe/config.json — created by `
 Logged in as you@example.com
 1 frames:
   - Living Room (id: 00000000-0000-0000-0000-000000000000)
+Google:
+  linked: yes
+  account: you@example.com
+  session: usable
+Scheduled:
+  nightly: mirror album "Holidays" → frame "Living Room" — next: Sat 2026-10-03 00:03
+  (detail: `pushframe schedule list`)
 ```
 
 The first line names where the credentials come from: `Config: stored
@@ -407,7 +414,11 @@ password is stored or needed, the session token is resumed), or
 variables are set (they take precedence over the stored config; `config
 show` details per-setting sources). The check runs **before** any network
 call and never prints a secret; with no credentials at all it stops there
-and exits `1`:
+and exits `1`. The `Scheduled:` section closes the picture: one line per
+installed timer naming **what flows where** (the pair, or album → frame,
+or local directory → frame) and **when it next fires** — so one command
+answers "what does this machine do on its own?". `pushframe schedule
+list` gives the raw systemd table.
 
 ```
 no credentials: set PUSHFRAME_EMAIL/PUSHFRAME_PASSWORD or run `pushframe config`

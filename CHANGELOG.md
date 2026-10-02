@@ -12,6 +12,17 @@ every channel.
 `pushframe` is an unofficial community CLI for Aura Frames digital photo
 frames; it is not affiliated with Aura Frames Inc.
 
+## [Unreleased]
+
+### Added
+
+- `status` now closes with a `Scheduled:` section — one line per
+  installed timer naming WHAT flows where (mirror album→frame for pair X,
+  every configured pair, or local dir → frame, parsed from the unit's
+  ExecStart) and WHEN it next fires (from `systemctl list-timers`), so
+  one command answers "what does this machine do on its own?". Degrades
+  to an honest line when systemctl is unavailable; never a network call.
+
 ## [5.1.19] - 2026-10-02
 
 ### Fixed

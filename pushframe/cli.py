@@ -982,7 +982,96 @@ def run_status(aura=None, debug: bool = False, google_session=None) -> int:
     for line in _google_status_section(google_session):
         print(line)
 
+    # Scheduled jobs: WHAT runs (the album→frame it touches) and WHEN the
+    # next tick fires — an operator answering "what does this machine do
+    # on its own?" should not need a second command (2026-10-02 report).
+    for line in _schedule_status_section():
+        print(line)
+
     return 0
+
+
+def _schedule_status_section() -> list[str]:
+    """The `Scheduled:` section for `status` — one line per pushframe timer.
+
+    For each timer the paired SERVICE unit's ExecStart is parsed for the
+    verb and its target (google-sync --pair X / --all / album + --frame /
+    sync dir + frame), so the line names what flows where, not just a unit
+    name. Next fire time comes from `systemctl list-timers`. Everything
+    degrades to an honest '(unreadable)' — status never fails over this
+    section, and nothing here triggers a network call.
+    """
+    from pushframe import schedule as sch
+    lines = ['Scheduled:']
+    try:
+        timers_out, _ = sch.run_systemctl(
+            'list-timers', '--all', 'pushframe-*.timer', '--no-pager')
+    except Exception:
+        return lines + ['  (systemctl --user unavailable — no schedule info)']
+
+    # list-timers rows: NEXT(weekday date time tz) LEFT LAST PASSED UNIT
+    # ACTIVATES — the NEXT cell is 4 tokens ("Sat 2026-10-03 00:03:19 CEST").
+    next_fire: dict[str, str] = {}
+    for row in timers_out.splitlines():
+        parts = row.split()
+        if len(parts) >= 8 and 'pushframe-' in row and '.timer' in row:
+            unit = next(p for p in parts if p.endswith('.timer'))
+            unit_idx = parts.index(unit)
+            next_fire[unit] = ' '.join(parts[:unit_idx - 3])
+
+    unit_dir = sch.UNIT_DIR
+    services = sorted(unit_dir.glob('pushframe-*.service')) \
+        if unit_dir.is_dir() else []
+    if not services:
+        return lines + ['  none — add one with `pushframe schedule add '
+                        '<job> --pair <name> --every 1d`']
+    for svc_path in services:
+        job = svc_path.stem.replace('pushframe-', '')
+        what = '(unreadable unit)'
+        try:
+            unit_text = svc_path.read_text(encoding='utf-8')
+            exec_line = next((l for l in unit_text.splitlines()
+                              if l.startswith('ExecStart=')), '')
+            what = _describe_exec_start(exec_line)
+        except Exception:
+            pass
+        when = next_fire.get(f'pushframe-{job}.timer', '(timer not enabled)')
+        lines.append(f'  {job}: {what} — next: {when}')
+    lines.append('  (detail: `pushframe schedule list`)')
+    return lines
+
+
+def _describe_exec_start(exec_line: str) -> str:
+    """Human summary of an ExecStart= line: verb + what flows where."""
+    import shlex
+    body = exec_line.removeprefix('ExecStart=')
+    try:
+        tokens = shlex.split(body)
+    except ValueError:
+        return '(unreadable unit)'
+    # tokens[0] is the executable (absolute since 2026-10-02); find the verb
+    verb_idx = next((i for i, t in enumerate(tokens)
+                     if t in ('google-sync', 'sync', 'push')), None)
+    if verb_idx is None:
+        return '(unknown verb)'
+    verb = tokens[verb_idx]
+    rest = tokens[verb_idx + 1:]
+    if verb == 'google-sync':
+        pair = rest[rest.index('--pair') + 1] if '--pair' in rest else None
+        if pair:
+            return f'mirror album→frame for pair "{pair}"'
+        if '--all' in rest:
+            return 'mirror every configured pair'
+        album = rest[0] if rest and not rest[0].startswith('-') else '?'
+        frame = rest[rest.index('--frame') + 1] \
+            if '--frame' in rest else '?'
+        return f'mirror album "{album}" → frame "{frame}"'
+    if verb == 'sync':
+        src = rest[0] if rest and not rest[0].startswith('-') else '?'
+        frame = rest[rest.index('--frame') + 1] \
+            if '--frame' in rest else '?'
+        return f'sync local "{src}" → frame "{frame}"'
+    return f'{verb} (scheduled)'
 
 
 def _read_frames_with_refresh(aura, who, stored):
