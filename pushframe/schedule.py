@@ -104,6 +104,25 @@ WantedBy=timers.target
 """
 
 
+def _pushframe_command() -> str:
+    """Absolute path to the running pushframe executable, for systemd units.
+
+    User systemd services get a minimal PATH (~/.local/bin absent), so a
+    bare `pushframe` ExecStart dies with 203/EXEC on the most common
+    install (uv tool install). shutil.which finds our OWN executable —
+    sys.argv[0]'s directory is the fallback for exotic launches.
+    """
+    import shutil
+    import sys
+    found = shutil.which('pushframe')
+    if found:
+        return found
+    argv0 = Path(sys.argv[0]).resolve()
+    if argv0.name == 'pushframe' and argv0.is_file():
+        return str(argv0)
+    return 'pushframe'  # last resort: let systemd's PATH try
+
+
 def _exec_start_for(pair: str | None = None, album: str | None = None,
                    frame: str | None = None, sync_dir: str | None = None,
                    batch_size: int | None = None, job: str | None = None,
@@ -111,7 +130,7 @@ def _exec_start_for(pair: str | None = None, album: str | None = None,
                    report_to: str | None = None) -> str:
     """Non-interactive ExecStart from STORED config only (TMR-03)."""
     from pushframe import config_store
-    parts = ['pushframe']
+    parts = [_pushframe_command()]
     if sync_dir:
         parts += ['sync', f'"{sync_dir}"', f'--frame "{frame}"',
                   '--apply', '--yes', '--scheduled']

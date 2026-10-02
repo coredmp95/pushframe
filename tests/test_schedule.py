@@ -52,6 +52,21 @@ def test_service_unit_is_oneshot_noninteractive_norestart(unit_dir, cfg_path):
     assert "nightly.log" in unit and "append:" in unit   # TMR-03 per-job log
 
 
+def test_exec_start_uses_absolute_executable(unit_dir, cfg_path, monkeypatch):
+    """User systemd services get a minimal PATH (~/.local/bin absent), so a
+    bare `pushframe` ExecStart dies with 203/EXEC (found live, 2026-10-02,
+    on the very first armed nightly). The ExecStart must carry the
+    absolute path of the running executable."""
+    import shutil
+    from pushframe.schedule import _exec_start_for
+    exe = _exec_start_for(pair='p', job='n', report='ERROR')
+    first = exe.split(' ')[0]
+    assert first.startswith('/'), f'ExecStart must be absolute, got: {first}'
+    assert Path(first).is_file(), f'ExecStart target must exist: {first}'
+    # and it IS the pushframe we are running
+    assert 'pushframe' in first
+
+
 def test_timer_unit_maps_every_to_oncalendar(unit_dir, cfg_path):
     from pushframe.schedule import render_timer
     unit = render_timer("nightly", every="1d")
