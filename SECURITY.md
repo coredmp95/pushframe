@@ -10,8 +10,8 @@ session for the album-sync path.
 
 | Version | Supported | Channels |
 |---------|-----------|----------|
-| 5.0.x   | ✅        | [PyPI](https://pypi.org/project/pushframe/), [APT](https://coredmp95.github.io/pushframe/), [GitHub Releases](https://github.com/coredmp95/pushframe/releases) |
-| < 5.0   | ❌        | never published (5.0.0 is the first distribution release) |
+| 5.1.x   | ✅        | [PyPI](https://pypi.org/project/pushframe/), [APT](https://coredmp95.github.io/pushframe/), [GitHub Releases](https://github.com/coredmp95/pushframe/releases) |
+| < 5.1   | ❌        | upgrade — every release ships to all three channels at once (one tag, every channel) |
 
 ## Reporting a vulnerability
 
@@ -78,17 +78,18 @@ Out of scope:
   (`curl -fsSL https://coredmp95.github.io/pushframe/dists/pushframe.asc
   | gpg --show-keys`). If you ever see a different fingerprint, stop and
   report it.
-- **Actions**: the release workflow pins first-party actions
-  (`actions/checkout@v4`, `astral-sh/setup-uv@v5`); the test workflow
-  runs the credential-less offline suite on every push/PR.
+- **Actions**: the workflows pin first-party actions by version
+  (`actions/checkout@v7`, `astral-sh/setup-uv@v10.2.0`); the test
+  workflow runs the credential-less offline suite plus a `pip-audit`
+  dependency gate on every push/PR.
 
 ## Automated monitoring
 
-- Dependabot security updates + Dependency Graph: **enabled**.
+- Dependabot security updates + Dependency Graph: **enabled** (all 20
+  alerts opened to date are resolved; `pip-audit --strict` also gates
+  every CI run).
 - Secret scanning + push protection: **enabled** (a push carrying a
   secret is blocked).
-- Code scanning (CodeQL): enabled for `python` and `actions` via default
-  setup.
 
 ## Hardening notes for users
 
