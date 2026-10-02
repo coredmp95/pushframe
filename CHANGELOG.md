@@ -12,7 +12,7 @@ every channel.
 `pushframe` is an unofficial community CLI for Aura Frames digital photo
 frames; it is not affiliated with Aura Frames Inc.
 
-## [Unreleased]
+## [5.1.24] - 2026-10-02
 
 ### Changed
 
