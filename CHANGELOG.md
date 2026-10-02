@@ -12,15 +12,31 @@ every channel.
 `pushframe` is an unofficial community CLI for Aura Frames digital photo
 frames; it is not affiliated with Aura Frames Inc.
 
-## [Unreleased]
+## [5.1.18] - 2026-10-02
 
 ### Added
 
+- A real bug-report path: the `.github/ISSUE_TEMPLATE/bug_report.yml`
+  form (version, channel, OS, command, full output — with the secrets/
+  share-link redaction warning), routing to Discussions for questions
+  and private advisories for security (blank issues off), the reporting
+  section in README's troubleshooting and ERRORS.md, and the maintainer
+  flow in DEVELOPING.md.
 - `pushframe config set --help` — every accepted key, explained, grouped
   by purpose (wizard-managed, email-report transport, anti-abuse/write
   budget, client identity, endpoint overrides) with the same reference
   added to docs/CLI.md as "Every `config set` key, explained". The
   unknown-key error and the bare `config set` usage now point to it.
+- `pushframe schedule report --help` — the configurator's map, and the
+  docs section now leads with the WHERE-transport vs WHICH-level
+  distinction plus the end-to-end story.
+
+### Changed
+
+- SECURITY.md refreshed against the repo's reality: supported versions
+  5.1.x (was 5.0.x), the actual action pins (checkout@v7,
+  setup-uv@v10.2.0), and the pip-audit CI gate replacing the CodeQL
+  claim that had no basis in the repository.
 
 ## [5.1.17] - 2026-10-02
 
