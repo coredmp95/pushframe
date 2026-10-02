@@ -2042,62 +2042,83 @@ _SCHEDULE_ADD_USAGE = ('usage: pushframe schedule add <job> --pair NAME '
                        '--every Nmin|Nh|Nd [--report DEBUG|INFO|ERROR]')
 
 
-def _schedule_add_usage_hint() -> None:
-    print(_SCHEDULE_ADD_USAGE)
-    print('run `pushframe schedule --help` for the full map '
-          '(what gets scheduled, email reports, examples)')
+def _parse_flag_value_tail(
+        tail: list[str], *, prefix: str, flags: tuple[str, ...], usage: str,
+        next_cmd: str, next_note: str, name_label: str = 'job',
+        required: tuple[str, ...] = (), required_note: str = '',
+        int_flags: tuple[str, ...] = (),
+) -> tuple[int, str | None, dict | None]:
+    """The ONE strict engine for `<name> --flag VALUE …` tails — shared by
+    `schedule add` and `config pair add` (factored 2026-10-02; both used to
+    hand-roll the same indexer, and both could crash on a malformed tail).
+
+    A named usage error (exit 2, nothing installed) on: a missing name
+    (it must come right after the verb, before any --flag), a stray word,
+    an unknown flag (valid ones listed), a duplicated flag, a dangling
+    flag, a non-integer int_flags value, or a missing `required` flag.
+    Every error prints the usage line and the next-step pointer.
+    Returns (rc, name, opts): opts values are str, with int_flags cast.
+    """
+
+    def _fail(msg: str) -> tuple[int, None, None]:
+        print(f'{prefix}: {msg}')
+        print(usage)
+        print(f'run `{next_cmd}` {next_note}')
+        return 2, None, None
+
+    if len(tail) < 2 or tail[1].startswith('--'):
+        return _fail(f'the {name_label} name is missing — it must come '
+                     'right after `add`, before any --flag')
+    name = tail[1]
+    opts: dict = {}
+    i = 2
+    while i < len(tail):
+        tok = tail[i]
+        if not tok.startswith('--'):
+            return _fail(f'unexpected "{tok}" — every option is a '
+                         '--flag VALUE pair')
+        if tok not in flags:
+            return _fail(f'unknown option "{tok}" — known ones: '
+                         + ', '.join(flags))
+        if tok in opts:
+            return _fail(f'{tok} given twice — one value per flag')
+        if i + 1 >= len(tail) or tail[i + 1].startswith('--'):
+            return _fail(f'{tok} needs a value — a flag left dangling '
+                         'breaks the command')
+        opts[tok] = tail[i + 1]
+        i += 2
+    for flag in int_flags:
+        if flag not in opts:
+            continue
+        try:
+            opts[flag] = int(opts[flag])
+        except ValueError:
+            return _fail(f'{flag} must be a number, got "{opts[flag]}"')
+    for flag in required:
+        if flag not in opts:
+            return _fail(f'{flag} is missing — {required_note}')
+    return 0, name, opts
 
 
 def _parse_schedule_add(sub: list[str]) -> tuple[int, dict | None]:
-    """Strict parse of `schedule add <job> --flag VALUE …` — a named usage
-    error (exit 2) on any malformed tail, never a crash (5.1.21 regression:
-    the `_opt` indexer died with a raw IndexError on a dangling flag, and a
-    flag right after `add` silently became the job name)."""
-    if len(sub) < 2 or sub[1].startswith('--'):
-        print('schedule add: the job name is missing — it must come right '
-              'after `add`, before any --flag')
-        _schedule_add_usage_hint()
-        return 2, None
-    job = sub[1]
-    opts: dict[str, str] = {}
-    i = 2
-    while i < len(sub):
-        tok = sub[i]
-        if not tok.startswith('--'):
-            print(f'schedule add: unexpected "{tok}" — every option is a '
-                  '--flag VALUE pair')
-            _schedule_add_usage_hint()
-            return 2, None
-        if tok not in _SCHEDULE_ADD_FLAGS:
-            print(f'schedule add: unknown option "{tok}" — known ones: '
-                  + ', '.join(_SCHEDULE_ADD_FLAGS))
-            _schedule_add_usage_hint()
-            return 2, None
-        if tok in opts:
-            print(f'schedule add: {tok} given twice — one value per flag')
-            _schedule_add_usage_hint()
-            return 2, None
-        if i + 1 >= len(sub) or sub[i + 1].startswith('--'):
-            print(f'schedule add: {tok} needs a value — a flag left '
-                  'dangling breaks the command')
-            _schedule_add_usage_hint()
-            return 2, None
-        opts[tok] = sub[i + 1]
-        i += 2
-    batch_size = None
-    if '--batch-size' in opts:
-        try:
-            batch_size = int(opts['--batch-size'])
-        except ValueError:
-            print(f'schedule add: --batch-size must be a number, '
-                  f'got "{opts["--batch-size"]}"')
-            _schedule_add_usage_hint()
-            return 2, None
+    """The `schedule add` spelling of the shared tail parser — a named
+    usage error (exit 2) on any malformed tail, never a crash (the venus
+    2026-10-02 IndexError regression: a dangling flag used to die raw, and
+    a flag right after `add` silently became the job name)."""
+    rc, job, opts = _parse_flag_value_tail(
+        sub, prefix='schedule add', flags=_SCHEDULE_ADD_FLAGS,
+        usage=_SCHEDULE_ADD_USAGE, next_cmd='pushframe schedule --help',
+        next_note='for the full map (what gets scheduled, email reports, '
+                  'examples)',
+        name_label='job', int_flags=('--batch-size',))
+    if rc != 0:
+        return rc, None
     return 0, {'job': job, 'pair': opts.get('--pair'),
                'album': opts.get('--album'), 'frame': opts.get('--frame'),
                'sync_dir': opts.get('--sync-dir'),
                'every': opts.get('--every'), 'at': opts.get('--at'),
-               'batch_size': batch_size, 'report': opts.get('--report'),
+               'batch_size': opts.get('--batch-size'),
+               'report': opts.get('--report'),
                'report_to': opts.get('--report-to')}
 
 
@@ -2107,57 +2128,18 @@ _PAIR_ADD_USAGE = ('usage: pushframe config pair add <name> --album ALBUM '
 
 def _parse_pair_add(sub: list[str]) -> tuple[int, str | None, str | None,
                                              str | None]:
-    """Strict parse of `config pair add <name> --album A --frame F` — a
-    named usage error (exit 2) on any malformed tail, never a crash and
-    never a pair literally named `--album` (audit 2026-10-02: the loose
-    `sub[1]` + `sub.index(flag)+1` pair did both)."""
-    if len(sub) < 2 or sub[1].startswith('--'):
-        print('pair add: the pair name is missing — it must come right '
-              'after `add`, before any --flag')
-        print(_PAIR_ADD_USAGE)
-        print('run `pushframe config pair --help` for what a pair is and '
-              'how to use it')
-        return 2, None, None, None
-    name = sub[1]
-    opts: dict[str, str] = {}
-    i = 2
-    while i < len(sub):
-        tok = sub[i]
-        if not tok.startswith('--'):
-            print(f'pair add: unexpected "{tok}" — every option is a '
-                  '--flag VALUE pair')
-            print(_PAIR_ADD_USAGE)
-            return 2, None, None, None
-        if tok not in ('--album', '--frame'):
-            print(f'pair add: unknown option "{tok}" — known ones: '
-                  '--album, --frame')
-            print(_PAIR_ADD_USAGE)
-            print('run `pushframe config pair --help` for what a pair is '
-                  'and how to use it')
-            return 2, None, None, None
-        if tok in opts:
-            print(f'pair add: {tok} given twice — one value per flag')
-            print(_PAIR_ADD_USAGE)
-            print('run `pushframe config pair --help` for what a pair is '
-                  'and how to use it')
-            return 2, None, None, None
-        if i + 1 >= len(sub) or sub[i + 1].startswith('--'):
-            print(f'pair add: {tok} needs a value — a flag left dangling '
-                  'breaks the command')
-            print(_PAIR_ADD_USAGE)
-            print('run `pushframe config pair --help` for what a pair is '
-                  'and how to use it')
-            return 2, None, None, None
-        opts[tok] = sub[i + 1]
-        i += 2
-    if '--album' not in opts or '--frame' not in opts:
-        missing = '--frame' if '--album' in opts else '--album'
-        print(f'pair add: {missing} is missing — a pair maps an album to a '
-              'frame, both are required')
-        print(_PAIR_ADD_USAGE)
-        print('run `pushframe config pair --help` for what a pair is '
-              'and how to use it')
-        return 2, None, None, None
+    """The `config pair add` spelling of the shared tail parser — a named
+    usage error (exit 2) on any malformed tail, never a crash and never a
+    pair literally named `--album` (audit 2026-10-02: the loose `sub[1]`
+    + `sub.index(flag)+1` pair did both)."""
+    rc, name, opts = _parse_flag_value_tail(
+        sub, prefix='pair add', flags=('--album', '--frame'),
+        usage=_PAIR_ADD_USAGE, next_cmd='pushframe config pair --help',
+        next_note='for what a pair is and how to use it',
+        name_label='pair', required=('--album', '--frame'),
+        required_note='a pair maps an album to a frame, both are required')
+    if rc != 0:
+        return rc, None, None, None
     return 0, name, opts['--album'], opts['--frame']
 
 

@@ -12,6 +12,17 @@ every channel.
 `pushframe` is an unofficial community CLI for Aura Frames digital photo
 frames; it is not affiliated with Aura Frames Inc.
 
+## [Unreleased]
+
+### Changed
+
+- The `schedule add` and `config pair add` dispatchers now share ONE
+  strict tail parser (`_parse_flag_value_tail`): the same named errors,
+  usage shape and next-step pointer for both verbs; the two hand-rolled
+  twin parsers are gone (net ~80 lines lighter). Pinned tests caught the
+  refactor's only slip live — an int cast on an absent flag — before it
+  reached anyone.
+
 ## [5.1.23] - 2026-10-02
 
 ### Fixed
