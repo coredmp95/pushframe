@@ -565,6 +565,19 @@ success (a dry run and an aborted confirmation both count); `1` failure
 (bad credentials, unresolvable frame, per-item failure, budget exhausted);
 `2` usage/ambiguity (e.g. an album name matching several albums).
 
+**Still stuck — report a bug.** Open a GitHub issue with the template's
+fields: `pushframe --version`, your OS, the exact command, and the **full
+output** (never paste passwords, tokens, cookies, or full album share
+links — mask them like `AF1Qip…last4`). Add `--debug` **before** the
+subcommand when asked for verbose logs, and review the paste first — it
+can contain your frame and photo names:
+[New bug report](https://github.com/coredmp95/pushframe/issues/new?template=bug_report.yml)
+· Questions that are not bugs go to
+[Discussions](https://github.com/coredmp95/pushframe/discussions) ·
+Security problems go to
+[private vulnerability reporting](https://github.com/coredmp95/pushframe/security/advisories/new),
+never a public issue (see [SECURITY.md](SECURITY.md)).
+
 ## Documentation map
 
 **For users:**

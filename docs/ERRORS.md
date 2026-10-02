@@ -80,7 +80,13 @@ twice.
 
 ## Anything else
 
-A traceback you can read means a bug — please open an issue with the
-`logs/file_*.log` content (secrets are redacted in messages; still, skim
-before pasting). Start with `pushframe status` to confirm the account is
-healthy, and `pushframe doctor` before assuming a write problem is yours.
+A traceback you can read means a bug —
+[open a bug report](https://github.com/coredmp95/pushframe/issues/new?template=bug_report.yml)
+with `pushframe --version`, your OS, the exact command and the full output
+(never paste passwords, tokens, cookies, or full album share links). Start
+with `pushframe status` to confirm the account is healthy, and `pushframe
+doctor` before assuming a write problem is yours. Questions that are not
+bugs go to [Discussions](https://github.com/coredmp95/pushframe/discussions);
+anything that looks like a security problem goes to
+[private vulnerability reporting](https://github.com/coredmp95/pushframe/security/advisories/new),
+never a public issue (see [SECURITY.md](https://github.com/coredmp95/pushframe/blob/master/SECURITY.md)).

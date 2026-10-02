@@ -1,0 +1,88 @@
+name: Bug report
+description: Something broke or behaved unexpectedly — tell us what happened.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug.
+
+        Before filing: check [`docs/ERRORS.md`](https://github.com/coredmp95/pushframe/blob/master/docs/ERRORS.md)
+        — most error messages are explained there with their remedy — and
+        [existing issues](https://github.com/coredmp95/pushframe/issues?q=is%3Aissue).
+        **Never paste passwords, session tokens, cookies, or Google album
+        share links in full** (share links are capability URLs — mask them
+        like `AF1Qip…last4`).
+
+  - type: input
+    id: version
+    attributes:
+      label: pushframe version
+      description: Output of `pushframe --version`
+      placeholder: pushframe 5.1.17
+    validations:
+      required: true
+  - type: dropdown
+    id: channel
+    attributes:
+      label: Install channel
+      options:
+        - APT repository (coredmp95.github.io/pushframe)
+        - .deb from GitHub Releases
+        - PyPI (pip / uv tool install)
+        - from source
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: OS / environment
+      description: Distro and version, plus anything unusual (headless server, VPN, ssh -X…)
+      placeholder: Ubuntu 24.04 LTS, headless, IPv6
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Command you ran
+      description: The exact command line (redact album links / frame names if you prefer)
+      placeholder: pushframe google-sync --pair cadre-venus --apply
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Full output
+      description: |
+        Copy the complete terminal output, including the "Docs —" footer if
+        it appeared. If asked for verbose logs, run with `--debug` BEFORE
+        the subcommand (`pushframe --debug <command>`) and paste the
+        relevant part — review it first, it can contain your frame and
+        photo names.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+      placeholder: The photo should appear on the frame after the run.
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Anything else?
+      description: |
+        First time it happened or after an upgrade? Does re-running change
+        anything? Was the frame/album unusually large? The per-run log at
+        logs/file_<timestamp>.log (in the directory you ran from) can help
+        — paste the relevant tail, secrets redacted.
+  - type: markdown
+    attributes:
+      value: |
+        **Security problems** (credentials leaking, crashes on crafted
+        files, anything that looks exploitable): please do NOT open a
+        public issue — use
+        [private vulnerability reporting](https://github.com/coredmp95/pushframe/security/advisories/new)
+        instead (see [SECURITY.md](https://github.com/coredmp95/pushframe/blob/master/SECURITY.md)).

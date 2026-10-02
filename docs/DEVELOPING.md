@@ -93,6 +93,16 @@ The project evolved by short, verified increments; keep it that way:
 4. Docs follow code: if a flag, message or behavior changed, the user docs
    (README/CLI.md/ERRORS.md) change in the same commit.
 
+## Issues and pull requests
+
+Bugs arrive through the `.github/ISSUE_TEMPLATE/bug_report.yml` form
+(version, channel, OS, command, full output — the form routes security
+reports to private advisories and non-bugs to Discussions). Working on
+one: reproduce first (the template's output usually names the failing
+verb), then follow the working method above. PRs run the same offline
+suite + pip-audit gate as master; keep behavior changes and their user-doc
+updates in the same PR.
+
 ## Releasing
 
 A release is one tag shipped to three channels simultaneously —
