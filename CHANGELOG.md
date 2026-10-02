@@ -12,6 +12,19 @@ every channel.
 `pushframe` is an unofficial community CLI for Aura Frames digital photo
 frames; it is not affiliated with Aura Frames Inc.
 
+## [Unreleased]
+
+### Added
+
+- The report/SMTP transport is configurable through the standard config
+  family: `config set report_to|smtp_host|smtp_port|smtp_user|
+  smtp_password|report_from VALUE` (stored in the `report` block, same
+  one `schedule report` writes; the password is redacted in every
+  output), `config get <key>` reads one back with its source, and
+  `config show` surfaces the whole transport (env override noted,
+  password as ***), with the not-configured remedy naming the exact
+  commands when nothing is set.
+
 ## [5.1.15] - 2026-10-02
 
 ### Changed

@@ -256,6 +256,14 @@ pushframe schedule report               # show what is configured
 pushframe schedule report --disable     # forget it
 ```
 
+The same settings are plain config keys — `pushframe config set report_to
+you@example.com`, `config set smtp_host …`, `config set smtp_port …`,
+`config set smtp_user …`, `config set smtp_password …` (redacted in every
+output), `config set report_from …` — and `config show` lists the transport
+(whether it came from the file or from `PUSHFRAME_SMTP_*` /
+`PUSHFRAME_REPORT_TO` overrides, password as `***`) with the trial-email
+next step. `config get <key>` reads one back.
+
 Then pick a level per job:
 
 ```bash

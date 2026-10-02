@@ -456,6 +456,82 @@ def test_schedule_subcommand_flags_reach_the_verb(cfg_path, monkeypatch,
     assert 'smtp.example.com' in capsys.readouterr().out
 
 
+# --- config set/get/show speak the report keys -------------------------------
+
+def test_config_set_report_key_stores_in_report_block(cfg_path, capsys):
+    from pushframe.cli import run_config
+    assert run_config(wizard_args=['set', 'report_to', 'me@example.com']) == 0
+    data = json.loads(cfg_path.read_text())
+    assert data['report']['to'] == 'me@example.com'   # aliased to the block
+    out = capsys.readouterr().out
+    assert 'report --test' in out                     # names the next step
+
+
+def test_config_set_smtp_password_is_redacted_in_output(cfg_path, capsys):
+    from pushframe.cli import run_config
+    assert run_config(wizard_args=['set', 'smtp_password', 's3cret']) == 0  # noqa: S105
+    out = capsys.readouterr().out
+    assert 's3cret' not in out                        # noqa: S105
+    assert "'***'" in out
+    assert json.loads(cfg_path.read_text())['report']['smtp_password'] == 's3cret'  # noqa: S105
+
+
+def test_config_get_report_key_and_unknown_lists_them(cfg_path, monkeypatch,
+                                                      capsys):
+    _clean_env(monkeypatch)
+    from pushframe.cli import run_config
+    run_config(wizard_args=['set', 'smtp_host', 'smtp.example.com'])
+    assert run_config(wizard_args=['get', 'smtp_host']) == 0
+    assert 'smtp.example.com' in capsys.readouterr().out
+    # an unknown key's remedy lists the report keys too
+    rc = run_config(wizard_args=['get', 'NOT_A_KEY'])
+    assert rc == 1
+    assert 'report_to' in capsys.readouterr().out
+
+
+def test_config_get_report_key_env_override(cfg_path, monkeypatch, capsys):
+    _clean_env(monkeypatch)
+    monkeypatch.setenv('PUSHFRAME_REPORT_TO', 'env@example.com')
+    from pushframe.cli import run_config
+    run_config(wizard_args=['set', 'report_to', 'file@example.com'])
+    assert run_config(wizard_args=['get', 'report_to']) == 0
+    out = capsys.readouterr().out
+    assert 'env@example.com' in out and '(source: env)' in out
+
+
+def test_config_show_reports_the_transport_block(cfg_path, monkeypatch, capsys):
+    """`config show` must surface the report transport — the operator's only
+    discovery path for "how do I configure SMTP?" was reading docs."""
+    _clean_env(monkeypatch)
+    from pushframe.cli import run_config
+    # not configured: names the remedy
+    assert run_config(wizard_args=['show']) == 0
+    assert 'email reports: not configured' in capsys.readouterr().out
+    # configured: shows the values, redacts the password, names next steps
+    run_config(wizard_args=['set', 'report_to', 'me@example.com'])
+    run_config(wizard_args=['set', 'smtp_host', 'smtp.example.com'])
+    run_config(wizard_args=['set', 'smtp_password', 's3cret'])  # noqa: S105
+    assert run_config(wizard_args=['show']) == 0
+    out = capsys.readouterr().out
+    assert "report_to = 'me@example.com'  (file)" in out
+    assert "smtp_host = 'smtp.example.com'  (file)" in out
+    assert "smtp_password = '***'  (file)" in out
+    assert 's3cret' not in out                        # noqa: S105
+    assert 'schedule report --test' in out
+
+
+def test_config_show_env_overrides_report_block(cfg_path, monkeypatch, capsys):
+    _clean_env(monkeypatch)
+    monkeypatch.setenv('PUSHFRAME_SMTP_HOST', 'env.example.com')
+    from pushframe.cli import run_config
+    run_config(wizard_args=['set', 'report_to', 'me@example.com'])
+    run_config(wizard_args=['set', 'smtp_host', 'file.example.com'])
+    assert run_config(wizard_args=['show']) == 0
+    out = capsys.readouterr().out
+    assert "smtp_host = 'env.example.com'  (env)" in out
+    assert "report_to = 'me@example.com'  (file)" in out
+
+
 def test_schedule_bare_help_still_prints_the_full_map(capsys):
     """5.1.13 regression: the tail stripping swallowed bare `schedule
     --help` — it printed one usage line instead of the WHAT GETS SCHEDULED

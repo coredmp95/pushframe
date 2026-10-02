@@ -478,14 +478,38 @@ def run_config(wizard_args=None, stdin_isatty: bool | None = None) -> int:
     if args and args[0] == 'import':
         return _config_import(args[1:])
     if args and args[0] == 'set':
-        return _config_set(args[1:])
+        argv = args[1:]
+        if argv and argv[0] in _REPORT_KEY_ALIASES:
+            return _config_report_set(argv[0], argv[1:])
+        return _config_set(argv)
     if args and args[0] == 'get':
         if len(args) < 2:
             print('usage: pushframe config get <key>')
             return 1
         name = args[1]
+        if name in _REPORT_KEY_ALIASES:
+            from pushframe import report as report_mod
+            rcfg = report_mod.load_config()
+            env_var = {'report_to': 'PUSHFRAME_REPORT_TO',
+                       'smtp_host': 'PUSHFRAME_SMTP_HOST',
+                       'smtp_port': 'PUSHFRAME_SMTP_PORT',
+                       'smtp_user': 'PUSHFRAME_SMTP_USER',
+                       'smtp_password': 'PUSHFRAME_SMTP_PASSWORD',
+                       'report_from': 'PUSHFRAME_SMTP_FROM'}[name]
+            if os.getenv(env_var) is not None:
+                shown = '***' if name == 'smtp_password' else os.getenv(env_var)
+                print(f'{name} = {shown!r}  (source: env)')
+                return 0
+            stored = (config_store.load().get('report', {}) or {}).get(
+                _REPORT_KEY_ALIASES[name])
+            shown = '***' if name == 'smtp_password' and stored else stored
+            source = 'file' if stored else 'default'
+            print(f'{name} = {shown!r}  (source: {source})')
+            return 0
         if name not in settings.known_keys() and name not in ('email', 'default_frame', 'debug'):
-            print(f'unknown key {name!r}. Known settings: {", ".join(settings.known_keys())}')
+            print(f'unknown key {name!r}. Known settings: '
+                  f'{", ".join(sorted(settings.known_keys()))}, or report '
+                  f'transport keys: {", ".join(sorted(_REPORT_KEY_ALIASES))}')
             return 1
         value = config_store.setting(name)
         source = 'file' if value is not None else ('env' if settings.shadowed_keys({name: None}) else 'default')
@@ -587,6 +611,20 @@ def _finish_wizard(data: dict) -> None:
           + (f' (default frame: {frames_note})' if frames_note else ''))
 
 
+# The report/SMTP keys `config set/get` accept directly (stored under the
+# config's `report` key; PUSHFRAME_SMTP_* / PUSHFRAME_REPORT_TO override at
+# use time — see pushframe/report.py). Names are operator-facing; the
+# config-file spellings differ for two of them.
+_REPORT_KEY_ALIASES = {
+    'smtp_host': 'smtp_host',
+    'smtp_port': 'smtp_port',
+    'smtp_user': 'smtp_user',
+    'smtp_password': 'smtp_password',
+    'report_to': 'to',
+    'report_from': 'from',
+}
+
+
 def _config_show() -> int:
     """CFG-02: the effective config, secrets redacted, sources labeled."""
     import json as _json
@@ -608,6 +646,36 @@ def _config_show() -> int:
             print(f'  {key} = {shown!r}  (file)')
     if data.get('auth_token'):
         print('  auth_token = ***  (file)')
+    # The report transport (report.py's load_config): env overrides the
+    # stored `report` block; the password never prints.
+    from pushframe import report as report_mod
+    rcfg = report_mod.load_config()
+    rdata = data.get('report', {}) or {}
+    if rcfg.get('to') or rcfg.get('smtp_host'):
+        env_of = {
+            'report_to': 'PUSHFRAME_REPORT_TO',
+            'smtp_host': 'PUSHFRAME_SMTP_HOST',
+            'smtp_port': 'PUSHFRAME_SMTP_PORT',
+            'smtp_user': 'PUSHFRAME_SMTP_USER',
+            'smtp_password': 'PUSHFRAME_SMTP_PASSWORD',
+            'report_from': 'PUSHFRAME_SMTP_FROM',
+        }
+        for op_name, env_var in env_of.items():
+            stored_key = _REPORT_KEY_ALIASES[op_name]
+            if os.getenv(env_var) is not None:
+                shown = '***' if op_name == 'smtp_password' else os.getenv(env_var)
+                print(f'  {op_name} = {shown!r}  (env)')
+            elif rdata.get(stored_key):
+                shown = '***' if op_name == 'smtp_password' else rdata[stored_key]
+                print(f'  {op_name} = {shown!r}  (file)')
+        print('  (email reports: `pushframe schedule report --test` sends a '
+              'trial; levels go on each job with `schedule add … --report '
+              'DEBUG|INFO|ERROR`)')
+    else:
+        print('  email reports: not configured — set with `pushframe config '
+              'set report_to you@example.com` + `pushframe config set '
+              'smtp_host …` (or `pushframe schedule report --to … '
+              '--smtp-host …`)')
     # Identity hygiene (5.1.1, venus anti-abuse lesson): the all-zeros id is
     # shared by every unprovisioned pushframe install and reads as a
     # non-phone client — name it and hand the remedy.
@@ -666,6 +734,26 @@ def _config_import(argv: list[str]) -> int:
         print(f'  stored {name} (file)')
     if not stored and not skipped:
         print('nothing to import.')
+    return 0
+
+
+def _config_report_set(op_name: str, argv: list[str]) -> int:
+    """`config set <report-key> <value>` — store under the config's `report`
+    block (the same block `schedule report --to ...` writes)."""
+    if not argv:
+        print(f'usage: pushframe config set {op_name} <value>')
+        return 1
+    from pushframe import config_store
+    data = config_store.load()
+    stored = data.get('report', {}) or {}
+    stored[_REPORT_KEY_ALIASES[op_name]] = argv[0]
+    data['report'] = stored
+    config_store.save(data)
+    shown = '***' if op_name == 'smtp_password' else argv[0]
+    print(f'{op_name} = {shown!r} written to {settings.CONFIG_PATH} '
+          f'(report block; PUSHFRAME_{op_name.upper()} still wins if set)')
+    print('next: `pushframe schedule report --test` sends a trial email; '
+          '`schedule add … --report DEBUG|INFO|ERROR` turns reports on per job.')
     return 0
 
 
