@@ -226,7 +226,7 @@ frames; it is not affiliated with Aura Frames Inc.
   safety model → troubleshooting) and no longer carries the device-flow
   transcripts, the write-path research narrative or the open
   reverse-engineering questions; those moved to a new
-  [`docs/INTERNALS.md`](docs/INTERNALS.md) ("how it works" for curious
+  [`docs/INTERNALS.md`](https://github.com/coredmp95/pushframe/blob/master/docs/INTERNALS.md) ("how it works" for curious
   readers). docs/CLI.md's reconcile evidence story is condensed to what a
   user needs. No behavior change.
 

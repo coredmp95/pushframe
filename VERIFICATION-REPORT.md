@@ -6,7 +6,7 @@
 
 This is a standalone, developer-visible snapshot of what the revived client provably does
 today. It **consolidates and cites** the raw evidence captured in
-[`.planning/phases/02-live-read-path-verification/02-LIVE-EVIDENCE.md`](.planning/phases/02-live-read-path-verification/02-LIVE-EVIDENCE.md)
+[`.planning/milestones/v1.0-phases/02-live-read-path-verification/02-LIVE-EVIDENCE.md`](https://github.com/coredmp95/pushframe/blob/master/.planning/milestones/v1.0-phases/02-live-read-path-verification/02-LIVE-EVIDENCE.md)
 rather than replacing it.
 
 ---
@@ -34,7 +34,7 @@ This 2026-06-29 Phase 3 refresh reproduces the Phase 2 result exactly (same "4 p
 9 deselected" shape), confirming the read path still works today with no new drift. The
 human-runnable equivalent is `uv run python main.py`. Raw evidence (request/response
 detail) lives in
-[`02-LIVE-EVIDENCE.md`](.planning/phases/02-live-read-path-verification/02-LIVE-EVIDENCE.md).
+[`02-LIVE-EVIDENCE.md`](https://github.com/coredmp95/pushframe/blob/master/.planning/milestones/v1.0-phases/02-live-read-path-verification/02-LIVE-EVIDENCE.md).
 
 ---
 
