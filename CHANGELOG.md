@@ -14,6 +14,23 @@ frames; it is not affiliated with Aura Frames Inc.
 
 ## [Unreleased]
 
+### Added
+
+- **Email run reports** for scheduled jobs, three levels per job
+  (`schedule add … --report DEBUG|INFO|ERROR`): DEBUG emails every run
+  with the full output plus the run's log tail (precise traces when
+  something is off); INFO emails every run's summary (frames synced,
+  photos, actions); ERROR emails only when a run failed or carries a
+  potential problem (non-zero exit, failed uploads/downloads, a
+  scheduled mass-hide skip, an abort). Transport configured once with
+  the new `pushframe schedule report` subcommand (--to/--smtp-host/
+  --smtp-port/--smtp-user/--smtp-password, --test, --show, --disable;
+  stored in the 0600 config `report` key, PUSHFRAME_SMTP_*/
+  PUSHFRAME_REPORT_TO override at use time). Subjects name the outcome
+  ([pushframe] nightly: OK — Applied: 111 uploaded, 2 hidden / FAILED /
+  ATTENTION); a delivery failure never changes the run's exit code.
+  Manual runs can email too: `google-sync … --report INFO`.
+
 ### Changed
 
 - The pair system explains itself: `pushframe config pair --help` maps

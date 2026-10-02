@@ -106,7 +106,9 @@ WantedBy=timers.target
 
 def _exec_start_for(pair: str | None = None, album: str | None = None,
                    frame: str | None = None, sync_dir: str | None = None,
-                   batch_size: int | None = None) -> str:
+                   batch_size: int | None = None, job: str | None = None,
+                   report: str | None = None,
+                   report_to: str | None = None) -> str:
     """Non-interactive ExecStart from STORED config only (TMR-03)."""
     from pushframe import config_store
     parts = ['pushframe']
@@ -121,6 +123,12 @@ def _exec_start_for(pair: str | None = None, album: str | None = None,
                   '--apply', '--yes', '--scheduled']
         if spec.get('batch_size') or batch_size:
             parts += ['--batch-size', str(spec.get('batch_size') or batch_size)]
+        if report:
+            parts += ['--report', report]
+            if job:
+                parts += ['--report-tag', f'"{job}"']
+            if report_to:
+                parts += ['--report-to', f'"{report_to}"']
     return ' '.join(parts)
 
 
@@ -128,10 +136,31 @@ def schedule_add(job: str, *, pair: str | None = None,
                  album: str | None = None, frame: str | None = None,
                  sync_dir: str | None = None, every: str | None = None,
                  at: str | None = None,
-                 batch_size: int | None = None) -> int:
+                 batch_size: int | None = None,
+                 report: str | None = None,
+                 report_to: str | None = None) -> int:
     if not job.replace('-', '').isalnum():
         print(f'schedule: job name "{job}" must be alphanumeric/dashes')
         return 1
+    report_level = None
+    if report is not None:
+        from pushframe import report as report_mod
+        report_level = report_mod.normalize_level(report)
+        if report_level is None:
+            print(f'schedule: --report {report!r} is not a level — use '
+                  f'DEBUG, INFO or ERROR (DEBUG: every run with traces; '
+                  f'INFO: every run, summary; ERROR: only on a problem)')
+            return 1
+        if sync_dir:
+            print('schedule: --report is wired for google-sync jobs — use '
+                  '--pair (or --album/--frame), not --sync-dir')
+            return 1
+        cfg = report_mod.load_config()
+        if not (cfg.get('to') and cfg.get('smtp_host')):
+            print('schedule: WARNING — --report is on but no email transport '
+                  'is configured; the job will run silently. Set it once: '
+                  '`pushframe schedule report --to ADDR --smtp-host HOST` '
+                  '(then `schedule report --test`).')
     if not systemd_user_session_ok():
         print('schedule: no systemd USER session available (systemctl '
               '--user does not answer). Remedy: log in once on the machine, '
@@ -150,7 +179,9 @@ def schedule_add(job: str, *, pair: str | None = None,
 
     UNIT_DIR.mkdir(parents=True, exist_ok=True)
     exec_start = _exec_start_for(pair=pair, album=album, frame=frame,
-                                 sync_dir=sync_dir, batch_size=batch_size)
+                                 sync_dir=sync_dir, batch_size=batch_size,
+                                 job=job, report=report_level,
+                                 report_to=report_to)
     (UNIT_DIR / f'pushframe-{job}.service').write_text(
         render_service(job, exec_start))
     (UNIT_DIR / f'pushframe-{job}.timer').write_text(timer)

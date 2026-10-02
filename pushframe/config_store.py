@@ -23,7 +23,7 @@ def _path() -> Path:
     from-import would freeze the path at first import."""
     return Path(settings.CONFIG_PATH)
 KEY_WHITELIST = {'version', 'email', 'auth_token', 'user_id', 'default_frame',
-                 'debug', 'settings', 'pairs'}
+                 'debug', 'settings', 'pairs', 'report'}
 
 
 class ConfigError(ValueError):
@@ -52,10 +52,13 @@ def load(path: Path | None = None) -> dict:
             f'expected {SCHEMA_VERSION}')
     data.setdefault('settings', {})
     data.setdefault('pairs', {})
+    data.setdefault('report', {})
     if not isinstance(data['settings'], dict):
         raise ConfigError(f'config file {path}: "settings" must be an object')
     if not isinstance(data['pairs'], dict):
         raise ConfigError(f'config file {path}: "pairs" must be an object')
+    if not isinstance(data['report'], dict):
+        raise ConfigError(f'config file {path}: "report" must be an object')
     return data
 
 

@@ -215,6 +215,18 @@ def build_parser() -> argparse.ArgumentParser:
         help='Timed-run semantics: a plan hiding too many photos (over the '
              'mass-hide safety threshold) SKIPS AND LOGS '
              'instead of proceeding (used by pushframe schedule units)')
+    gsync_parser.add_argument(
+        '--report', default=None,
+        help='Email a run report at DEBUG (every run, traces), INFO (every '
+             'run, summary) or ERROR (only on failure / potential problem). '
+             'Transport setup: `pushframe schedule report --to ... '
+             '--smtp-host ...`')
+    gsync_parser.add_argument(
+        '--report-to', default=None, dest='report_to',
+        help='Override the configured report recipient')
+    gsync_parser.add_argument(
+        '--report-tag', default=None, dest='report_tag',
+        help='Label in the report subject (schedule units pass the job name)')
     sched_parser = subparsers.add_parser(
         'schedule', help='Install/list/remove systemd USER timers '
                          '(no root; runs from stored config, never prompts)',
@@ -230,8 +242,16 @@ def build_parser() -> argparse.ArgumentParser:
             '  --at "OnCalendar"         explicit systemd calendar (e.g.\n'
             '                  "Mon *-*-* 02:00") instead of --every Nmin|Nh|Nd.\n'
             '\n'
+            'EMAIL REPORTS (--report on a google-sync job)\n'
+            '  pushframe schedule report --to you@example.com --smtp-host smtp.example.com\n'
+            '                  [--smtp-port 587] [--smtp-user U]   one-time setup\n'
+            '  pushframe schedule report --test    send a trial email now\n'
+            '  --report DEBUG    every run, full traces (something looks off)\n'
+            '  --report INFO     every run, the summary (frames, photos, actions)\n'
+            '  --report ERROR    only when a run failed or looks wrong\n'
+            '\n'
             'EXAMPLES\n'
-            '  pushframe schedule add nightly --pair family --every 1d\n'
+            '  pushframe schedule add nightly --pair family --every 1d --report INFO\n'
             '  pushframe schedule add hourly --sync-dir /srv/photos --frame Salon --every 1h\n'
             '  pushframe schedule list   |   pushframe schedule remove nightly\n'
             '\n'
@@ -1662,6 +1682,35 @@ def run_sync(dir_arg: str, frame_arg: str, apply: bool = False, yes: bool = Fals
         return 1
 
 
+class _Tee:
+    """stdout mirror for --report: the operator keeps the live output while
+    the report captures the exact same stream."""
+
+    def __init__(self, stream, buf):
+        self._stream, self._buf = stream, buf
+
+    def write(self, s):
+        self._stream.write(s)
+        self._buf.write(s)
+        return len(s)
+
+    def flush(self):
+        self._stream.flush()
+
+
+def _deliver_report(level, report_to, report_tag, *, command, rc, output,
+                    started_ts, duration_s) -> None:
+    """Send the run report; a delivery problem is a stderr warning, never a
+    run failure (the scheduled job's exit code reflects the SYNC, not the
+    email)."""
+    from pushframe import report as report_mod
+    err = report_mod.deliver(level, command=command, rc=rc, output=output,
+                             duration_s=duration_s, started_ts=started_ts,
+                             tag=report_tag, to=report_to)
+    if err:
+        print(f'report: not sent — {err}', file=sys.stderr)
+
+
 def _docs_hint() -> str:
     # The wheel ships no docs (they live on GitHub), so terminal users get
     # URLs, not local paths. Printed ONCE, on failure only — never after a
@@ -1691,8 +1740,11 @@ def _main(argv=None) -> int:
     parser = build_parser()
     # `config` sub-args carry their own --flags (pair add --album …); split
     # them out BEFORE argparse so they are not rejected as unknown options.
+    # `schedule` gets the same treatment (its `add --report … --report-to …`
+    # and `report --to … --smtp-host …` flags are hand-parsed downstream).
     argv_list = list(argv) if argv is not None else None
     config_tail = []
+    schedule_tail = []
     if argv_list is not None and 'config' in argv_list:
         i = argv_list.index('config')
         config_tail = argv_list[i + 1:]
@@ -1701,9 +1753,19 @@ def _main(argv=None) -> int:
         i = sys.argv.index('config')
         config_tail = sys.argv[i + 1:]
         sys.argv = sys.argv[:i + 1]
+    elif argv_list is not None and 'schedule' in argv_list:
+        i = argv_list.index('schedule')
+        schedule_tail = argv_list[i + 1:]
+        argv_list = argv_list[:i + 1]
+    elif argv_list is None and 'schedule' in (sys.argv[1:] or []):
+        i = sys.argv.index('schedule')
+        schedule_tail = sys.argv[i + 1:]
+        sys.argv = sys.argv[:i + 1]
     args = parser.parse_args(argv_list)
     if args.command == 'config' and config_tail:
         args.config_args = config_tail
+    if args.command == 'schedule':
+        args.schedule_args = schedule_tail
 
     if args.command == 'config':
         return run_config(wizard_args=getattr(args, 'config_args', []) or [])
@@ -1716,6 +1778,9 @@ def _main(argv=None) -> int:
         sub = list(args.schedule_args or [])
         if not sub or sub[0] == 'list':
             return sch.schedule_list()
+        if sub[0] == 'report':
+            from pushframe import report as report_mod
+            return report_mod.configure(sub[1:])
         if sub[0] == 'add' and len(sub) >= 2:
             job = sub[1]
             def _opt(flag, default=None):
@@ -1726,7 +1791,9 @@ def _main(argv=None) -> int:
                                     sync_dir=_opt('--sync-dir'),
                                     every=_opt('--every'), at=_opt('--at'),
                                     batch_size=int(_opt('--batch-size'))
-                                    if _opt('--batch-size') else None)
+                                    if _opt('--batch-size') else None,
+                                    report=_opt('--report'),
+                                    report_to=_opt('--report-to'))
         if sub[0] == 'remove' and len(sub) >= 2:
             return sch.schedule_remove(sub[1])
         print('usage: pushframe schedule add <job> --pair <name> --every Nmin|Nh|Nd '
@@ -1751,6 +1818,31 @@ def _main(argv=None) -> int:
         if (args.pair or args.all_pairs) and (args.album or args.frame):
             print('note: with --pair/--all the album and frame come from the '
                   'config — the positional album and --frame are ignored')
+        target = (f'--pair {args.pair}' if args.pair
+                  else '--all' if args.all_pairs
+                  else f'{args.album!r} --frame {args.frame!r}')
+        command = f'google-sync {target}'
+        if args.report:
+            # --report mirrors stdout (the operator keeps the live output)
+            # and emails the captured run per the level's contract.
+            import contextlib
+            import io as _io
+            import time as _time
+            started = _time.time()
+            buf = _io.StringIO()
+            with contextlib.redirect_stdout(_Tee(sys.stdout, buf)):
+                rc = run_google_sync(args.album, args.frame or '--all',
+                                     apply=args.apply, yes=args.yes,
+                                     debug=args.debug,
+                                     batch_size=args.batch_size,
+                                     pair=args.pair,
+                                     run_all=args.all_pairs,
+                                     scheduled=args.scheduled)
+            _deliver_report(args.report, args.report_to, args.report_tag,
+                            command=command, rc=rc, output=buf.getvalue(),
+                            started_ts=started,
+                            duration_s=_time.time() - started)
+            return rc
         return run_google_sync(args.album, args.frame or '--all',
                                apply=args.apply, yes=args.yes,
                                debug=args.debug, batch_size=args.batch_size,

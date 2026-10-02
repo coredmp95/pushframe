@@ -245,6 +245,39 @@ Two safety properties in scheduled mode:
   only if you enable lingering once:
   `loginctl enable-linger $USER` (run it yourself; the tool never does).
 
+### Email run reports — `schedule report` + `google-sync --report`
+
+Scheduled jobs can email their report. Configure the transport once:
+
+```bash
+pushframe schedule report --to you@example.com --smtp-host smtp.example.com
+pushframe schedule report --test        # a trial email lands in the inbox
+pushframe schedule report               # show what is configured
+pushframe schedule report --disable     # forget it
+```
+
+Then pick a level per job:
+
+```bash
+pushframe schedule add nightly --pair cadre-venus --every 1d --report INFO
+```
+
+| Level | Emails… |
+|---|---|
+| `--report DEBUG` | **every run**, full run output **plus the last 100 lines of the run's log file** — for when something is not quite right and you need precise traces |
+| `--report INFO` | **every run**, the summary: plan counts, `Applied: …`, per-pair sections — knowing what happened (frames synced, photos, actions) |
+| `--report ERROR` | **only when a run failed or carries a potential problem**: non-zero exit, failed uploads/downloads, a scheduled mass-hide skip, an aborted run |
+
+The subject names the outcome at a glance: `[pushframe] nightly: OK — Applied:
+111 uploaded, 2 hidden, 0 re-shown`, `[pushframe] nightly: FAILED — …reason…`,
+`[pushframe] nightly: ATTENTION — …skip reason…` on an ERROR-level problem
+with exit 0. A manual run can email too: `pushframe google-sync --pair
+cadre-venus --apply --report INFO`. The SMTP settings live in the config file
+(`0600`; the password is prompted hidden, or `PUSHFRAME_SMTP_PASSWORD`), and
+`PUSHFRAME_REPORT_TO` / `PUSHFRAME_SMTP_*` override at use time. A delivery
+problem is printed as a warning and never changes the run's exit code — and a
+run with nothing to do simply emails `OK — nothing to do` at DEBUG/INFO.
+
 ## `config` — set up credentials and settings once
 
 The conversational alternative to hand-managed environment variables. Every value
