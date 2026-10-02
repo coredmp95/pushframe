@@ -247,6 +247,11 @@ The conversational alternative to hand-managed environment variables. Every valu
 still resolves live with the precedence **environment → config file → default**;
 the file is `~/.config/pushframe/config.json`, mode `0600`, written atomically.
 
+`pushframe config --help` (or `-h`, or `config help`) prints a one-screen map
+of the whole family — subcommands, examples, and the docs link — without
+starting anything; an unknown subcommand (a typo like `config shwo`) prints
+the same map and exits `2` instead of silently launching the wizard.
+
 ### The wizard (`pushframe config`)
 
 On a fresh install it asks for your email, then your password (**hidden

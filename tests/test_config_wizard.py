@@ -311,3 +311,34 @@ def test_set_get_path_and_unknown_key(cfg_path, capsys):
     assert "LOCALE" in capsys.readouterr().out  # known keys listed
     # auth_token is wizard-only
     assert run_config(wizard_args=["set", "auth_token", "x"]) == 1  # noqa: S105
+
+
+def test_config_help_prints_the_subcommand_map_not_the_wizard(capsys):
+    """`pushframe config --help` must answer with a map of the family.
+
+    The CLI passthrough captures everything after `config`, so argparse
+    never sees --help for this verb — it used to fall through into the
+    interactive wizard (stdin_isatty=True here: a fall-through would call
+    input() and blow up on EOF instead of printing a map).
+    """
+    from pushframe.cli import run_config
+    for flag in ('--help', '-h', 'help'):
+        rc = run_config(wizard_args=[flag], stdin_isatty=True)
+        assert rc == 0
+        out = capsys.readouterr().out
+        assert 'usage: pushframe config [SUBCOMMAND [ARGS]]' in out
+        assert 'show' in out and 'pair add NAME --album A --frame F' in out
+        assert 'docs/CLI.md' in out
+        assert 'Aura email:' not in out  # never the wizard's first prompt
+
+
+def test_config_unknown_subcommand_prints_usage_and_exits_2(cfg_path, capsys):
+    """A typo (`config shwo`) used to launch the wizard silently; it must
+    fail loud with the map and a usage exit code instead."""
+    from pushframe.cli import run_config
+    rc = run_config(wizard_args=["shwo"], stdin_isatty=True)
+    assert rc == 2
+    out = capsys.readouterr().out
+    assert "unknown config subcommand: 'shwo'" in out
+    assert 'usage: pushframe config' in out
+    assert 'Aura email:' not in out

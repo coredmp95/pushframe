@@ -16,6 +16,11 @@ frames; it is not affiliated with Aura Frames Inc.
 
 ### Changed
 
+- `pushframe config --help` (`-h`, `config help`) prints a one-screen map
+  of the config family — subcommands, examples, docs link — instead of
+  falling through into the interactive wizard (argparse never saw the
+  flag). An unknown subcommand or flag prints the same map and exits `2`
+  instead of silently starting the wizard.
 - `google-album` prints a summary by default (item count, page/exhaustion
   state, total disk weight with min/max/avg) instead of dumping the
   per-item table — hundreds of opaque id lines on a real album. The table

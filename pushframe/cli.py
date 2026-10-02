@@ -89,7 +89,7 @@ def build_parser() -> argparse.ArgumentParser:
                                help='Session/frames checks only (no test image written)')
     doctor_parser.add_argument('--debug', action='store_true', default=False)
     config_parser = subparsers.add_parser(
-        'config', help='Interactive setup wizard; subcommands: show, import, set, get, path, pair')
+        'config', help='Setup wizard and config family — run `pushframe config --help` for the subcommand map')
     # argparse_known: config_args may itself contain --flags (pair add
     # --album A --frame F); parse_known_args would otherwise reject them as
     # unknown top-level options.
@@ -311,6 +311,45 @@ def _wizard_login(email: str, password: str) -> dict:
             'user_id': aura.user_id, 'frames': frames}
 
 
+def _print_config_help() -> None:
+    """`pushframe config --help` — a one-screen map of the config family.
+
+    The CLI passthrough routes EVERYTHING after `config` into run_config,
+    so argparse never sees `--help` for this verb; this is the hand-rolled
+    replacement (kept in sync with docs/CLI.md's config section).
+    """
+    print(
+        'usage: pushframe config [SUBCOMMAND [ARGS]]\n'
+        '\n'
+        'With no subcommand: the interactive setup wizard — asks for the Aura\n'
+        'credentials (login-tested before anything is written), then the\n'
+        'default frame. Run it once after install; re-run any time, Enter\n'
+        'keeps stored values.\n'
+        '\n'
+        'Subcommands:\n'
+        '  show              Effective settings, secrets redacted, with each\n'
+        "                    value's source (env / file / default)\n"
+        '  path              Print the config file path\n'
+        '  import [--file F] Adopt a .env file (default: .env) as config\n'
+        '  set KEY VALUE     Store one setting (validated; e.g.\n'
+        '                    config set DEFAULT_FRAME "Living Room")\n'
+        '  get KEY           Print one setting and where it comes from\n'
+        '  pair list         List named album→frame pairs\n'
+        '  pair add NAME --album A --frame F\n'
+        '                    Save a pair (consumed by google-sync --pair / --all)\n'
+        '  pair remove NAME  Remove a named pair\n'
+        '\n'
+        'Examples:\n'
+        '  pushframe config            first-time setup\n'
+        '  pushframe config show       what is set, and from where\n'
+        '  pushframe config set DEFAULT_FRAME "Living Room"\n'
+        '  pushframe config pair add family --album "Album X" --frame "Living Room"\n'
+        '\n'
+        'Full reference: '
+        'https://github.com/coredmp95/pushframe/blob/master/docs/CLI.md'
+    )
+
+
 def run_config(wizard_args=None, stdin_isatty: bool | None = None) -> int:
     """pushframe config — the command family (CFG-01..04).
 
@@ -322,6 +361,20 @@ def run_config(wizard_args=None, stdin_isatty: bool | None = None) -> int:
 
     args = list(wizard_args if wizard_args is not None else [])
     is_tty = _sys.stdin.isatty() if stdin_isatty is None else stdin_isatty
+
+    # `--help` never reaches argparse (the CLI passthrough captures
+    # everything after `config`), so it used to fall through into the
+    # wizard — or, non-interactively, answered "needs an interactive
+    # terminal". Answer it here; and refuse unknown subcommands/flags
+    # instead of silently launching an interactive flow (`config shwo`
+    # used to start the wizard).
+    if args and args[0] in ('--help', '-h', 'help'):
+        _print_config_help()
+        return 0
+    if args and args[0] not in ('pair', 'show', 'path', 'import', 'set', 'get'):
+        print(f'unknown config subcommand: {args[0]!r}\n')
+        _print_config_help()
+        return 2
 
     # --- subcommands -------------------------------------------------------
     if args and args[0] == 'pair':
