@@ -432,7 +432,7 @@ wheels = [
 
 [[package]]
 name = "pushframe"
-version = "5.1.15"
+version = "5.1.16"
 source = { editable = "." }
 dependencies = [
     { name = "boto3" },
