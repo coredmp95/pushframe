@@ -323,10 +323,20 @@ saw exactly one login.
 
 ### `config show`
 
-Prints every known setting: its **effective value** (secrets masked as `***`),
-and **where it came from** (`env`, `file`, or `default`). Lists the keys an
-environment variable is currently shadowing, so a stale export never silently
-beats what you put in the file.
+Prints **every** configuration surface — an exhaustive inventory, so a
+setting can always be discovered before it is set:
+
+- the settings table, each with its **effective value** (secrets masked as
+  `***`) and **where it came from** (`env`, `file`, or `default`);
+- the wizard keys (`email`, `default_frame`, `debug`, `auth_token`) —
+  listed even when unset, as `(not set)`;
+- all six email-report keys (`report_to`, `smtp_host`, `smtp_port`,
+  `smtp_user`, `smtp_password`, `report_from`) — `(not set)` included,
+  with the setup remedy or the trial-email next step;
+- the pairs (`pairs: N (names) — detail: pushframe config pair list`).
+
+Environment variables currently shadowing a value are labeled `(env)`, so a
+stale export never silently beats what you put in the file.
 
 ### `config import FILE`
 

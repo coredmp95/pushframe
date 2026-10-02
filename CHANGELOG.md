@@ -12,6 +12,18 @@ every channel.
 `pushframe` is an unofficial community CLI for Aura Frames digital photo
 frames; it is not affiliated with Aura Frames Inc.
 
+## [Unreleased]
+
+### Changed
+
+- `config show` is now an exhaustive inventory: the wizard keys
+  (`email`, `default_frame`, `debug`, `auth_token`) are listed even when
+  unset (as `(not set)`), all six email-report keys are always shown
+  with their setup remedy or next step (`smtp_port` names the 587/465
+  defaults when unset), and the pairs line names the count and the
+  `config pair list` detail command — a setting can no longer stay
+  undiscoverable just because it was never configured.
+
 ## [5.1.16] - 2026-10-02
 
 ### Added

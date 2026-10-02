@@ -626,8 +626,16 @@ _REPORT_KEY_ALIASES = {
 
 
 def _config_show() -> int:
-    """CFG-02: the effective config, secrets redacted, sources labeled."""
-    import json as _json
+    """CFG-02: EVERY configuration surface with its status, secrets
+    redacted, sources labeled.
+
+    An inventory is only useful if it is exhaustive (2026-10-02 report:
+    "how do you know a setting exists?" — the report transport used to be
+    invisible until configured, the wizard keys absent until set, and
+    pairs were never mentioned). Everything the tool reads is listed:
+    the settings table, the wizard keys, the six report keys, and the
+    pairs — each with its effective value/source or `(not set)`.
+    """
     data = config_store.load()
     print('effective pushframe configuration (env var > config file > default):')
     for name in settings.known_keys():
@@ -640,42 +648,64 @@ def _config_show() -> int:
         else:
             source = 'default'
         print(f'  {name} = {value!r}  ({source})')
+    # Wizard-managed keys: always listed, `(not set)` included — a missing
+    # line is how a setting stays undiscoverable.
     for key in ('email', 'default_frame', 'debug'):
         if data.get(key) is not None:
-            shown = '***' if key == 'auth_token' else data[key]
-            print(f'  {key} = {shown!r}  (file)')
+            print(f'  {key} = {data[key]!r}  (file)')
+        elif key == 'debug':
+            print('  debug = False  (default)')
+        else:
+            print(f'  {key} = (not set)')
     if data.get('auth_token'):
         print('  auth_token = ***  (file)')
-    # The report transport (report.py's load_config): env overrides the
-    # stored `report` block; the password never prints.
-    from pushframe import report as report_mod
-    rcfg = report_mod.load_config()
-    rdata = data.get('report', {}) or {}
-    if rcfg.get('to') or rcfg.get('smtp_host'):
-        env_of = {
-            'report_to': 'PUSHFRAME_REPORT_TO',
-            'smtp_host': 'PUSHFRAME_SMTP_HOST',
-            'smtp_port': 'PUSHFRAME_SMTP_PORT',
-            'smtp_user': 'PUSHFRAME_SMTP_USER',
-            'smtp_password': 'PUSHFRAME_SMTP_PASSWORD',
-            'report_from': 'PUSHFRAME_SMTP_FROM',
-        }
-        for op_name, env_var in env_of.items():
-            stored_key = _REPORT_KEY_ALIASES[op_name]
-            if os.getenv(env_var) is not None:
-                shown = '***' if op_name == 'smtp_password' else os.getenv(env_var)
-                print(f'  {op_name} = {shown!r}  (env)')
-            elif rdata.get(stored_key):
-                shown = '***' if op_name == 'smtp_password' else rdata[stored_key]
-                print(f'  {op_name} = {shown!r}  (file)')
-        print('  (email reports: `pushframe schedule report --test` sends a '
-              'trial; levels go on each job with `schedule add … --report '
-              'DEBUG|INFO|ERROR`)')
     else:
-        print('  email reports: not configured — set with `pushframe config '
-              'set report_to you@example.com` + `pushframe config set '
-              'smtp_host …` (or `pushframe schedule report --to … '
-              '--smtp-host …`)')
+        print('  auth_token = (not set)')
+    # The report transport (report.py's load_config): env overrides the
+    # stored `report` block; the password never prints. All six keys are
+    # ALWAYS listed.
+    from pushframe import report as report_mod
+    rdata = data.get('report', {}) or {}
+    print('  email reports (google-sync --report):')
+    env_of = {
+        'report_to': 'PUSHFRAME_REPORT_TO',
+        'smtp_host': 'PUSHFRAME_SMTP_HOST',
+        'smtp_port': 'PUSHFRAME_SMTP_PORT',
+        'smtp_user': 'PUSHFRAME_SMTP_USER',
+        'smtp_password': 'PUSHFRAME_SMTP_PASSWORD',
+        'report_from': 'PUSHFRAME_SMTP_FROM',
+    }
+    configured = False
+    for op_name, env_var in env_of.items():
+        stored_key = _REPORT_KEY_ALIASES[op_name]
+        env_value = os.getenv(env_var)
+        if env_value is not None:
+            shown = '***' if op_name == 'smtp_password' else env_value
+            print(f'    {op_name} = {shown!r}  (env)')
+            configured = True
+        elif rdata.get(stored_key):
+            shown = '***' if op_name == 'smtp_password' else rdata[stored_key]
+            print(f'    {op_name} = {shown!r}  (file)')
+            configured = True
+        elif op_name == 'smtp_port':
+            print('    smtp_port = (not set — 587 by default; 465 = SSL)')
+        else:
+            print(f'    {op_name} = (not set)')
+    if configured:
+        print('    (trial: `pushframe schedule report --test`; levels go on '
+              'each job with `schedule add … --report DEBUG|INFO|ERROR`)')
+    else:
+        print('    (not configured — `pushframe config set report_to '
+              'you@example.com` + `config set smtp_host smtp.example.com`, '
+              'then `pushframe schedule report --test`)')
+    # Pairs: count and names here, the full mapping with `config pair list`.
+    pairs = data.get('pairs', {}) or {}
+    if pairs:
+        print(f'  pairs: {len(pairs)} ({", ".join(pairs)}) — detail: '
+              f'pushframe config pair list')
+    else:
+        print('  pairs: none — add with `pushframe config pair add <name> '
+              '--album A --frame F`')
     # Identity hygiene (5.1.1, venus anti-abuse lesson): the all-zeros id is
     # shared by every unprovisioned pushframe install and reads as a
     # non-phone client — name it and hand the remedy.

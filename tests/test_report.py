@@ -504,9 +504,6 @@ def test_config_show_reports_the_transport_block(cfg_path, monkeypatch, capsys):
     discovery path for "how do I configure SMTP?" was reading docs."""
     _clean_env(monkeypatch)
     from pushframe.cli import run_config
-    # not configured: names the remedy
-    assert run_config(wizard_args=['show']) == 0
-    assert 'email reports: not configured' in capsys.readouterr().out
     # configured: shows the values, redacts the password, names next steps
     run_config(wizard_args=['set', 'report_to', 'me@example.com'])
     run_config(wizard_args=['set', 'smtp_host', 'smtp.example.com'])
@@ -518,6 +515,46 @@ def test_config_show_reports_the_transport_block(cfg_path, monkeypatch, capsys):
     assert "smtp_password = '***'  (file)" in out
     assert 's3cret' not in out                        # noqa: S105
     assert 'schedule report --test' in out
+
+
+def test_config_show_is_an_exhaustive_inventory(cfg_path, monkeypatch, capsys):
+    """An inventory is only useful if it is exhaustive: every key pushframe
+    reads is LISTED — with `(not set)` status when absent — otherwise there
+    is no way to discover a setting exists (2026-10-02 report)."""
+    _clean_env(monkeypatch)
+    from pushframe.cli import run_config
+    assert run_config(wizard_args=['show']) == 0
+    out = capsys.readouterr().out
+    # wizard keys: always listed, absent = (not set)
+    assert 'email = (not set)' in out
+    assert 'default_frame = (not set)' in out
+    assert 'auth_token = (not set)' in out
+    assert 'debug = False  (default)' in out
+    # all six report keys listed even when nothing is configured
+    assert 'email reports (google-sync --report):' in out
+    for key in ('report_to', 'smtp_host', 'smtp_user',
+                'smtp_password', 'report_from'):
+        assert f'{key} = (not set)' in out
+    assert 'smtp_port = (not set — 587 by default; 465 = SSL)' in out
+    assert 'not configured' in out and 'schedule report --test' in out
+    # pairs: the mapping store is named with its remedy
+    assert 'pairs: none' in out and 'config pair add' in out
+
+
+def test_config_show_lists_pairs_and_report_values(cfg_path, monkeypatch,
+                                                   capsys):
+    _clean_env(monkeypatch)
+    from pushframe.cli import run_config
+    from pushframe import pairs as pairs_mod
+    pairs_mod.pair_add('cadre-venus', album='Cadre', frame='Cadre de Fabrice')
+    run_config(wizard_args=['set', 'report_to', 'me@example.com'])
+    run_config(wizard_args=['set', 'smtp_port', '465'])
+    assert run_config(wizard_args=['show']) == 0
+    out = capsys.readouterr().out
+    assert 'pairs: 1 (cadre-venus)' in out and 'config pair list' in out
+    assert "smtp_port = '465'  (file)" in out          # explicit value shown
+    assert '587 by default' not in out                 # only when unset
+    assert '(trial:' in out                            # configured next step
 
 
 def test_config_show_env_overrides_report_block(cfg_path, monkeypatch, capsys):
