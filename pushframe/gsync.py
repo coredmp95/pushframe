@@ -178,17 +178,25 @@ def run_google_sync_plan(listing, manifest, staged, cache_dir: Path,
 
 def format_plan_report(plan, failures: list[tuple[str, str]],
                        videos_skipped: int | None, *,
-                       staged=None) -> str:
+                       staged=None, detail_ids: bool = False) -> str:
     """Render the plan for the CLI (dry-run print and post-apply summary).
 
     Every Google id passes through `redact_link` — the report is print-ready
-    and log-safe by construction.
+    and log-safe by construction. `detail_ids` names the affected frame
+    assets too (same shape the interactive dry-run prints): a scheduled
+    run's log must answer WHICH photos a delta touched, not just how many —
+    the 2026-10-03 phantom-delta investigation had no ids to work with.
     """
     lines = [
         f"Plan: {len(plan.to_upload)} to upload, {len(plan.to_reshow)} to "
         f"re-show, {plan.unchanged} unchanged, {len(plan.to_delete)} to hide, "
         f"{plan.already_hidden} already hidden",
     ]
+    if detail_ids:
+        for asset in plan.to_reshow:
+            lines.append(f'  ~ {asset.id} (taken {asset.taken_at_dt}) — re-show')
+        for asset in plan.to_delete:
+            lines.append(f'  - {asset.id} (taken {asset.taken_at_dt})')
     if videos_skipped is not None:
         lines.append(
             f"Videos skipped: {videos_skipped} (metadata delta — videos are "
@@ -443,7 +451,8 @@ def run_google_sync(album_target: str, frame_arg: str, *, apply: bool = False,
         print(f'google-sync failed: {e}')
         return 1
 
-    print(format_plan_report(plan, failures, videos, staged=staged))
+    print(format_plan_report(plan, failures, videos, staged=staged,
+                             detail_ids=scheduled))
 
     if not apply:
         return 0  # structural dry-run default — nothing above mutated anything

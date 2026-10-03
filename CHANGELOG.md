@@ -12,6 +12,21 @@ every channel.
 `pushframe` is an unofficial community CLI for Aura Frames digital photo
 frames; it is not affiliated with Aura Frames Inc.
 
+## [Unreleased]
+
+### Added
+
+- Scheduled `google-sync` runs open their job log with a timestamped
+  `=== run <ISO> job=<tag> pushframe=<version> ===` header and close it with
+  `=== run end rc=<rc> elapsed=<s>s ===` — which night did what is readable
+  from the log alone, no journalctl required.
+- The scheduled plan names the affected frame assets (`~ <id> — re-show`,
+  `- <id> — hide`), the exact shape the interactive dry-run prints — a delta
+  is identifiable, not just countable (the 2026-10-03 phantom-delta
+  investigation had no ids to work with).
+- Job append logs are bounded: past 5 MiB a scheduled run slides its log to
+  `<job>.log.1` (one previous generation kept) at run end.
+
 ## [5.1.25] - 2026-10-03
 
 ### Fixed

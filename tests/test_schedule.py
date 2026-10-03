@@ -251,3 +251,79 @@ def test_scheduled_threshold_breach_skips_and_logs(tmp_path, capsys):
     assert "mass-hide safety threshold" in out and "skip" in out.lower()
     # nothing was hidden
     assert "Applied" not in out
+
+
+# --- scheduled-run bookkeeping (TMR-05): header, ids, footer, rotation -------
+
+def test_scheduled_run_header_and_footer(capsys):
+    import re
+    from pushframe.cli import _scheduled_run_footer, _scheduled_run_header
+    _scheduled_run_header('nightly')
+    _scheduled_run_footer(0, 18.4)
+    out = capsys.readouterr().out
+    assert re.match(r'^=== run \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2} '
+                    r'job=nightly pushframe=\S+ ===$', out.splitlines()[0])
+    assert '=== run end rc=0 elapsed=18s ===' in out
+
+
+def test_scheduled_dispatch_opens_and_closes_the_log_block(
+        unit_dir, cfg_path, monkeypatch, capsys):
+    """A scheduled google-sync through main() opens its log block with the
+    timestamped header and closes it with the run's rc — so which night did
+    what is readable from <job>.log alone."""
+    from pushframe import cli, gsync
+    seen = {}
+    monkeypatch.setattr(gsync, 'run_google_sync',
+                        lambda *a, **k: seen.update(k) or 0)
+    rc = cli.main(['google-sync', 'Cadre', '--frame', 'Fabrice',
+                   '--apply', '--yes', '--scheduled'])
+    out = capsys.readouterr().out
+    assert rc == 0 and seen['scheduled'] is True
+    assert out.splitlines()[0].startswith('=== run ')
+    assert '=== run end rc=0 elapsed=' in out
+
+
+def test_interactive_google_sync_prints_no_bookkeeping(
+        unit_dir, cfg_path, monkeypatch, capsys):
+    """The header/footer are job-log bookkeeping — an interactive run (a
+    human watching, or a captured report) never prints them."""
+    from pushframe import cli, gsync
+    monkeypatch.setattr(gsync, 'run_google_sync', lambda *a, **k: 0)
+    assert cli.main(['google-sync', 'Cadre', '--frame', 'Fabrice']) == 0
+    out = capsys.readouterr().out
+    assert '=== run' not in out and 'run end' not in out
+
+
+def test_job_log_rotation_slides_past_limit(unit_dir, monkeypatch):
+    """Past the size bound the job log slides to <job>.log.1 (one previous
+    generation); small logs, absent tags and absent files are silent no-ops."""
+    from pushframe import schedule
+    from pushframe.cli import _rotate_job_log_if_large
+    log = schedule.LOG_DIR / 'nightly.log'
+    log.parent.mkdir(parents=True, exist_ok=True)
+    log.write_text('x' * 50)
+    assert not _rotate_job_log_if_large('nightly', limit_bytes=100)
+    log.write_text('y' * 200)
+    assert _rotate_job_log_if_large('nightly', limit_bytes=100)
+    assert (log.parent / 'nightly.log.1').read_text() == 'y' * 200
+    assert not log.exists()
+    assert not _rotate_job_log_if_large(None, limit_bytes=100)
+    assert not _rotate_job_log_if_large('ghost', limit_bytes=100)
+
+
+def test_scheduled_plan_names_the_affected_assets():
+    """detail_ids renders the affected frame assets with the exact shape the
+    interactive dry-run prints — a scheduled delta is identifiable, not just
+    countable (the 2026-10-03 phantom-delta investigation had no ids)."""
+    from types import SimpleNamespace
+    from pushframe.gsync import format_plan_report
+    plan = SimpleNamespace(
+        to_upload=[],
+        to_reshow=[SimpleNamespace(id='AF1reshow', taken_at_dt='2020-01-01')],
+        to_delete=[SimpleNamespace(id='AF2hide', taken_at_dt='2020-02-02')],
+        unchanged=755, already_hidden=10)
+    out = format_plan_report(plan, [], 0, detail_ids=True)
+    assert '  ~ AF1reshow (taken 2020-01-01) — re-show' in out
+    assert '  - AF2hide (taken 2020-02-02)' in out
+    plain = format_plan_report(plan, [], 0)
+    assert 'AF1reshow' not in plain and 'AF2hide' not in plain

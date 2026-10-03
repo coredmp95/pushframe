@@ -2196,6 +2196,44 @@ def _parse_pair_add(sub: list[str]) -> tuple[int, str | None, str | None,
     return 0, name, opts['--album'], opts['--frame']
 
 
+def _scheduled_run_header(report_tag: str | None) -> None:
+    """First line a scheduled run writes to its job log — the run's identity
+    (which night did what must never require journalctl). Only the scheduled
+    paths print it: it exists for the append-only job logs."""
+    from datetime import datetime
+    from pushframe import __version__
+    stamp = datetime.now().astimezone().isoformat(timespec='seconds')
+    print(f'=== run {stamp} job={report_tag or "-"} pushframe={__version__} ===')
+
+
+def _scheduled_run_footer(rc: int, elapsed_s: float) -> None:
+    """Closes the run's log block. An exit by exception has no footer — the
+    traceback and systemd's Failed line carry that story."""
+    print(f'=== run end rc={rc} elapsed={round(elapsed_s)}s ===')
+
+
+def _rotate_job_log_if_large(report_tag: str | None, *,
+                             limit_bytes: int = 5 * 1024 * 1024) -> bool:
+    """Bound a job's append log (systemd reopens it with O_APPEND every
+    start): past `limit_bytes`, the log slides to <job>.log.1 — one
+    previous generation kept. Called at run END: this process's still-open
+    stdout fd keeps appending to the renamed inode until exit, and the next
+    start opens a fresh <job>.log, so nothing is lost and no fd surgery is
+    needed. A rotation failure must never fail a run that already succeeded.
+    """
+    if not report_tag:
+        return False
+    from pushframe.schedule import LOG_DIR
+    log = LOG_DIR / f'{report_tag}.log'
+    try:
+        if not log.exists() or log.stat().st_size <= limit_bytes:
+            return False
+        os.replace(log, log.parent / (log.name + '.1'))
+        return True
+    except OSError:
+        return False
+
+
 def _main(argv=None) -> int:
     load_dotenv()
     # IDN-03 (phase 20): first run on an existing auraframes install migrates
@@ -2320,12 +2358,15 @@ def _main(argv=None) -> int:
                   else '--all' if args.all_pairs
                   else f'{args.album!r} --frame {args.frame!r}')
         command = f'google-sync {target}'
+        import time as _time
+        if args.scheduled:
+            _scheduled_run_header(args.report_tag)
+        _t0 = _time.monotonic()
         if args.report:
             # --report mirrors stdout (the operator keeps the live output)
             # and emails the captured run per the level's contract.
             import contextlib
             import io as _io
-            import time as _time
             started = _time.time()
             buf = _io.StringIO()
             with contextlib.redirect_stdout(_Tee(sys.stdout, buf)):
@@ -2340,13 +2381,19 @@ def _main(argv=None) -> int:
                             command=command, rc=rc, output=buf.getvalue(),
                             started_ts=started,
                             duration_s=_time.time() - started)
-            return rc
-        return run_google_sync(args.album, args.frame or '--all',
-                               apply=args.apply, yes=args.yes,
-                               debug=args.debug, batch_size=args.batch_size,
-                               pair=args.pair,
-                               run_all=args.all_pairs,
-                               scheduled=args.scheduled)
+        else:
+            rc = run_google_sync(args.album, args.frame or '--all',
+                                 apply=args.apply, yes=args.yes,
+                                 debug=args.debug, batch_size=args.batch_size,
+                                 pair=args.pair,
+                                 run_all=args.all_pairs,
+                                 scheduled=args.scheduled)
+        if args.scheduled:
+            # The job log carries the run's own bookkeeping — identity
+            # (header above), end (rc + elapsed), then the size bound.
+            _scheduled_run_footer(rc, _time.monotonic() - _t0)
+            _rotate_job_log_if_large(args.report_tag)
+        return rc
     if args.command == 'inspect':
         return run_inspect(args.frame, debug=args.debug)
     if args.command == 'sync':
