@@ -560,3 +560,55 @@ def test_live_installed_units_all_parse():
             problems.append(f'{svc.name}: {problem}')
     assert not problems, \
         'units that would die at parse:\n' + '\n'.join(problems)
+
+
+# --- push scheduled bookkeeping (cron-fed buffet frames) ----------------------
+
+def test_scheduled_push_dispatch_opens_and_closes_the_log_block(
+        unit_dir, cfg_path, monkeypatch, capsys):
+    """A scheduled `push` through main() gets the same bookkeeping contract
+    as scheduled google-sync/sync: timestamped header with the job tag,
+    the run (still purely additive — verb='push', no_delete), then the
+    rc/elapsed footer."""
+    from pushframe import cli
+    seen = {}
+    monkeypatch.setattr(cli, 'run_sync', lambda *a, **k: seen.update(k) or 0)
+    rc = cli.main(['push', '/srv/buffet', '--frame', 'Salon',
+                   '--apply', '--yes', '--scheduled',
+                   '--report-tag', 'buffet'])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert seen['verb'] == 'push' and seen['no_delete'] is True
+    assert seen['apply'] is True and seen['yes'] is True
+    assert out.splitlines()[0].startswith('=== run ')
+    assert 'job=buffet' in out.splitlines()[0]
+    assert '=== run end rc=0 elapsed=' in out
+
+
+def test_interactive_push_prints_no_bookkeeping(unit_dir, cfg_path,
+                                                monkeypatch, capsys):
+    """An interactive (human-watched) push never prints the log blocks and
+    rotation never runs — the bookkeeping exists for append-only job logs."""
+    from pushframe import cli
+    rotations = []
+    monkeypatch.setattr(cli, 'run_sync', lambda *a, **k: 0)
+    monkeypatch.setattr(cli, '_rotate_job_log_if_large',
+                        lambda tag, **k: rotations.append(tag) or False)
+    assert cli.main(['push', '/srv/buffet', '--frame', 'Salon']) == 0
+    out = capsys.readouterr().out
+    assert '=== run' not in out and 'run end' not in out
+    assert rotations == []
+
+
+def test_handwritten_push_unit_with_bookkeeping_flags_parses(
+        unit_dir, cfg_path):
+    """The ExecStart↔parser contract for cron-fed push units: a push line
+    carrying --scheduled/--report-tag survives the real argparse, and a
+    push unit with an unknown flag is flagged like any other."""
+    from pushframe.cli import _unit_argv_parse_problem
+    good = ('ExecStart=/usr/bin/pushframe push "/srv/buffet" '
+            '--frame "Salon" --apply --yes --scheduled '
+            '--report-tag "buffet"')
+    assert _unit_argv_parse_problem(good) is None
+    bad = 'ExecStart=/usr/bin/pushframe push "/srv/buffet" --frame "Salon" --nope'
+    assert 'unrecognized arguments: --nope' in _unit_argv_parse_problem(bad)

@@ -12,6 +12,17 @@ every channel.
 `pushframe` is an unofficial community CLI for Aura Frames digital photo
 frames; it is not affiliated with Aura Frames Inc.
 
+## [Unreleased]
+
+### Added
+
+- Scheduled `push` jobs (cron or hand-written units feeding a "buffet"
+  directory) take `--scheduled`/`--report-tag` and write the same run
+  bookkeeping as scheduled `google-sync`/`sync`: the `=== run … ===`
+  header with the job tag, the `=== run end rc=<rc> elapsed=<s>s ===`
+  footer, then the 5 MiB rotation. `push` stays purely additive —
+  bookkeeping only, no removal guard involved.
+
 ## [5.1.27] - 2026-10-03
 
 ### Fixed

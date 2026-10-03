@@ -633,7 +633,7 @@ The second run reports `To upload: 0` — the photo is re-shown, never uploaded 
 usage: pushframe push [-h] --frame FRAME [--apply] [--yes] [--limit LIMIT]
                      [--batch-size BATCH_SIZE] [--chunk-delay CHUNK_DELAY]
                      [--max-wait MAX_WAIT] [--no-wait] [--country COUNTRY]
-                     [--ignore-budget]
+                     [--ignore-budget] [--scheduled] [--report-tag REPORT_TAG]
                      dir
 
 positional arguments:
@@ -652,11 +652,20 @@ options:
   --no-wait                Stop immediately instead of waiting when the write budget is exhausted
   --country COUNTRY        Override the expected account country for the geo pre-flight guard
   --ignore-budget          Escape hatch: bypass the write budget entirely for this run
+  --scheduled              Timed-run bookkeeping: the job log opens with a timestamped
+                           "=== run ... ===" header and closes with the rc/elapsed footer
+  --report-tag REPORT_TAG  Job identity in the log header and the log-rotation target
 ```
 
 `push` is **structurally additive**: the removal list is forced empty, so it can never hide,
 remove, or re-show anything. It is the safe way to add photos from a supply directory without
 the frame being diffed to match it.
+
+Cron-fed buffet frames: run `push ... --apply --yes --scheduled --report-tag <job>` from
+cron or a hand-written unit — the job log (`~/.local/state/pushframe/<job>.log` for units)
+then opens with a timestamped `=== run … ===` header, closes with `=== run end rc=<rc>
+elapsed=<s>s ===`, and rotates past 5 MiB (`PUSHFRAME_JOB_LOG_KEEP` tunes the depth), like
+every scheduled verb.
 
 ```bash
 pushframe push ./buffet --frame "Living Room"

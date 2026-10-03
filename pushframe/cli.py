@@ -148,6 +148,15 @@ def build_parser() -> argparse.ArgumentParser:
     push_parser.add_argument('--no-wait', action='store_true', default=False, help='Stop immediately instead of waiting when the write budget is exhausted')
     push_parser.add_argument('--country', default=None, help='Override the expected account country for the geo pre-flight guard (default from PUSHFRAME_COUNTRY, legacy AURA_COUNTRY)')
     push_parser.add_argument('--ignore-budget', action='store_true', default=False, dest='ignore_budget', help='Escape hatch: bypass the write budget entirely for this run')
+    # Scheduled push jobs (cron or hand-written units feeding a "buffet"
+    # directory) get the same log bookkeeping as scheduled sync/google-sync.
+    push_parser.add_argument('--scheduled', action='store_true', default=False,
+                             help='Timed-run bookkeeping: the job log opens with a '
+                                  'timestamped "=== run ... ===" header and closes with '
+                                  'the rc/elapsed footer')
+    push_parser.add_argument('--report-tag', default=None, dest='report_tag',
+                             help='Job identity in the log header and the log-rotation '
+                                  'target (crons and units pass a job name)')
 
     # `reconcile` = data hygiene on EXISTING stuck placeholder rows (REL-05,
     # D-13) -- deliberately outside the sync/push loop. Report-only by
@@ -2525,13 +2534,25 @@ def _main(argv=None) -> int:
             _rotate_job_log_if_large(args.report_tag)
         return rc
     if args.command == 'push':
-        return run_sync(
+        import time as _time
+        if args.scheduled:
+            _scheduled_run_header(args.report_tag)
+        _t0 = _time.monotonic()
+        rc = run_sync(
             args.dir, args.frame, apply=args.apply, yes=args.yes, debug=args.debug,
             no_delete=True, limit=args.limit, batch_size=args.batch_size,
             chunk_delay=args.chunk_delay, verb='push',
             max_wait=args.max_wait, no_wait=args.no_wait,
             country=args.country, ignore_budget=args.ignore_budget,
         )
+        if args.scheduled:
+            # Same bookkeeping contract as scheduled google-sync/sync: the
+            # job log carries the run's identity (header above), end (rc +
+            # elapsed), then the size bound. push is purely additive, so
+            # there is no mass-hide guard to check — bookkeeping only.
+            _scheduled_run_footer(rc, _time.monotonic() - _t0)
+            _rotate_job_log_if_large(args.report_tag)
+        return rc
     if args.command == 'reconcile':
         return run_reconcile(
             args.frame, remove=args.remove, yes=args.yes, mechanism=args.mechanism,
