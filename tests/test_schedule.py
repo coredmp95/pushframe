@@ -311,6 +311,67 @@ def test_job_log_rotation_slides_past_limit(unit_dir, monkeypatch):
     assert not _rotate_job_log_if_large('ghost', limit_bytes=100)
 
 
+def test_job_log_rotation_slides_a_chain_of_generations(unit_dir, monkeypatch):
+    """keep=N keeps the last N generations, each shifted one slot older in
+    order — <job>.log.1 is always the freshest rotated history."""
+    from pushframe import schedule
+    from pushframe.cli import _rotate_job_log_if_large
+    log = schedule.LOG_DIR / 'nightly.log'
+    log.parent.mkdir(parents=True, exist_ok=True)
+    fresh = 'N' * 150  # over limit_bytes — the size gate must be crossed
+    (log.parent / 'nightly.log.1').write_text('gen1')
+    (log.parent / 'nightly.log.2').write_text('gen2')
+    log.write_text(fresh)
+    assert _rotate_job_log_if_large('nightly', limit_bytes=100, keep=3)
+    assert not log.exists()
+    assert (log.parent / 'nightly.log.1').read_text() == fresh
+    assert (log.parent / 'nightly.log.2').read_text() == 'gen1'
+    assert (log.parent / 'nightly.log.3').read_text() == 'gen2'
+
+
+def test_job_log_rotation_drops_the_oldest_and_sweeps_stale(unit_dir, monkeypatch):
+    """At the cap the oldest generation falls off; generations beyond a
+    lowered `keep` (operator shrank retention) are swept, never left to
+    linger as unbounded silent tails."""
+    from pushframe import schedule
+    from pushframe.cli import _rotate_job_log_if_large
+    log = schedule.LOG_DIR / 'nightly.log'
+    log.parent.mkdir(parents=True, exist_ok=True)
+    fresh = 'N' * 150
+    (log.parent / 'nightly.log.1').write_text('gen1')
+    (log.parent / 'nightly.log.2').write_text('gen2')
+    (log.parent / 'nightly.log.3').write_text('gen3')
+    (log.parent / 'nightly.log.9').write_text('stale')
+    log.write_text(fresh)
+    assert _rotate_job_log_if_large('nightly', limit_bytes=100, keep=3)
+    assert (log.parent / 'nightly.log.1').read_text() == fresh
+    assert (log.parent / 'nightly.log.2').read_text() == 'gen1'
+    assert (log.parent / 'nightly.log.3').read_text() == 'gen2'  # gen3 fell off
+    assert not (log.parent / 'nightly.log.9').exists()
+
+
+def test_job_log_rotation_env_keep_and_junk_fallback(unit_dir, monkeypatch):
+    """PUSHFRAME_JOB_LOG_KEEP tunes the history depth; a junk value falls
+    back to the default instead of failing the run, and an explicit
+    programmer-supplied keep < 1 is rejected (fail closed)."""
+    from pushframe import schedule
+    from pushframe.cli import _rotate_job_log_if_large
+    log = schedule.LOG_DIR / 'nightly.log'
+    log.parent.mkdir(parents=True, exist_ok=True)
+    (log.parent / 'nightly.log.1').write_text('gen1')
+    (log.parent / 'nightly.log.2').write_text('gen2')
+    log.write_text('N' * 150)
+    monkeypatch.setenv('PUSHFRAME_JOB_LOG_KEEP', '2')
+    assert _rotate_job_log_if_large('nightly', limit_bytes=100)
+    assert (log.parent / 'nightly.log.2').read_text() == 'gen1'  # gen2 fell off
+    monkeypatch.setenv('PUSHFRAME_JOB_LOG_KEEP', 'banana')
+    log.write_text('M' * 150)
+    assert _rotate_job_log_if_large('nightly', limit_bytes=100)
+    assert (log.parent / 'nightly.log.1').read_text() == 'M' * 150
+    with pytest.raises(ValueError):
+        _rotate_job_log_if_large('nightly', limit_bytes=100, keep=0)
+
+
 def test_scheduled_plan_names_the_affected_assets():
     """detail_ids renders the affected frame assets with the exact shape the
     interactive dry-run prints — a scheduled delta is identifiable, not just

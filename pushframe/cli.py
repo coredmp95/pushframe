@@ -2212,23 +2212,68 @@ def _scheduled_run_footer(rc: int, elapsed_s: float) -> None:
     print(f'=== run end rc={rc} elapsed={round(elapsed_s)}s ===')
 
 
+JOB_LOG_KEEP_GENERATIONS = 28
+
+
+def _job_log_keep() -> int:
+    """Ops knob for the rotation history depth: PUSHFRAME_JOB_LOG_KEEP.
+    A junk or <1 value falls back to the default — a retention typo must
+    never fail a run that already succeeded (this function's only contract).
+    """
+    try:
+        keep = int(os.getenv('PUSHFRAME_JOB_LOG_KEEP', ''))
+    except ValueError:
+        return JOB_LOG_KEEP_GENERATIONS
+    return keep if keep >= 1 else JOB_LOG_KEEP_GENERATIONS
+
+
 def _rotate_job_log_if_large(report_tag: str | None, *,
-                             limit_bytes: int = 5 * 1024 * 1024) -> bool:
-    """Bound a job's append log (systemd reopens it with O_APPEND every
-    start): past `limit_bytes`, the log slides to <job>.log.1 — one
-    previous generation kept. Called at run END: this process's still-open
-    stdout fd keeps appending to the renamed inode until exit, and the next
-    start opens a fresh <job>.log, so nothing is lost and no fd surgery is
-    needed. A rotation failure must never fail a run that already succeeded.
+                             limit_bytes: int = 5 * 1024 * 1024,
+                             keep: int | None = None) -> bool:
+    """Bound a job's append log while keeping history consultable (systemd
+    reopens the file with O_APPEND every start): past `limit_bytes`, the log
+    slides one generation older — <job>.log.1 … <job>.log.<keep>, the oldest
+    generation falling off the end — so the live file stays bounded AND the
+    previous weeks remain readable. Generations are size-bounded, not
+    time-bounded: a nightly job crossing the limit every night keeps ~4
+    weeks (default 28); a quiet one keeps months. Worst case per job:
+    keep × limit bytes. Called at run END: this process's still-open stdout
+    fd keeps appending to the renamed inode until exit, and the next start
+    opens a fresh <job>.log, so nothing is lost and no fd surgery is needed.
+    A rotation failure must never fail a run that already succeeded.
     """
     if not report_tag:
         return False
+    if keep is None:
+        keep = _job_log_keep()
+    if keep < 1:
+        raise ValueError(f'keep={keep!r} must be >= 1')
     from pushframe.schedule import LOG_DIR
     log = LOG_DIR / f'{report_tag}.log'
     try:
         if not log.exists() or log.stat().st_size <= limit_bytes:
             return False
+        # Slide every existing generation one slot older, oldest falling off
+        # (os.replace overwrites the destination): .log.(keep-1) -> .log.keep,
+        # ..., .log.1 -> .log.2, then the live log -> .log.1.
+        for slot in range(keep - 1, 0, -1):
+            src = log.parent / f'{log.name}.{slot}'
+            if src.exists():
+                os.replace(src, log.parent / f'{log.name}.{slot + 1}')
         os.replace(log, log.parent / (log.name + '.1'))
+        # Generations beyond `keep` can only exist after an operator LOWERED
+        # the retention (env or code); leftovers would linger as unbounded
+        # silent tails, so sweep them — tolerantly, same run-success rule.
+        try:
+            prefix = log.name + '.'
+            for stale in log.parent.iterdir():
+                if not stale.name.startswith(prefix):
+                    continue
+                suffix = stale.name[len(prefix):]
+                if suffix.isdigit() and int(suffix) > keep:
+                    stale.unlink()
+        except OSError:
+            pass
         return True
     except OSError:
         return False

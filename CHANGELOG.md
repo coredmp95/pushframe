@@ -25,6 +25,11 @@ frames; it is not affiliated with Aura Frames Inc.
   API request-payload builders (`AssetApi.batch_update`,
   `AssetApi.crop_asset`, `FrameApi.update_frame`) — Python 3.13-clean,
   ready for Pydantic V3.
+- Job log rotation keeps a bounded history instead of a single generation:
+  past 5 MiB the log slides through `<job>.log.1` … `<job>.log.28`
+  (default; `PUSHFRAME_JOB_LOG_KEEP` tunes it), the oldest generation
+  falling off — several weeks of consultable history, worst case
+  `keep × 5 MiB` per job.
 
 ## [5.1.26] - 2026-10-03
 
