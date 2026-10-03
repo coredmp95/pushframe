@@ -103,6 +103,18 @@ def build_parser() -> argparse.ArgumentParser:
     sync_parser.add_argument('--frame', required=True, help='Frame name (substring) or id')
     sync_parser.add_argument('--apply', action='store_true', default=False, help='Execute the plan (upload + delete) instead of only printing it')
     sync_parser.add_argument('--yes', action='store_true', default=False, help='Skip the confirmation prompt (required for --apply when running non-interactively)')
+    # Scheduled sync-dir jobs (pushframe schedule add ... --sync-dir) run
+    # through this verb, so it needs the same bookkeeping flags as scheduled
+    # google-sync. (Regression: units passed --scheduled before this parser
+    # accepted it -- every sync-dir tick died 'unrecognized arguments'.)
+    sync_parser.add_argument('--scheduled', action='store_true', default=False,
+                             help='Timed-run bookkeeping: the job log opens with a '
+                                  'timestamped "=== run ... ===" header and closes with '
+                                  'the rc/elapsed footer (used by pushframe schedule units)')
+    sync_parser.add_argument('--report-tag', default=None, dest='report_tag',
+                             help='Job identity in the log header and the log-rotation '
+                                  'target (schedule units pass the job name; sync jobs '
+                                  'have no --report email)')
     # The three tiers of "no longer in the local directory" (D-02/D-03).
     # Hiding is the default because the frame has no photo-count limit, so a
     # mistaken sync should cost visibility, never photos. argparse enforces
@@ -2443,8 +2455,20 @@ def _main(argv=None) -> int:
         return run_inspect(args.frame, debug=args.debug)
     if args.command == 'sync':
         removal_mode = 'hard_delete' if args.hard_delete else ('delete' if args.delete else 'hide')
-        return run_sync(args.dir, args.frame, apply=args.apply, yes=args.yes, debug=args.debug,
-                        removal_mode=removal_mode)
+        import time as _time
+        if args.scheduled:
+            _scheduled_run_header(args.report_tag)
+        _t0 = _time.monotonic()
+        rc = run_sync(args.dir, args.frame, apply=args.apply, yes=args.yes, debug=args.debug,
+                      removal_mode=removal_mode)
+        if args.scheduled:
+            # Same bookkeeping contract as scheduled google-sync: the job
+            # log carries the run's identity (header above), end (rc +
+            # elapsed), then the size bound — <job>.log alone answers which
+            # night synced what.
+            _scheduled_run_footer(rc, _time.monotonic() - _t0)
+            _rotate_job_log_if_large(args.report_tag)
+        return rc
     if args.command == 'push':
         return run_sync(
             args.dir, args.frame, apply=args.apply, yes=args.yes, debug=args.debug,

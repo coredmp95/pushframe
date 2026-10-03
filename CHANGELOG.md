@@ -14,6 +14,22 @@ frames; it is not affiliated with Aura Frames Inc.
 
 ## [Unreleased]
 
+### Fixed
+
+- `schedule add --sync-dir` units never ran: their ExecStart passed
+  `--scheduled`, which the `sync` parser never accepted — every tick died
+  with `unrecognized arguments: --scheduled` before any sync happened. The
+  parser now takes `--scheduled` and `--report-tag`.
+
+### Added
+
+- Scheduled `sync` jobs (`--sync-dir`) write the same run bookkeeping as
+  scheduled `google-sync`: the `=== run … ===` header (with the job tag),
+  the `=== run end rc=<rc> elapsed=<s>s ===` footer, and the 5 MiB log
+  rotation — `<job>.log` alone answers which night synced what. Schedule
+  units now pass `--report-tag "<job>"`; `--report` (email) remains
+  google-sync-only.
+
 ### Changed
 
 - Replaced the deprecated `datetime.utcnow()` in `get_utc_now()` with the

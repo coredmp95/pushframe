@@ -388,3 +388,73 @@ def test_scheduled_plan_names_the_affected_assets():
     assert '  - AF2hide (taken 2020-02-02)' in out
     plain = format_plan_report(plan, [], 0)
     assert 'AF1reshow' not in plain and 'AF2hide' not in plain
+
+
+# --- sync-dir scheduled bookkeeping (TMR-05 extended to --sync-dir jobs) ------
+
+def test_scheduled_sync_dispatch_opens_and_closes_the_log_block(
+        unit_dir, cfg_path, monkeypatch, capsys):
+    """A scheduled `sync` through main() gets the same bookkeeping contract
+    as scheduled google-sync: timestamped header (with the job tag), the
+    run, then the rc/elapsed footer — and the parser accepts --scheduled at
+    all (schedule add --sync-dir units passed it before the sync parser did;
+    every tick died 'unrecognized arguments: --scheduled')."""
+    from pushframe import cli
+    seen = {}
+    monkeypatch.setattr(cli, 'run_sync', lambda *a, **k: seen.update(k) or 0)
+    rc = cli.main(['sync', '/srv/photos', '--frame', 'Salon',
+                   '--apply', '--yes', '--scheduled',
+                   '--report-tag', 'photosync'])
+    out = capsys.readouterr().out
+    assert rc == 0 and seen['apply'] is True and seen['yes'] is True
+    assert out.splitlines()[0].startswith('=== run ')
+    assert 'job=photosync' in out.splitlines()[0]
+    assert '=== run end rc=0 elapsed=' in out
+
+
+def test_scheduled_sync_without_tag_books_but_never_rotates(
+        unit_dir, cfg_path, monkeypatch, capsys):
+    """--scheduled without --report-tag still gets header/footer (job=-),
+    mirroring google-sync, and rotation no-ops without a tag."""
+    from pushframe import cli
+    rotations = []
+    monkeypatch.setattr(cli, 'run_sync', lambda *a, **k: 0)
+    monkeypatch.setattr(cli, '_rotate_job_log_if_large',
+                        lambda tag, **k: rotations.append(tag) or False)
+    assert cli.main(['sync', '/srv/photos', '--frame', 'Salon',
+                     '--apply', '--yes', '--scheduled']) == 0
+    out = capsys.readouterr().out
+    assert out.splitlines()[0].startswith('=== run ')
+    assert 'job=-' in out.splitlines()[0]
+    assert rotations == [None]
+
+
+def test_interactive_sync_prints_no_bookkeeping(unit_dir, cfg_path,
+                                                monkeypatch, capsys):
+    """An interactive (human-watched) sync never prints the log blocks and
+    rotation never runs — the bookkeeping exists for append-only job logs."""
+    from pushframe import cli
+    rotations = []
+    monkeypatch.setattr(cli, 'run_sync', lambda *a, **k: 0)
+    monkeypatch.setattr(cli, '_rotate_job_log_if_large',
+                        lambda tag, **k: rotations.append(tag) or False)
+    assert cli.main(['sync', '/srv/photos', '--frame', 'Salon']) == 0
+    out = capsys.readouterr().out
+    assert '=== run' not in out and 'run end' not in out
+    assert rotations == []
+
+
+def test_schedule_add_sync_dir_exec_start_carries_the_tag(
+        unit_dir, cfg_path, monkeypatch):
+    """The sync-dir ExecStart passes --scheduled AND --report-tag "<job>" —
+    the tag is what drives the log header + rotation (sync jobs have no
+    --report email). Regression: units shipped --scheduled before the sync
+    parser accepted it, dying 'unrecognized arguments' on every tick."""
+    from pushframe import schedule as sch
+    monkeypatch.setattr(sch, 'systemd_user_session_ok', lambda: True)
+    monkeypatch.setattr(sch, 'run_systemctl', lambda *a: ('', ''))
+    assert sch.schedule_add('photosync', sync_dir='/srv/photos',
+                            frame='Salon', every='1d') == 0
+    unit = (sch.UNIT_DIR / 'pushframe-photosync.service').read_text()
+    assert '--scheduled' in unit
+    assert '--report-tag "photosync"' in unit

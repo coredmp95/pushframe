@@ -132,8 +132,12 @@ def _exec_start_for(pair: str | None = None, album: str | None = None,
     from pushframe import config_store
     parts = [_pushframe_command()]
     if sync_dir:
+        # --report-tag carries the job identity into the run's log header
+        # and its rotation (sync jobs have no --report email; the tag is
+        # what makes <job>.log self-describing).
         parts += ['sync', f'"{sync_dir}"', f'--frame "{frame}"',
-                  '--apply', '--yes', '--scheduled']
+                  '--apply', '--yes', '--scheduled',
+                  '--report-tag', f'"{job}"']
     else:
         spec = (config_store.load().get('pairs', {}) or {}).get(pair or '', {})
         album = spec.get('album', album)
