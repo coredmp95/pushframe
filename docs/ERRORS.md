@@ -58,6 +58,7 @@ twice.
 | `⚠ N of M photos … would be hidden — over the … mass-hide safety threshold` | The plan hides more than 20 % of the frame's photos, so it demands explicit confirmation | Read the counts; `y` only if that is really what you want |
 | `SKIPPED (--scheduled): this plan would hide too many photos …` | Same gate in scheduled mode: the run **skips and logs** instead of proceeding | Run `google-sync` manually, review the plan, apply deliberately |
 | `google-sync failed: reading frame assets failed: …` | The frame listing itself failed | Re-run; if persistent, `pushframe status` / `pushframe inspect` to check the account and frame |
+| An argparse usage error on a command whose argument is literally `config` or `schedule` (e.g. `google-sync "config" --frame config`) (pre-5.1.25) | The `config` / `schedule` verb word was matched anywhere in the command line, truncating it at the frame name and leaving argparse a dangling option | Fixed in 5.1.25 — the verb is only matched at position one; re-run the same command |
 | `Unsupported image format: MPO …` on a few items (pre-5.1.9) | The file is a stereo/3D JPEG container (MPO) | Fixed in 5.1.9+: the first view uploads as plain JPEG. Update pushframe and re-run — the failed items retry automatically |
 | `snAcKc carries a null inner payload on HTTP 200 …` | Google answered a page request with an empty envelope. One automatic retry already ran; if it recurs on every run it means the past-the-end request shape Google now answers with null (a listing-size change) — fixed in 5.1.9+; on older versions, update | Update pushframe; if it persists on the latest version, wait a few minutes and re-run |
 
@@ -76,6 +77,22 @@ twice.
 |---|---|---|
 | `pair add: the pair name is missing — …` / `--album needs a value` / `unknown option "…"` / `… given twice` / `--frame is missing` | The `config pair add` tail is malformed — a dangling flag, a typo (valid ones are listed), a duplicate, or a missing required half of the album→frame mapping. Fixed after the 2026-10-02 audit — these used to crash with a raw traceback, or worse: silently create a pair literally named `--album` | Read the message: it names the exact token; the usage line below shows the full shape |
 | `pair add: pair "…" already exists …` | The name is taken (the message shows its album/frame) | `config pair remove <name>` first, or choose another name |
+| `config set: the key "…" starts with "--" — that looks like a flag, not a key (set takes exactly KEY VALUE)` / the same on the value (`… looks like a flag, not a value …`) | A flag-shaped word reached `config set` — an option misplaced, or the VALUE forgotten. Fixed in 5.1.25 — the word used to be stored as a literal key or value without a word | Count the words: `config set` takes exactly `KEY VALUE`; `pushframe config set --help` lists every key, explained |
+| `config set <key>: unexpected "…" — usage: pushframe config set <key> <value>` / `config get: unexpected "…" — usage: pushframe config get <key>` | A stray extra word — exit 2, nothing stored or shown. Fixed in 5.1.25 — extras used to be ignored silently | The command takes exactly KEY VALUE (get: exactly one KEY); drop the extra word |
+| `config import: unexpected "…"` / `unknown option "…"` / `--file given twice` / `--file needs a value` | The `config import` tail is malformed — the same strict parser as `pair add` (exit 2, nothing imported). Fixed in 5.1.25 — a dangling `--file` used to fall back to importing `.env` in silence (you thought you imported your file), unknown tokens were ignored, and the first of two `--file` flags won | Read the message; the usage line shows the shape. Bare `pushframe config import` (no flags) still imports `.env` — only a malformed tail is refused |
+| `pair remove: unexpected "…" — usage: pushframe config pair remove <name>` | A stray extra word after the pair name — exit 2, nothing removed. Fixed in 5.1.25 — extras were ignored silently | One name per command; `pushframe config pair list` shows what is configured |
+
+## Email reports (`schedule report` / `--report`)
+
+The transport — WHERE reports go — is configured once with
+`pushframe schedule report`; WHICH runs email, and how much detail, is
+chosen per job at install time with `schedule add … --report LEVEL`
+(see Scheduling below).
+
+| Message | What it means | What to do |
+|---|---|---|
+| `schedule report: unknown option "…" — known ones: --to, --smtp-host, …` / `… given twice` / `… needs a value` / `unexpected "…"` | The configurator tail is malformed — the same ONE strict parser as `schedule add` / `pair add` (exit 2, nothing stored). Fixed in 5.1.25 — `--to --test` used to store the literal `--test` as the recipient (and swallow the trial-send — discovered only when the first email failed), and `--to a --to b` let the second address win without a word | Read the message: it names the exact token, and the full usage reprints below it. `--help` / `-h` / `help` prints that usage from anywhere on the line (a value slot is consumed first, so `--to help` still means the literal address `help`) |
+| `schedule report: --show / --test / --disable are exclusive` | Exactly one action per call | Re-run with a single action flag |
 
 ## Scheduling
 
@@ -85,6 +102,7 @@ twice.
 | `schedule: job name "…" must be alphanumeric/dashes` | The job name is used in unit filenames | Pick a name like `nightly` or `living-room-nightly` |
 | `schedule add: the job name is missing — …` | The job name must come right after `add`, before any `--flag` (`schedule add --pair X` puts the flag in the name slot) | `schedule add nightly --pair X --every 1d` — the usage line below the message shows the shape |
 | `schedule add: --FLAG needs a value` / `unknown option "…"` / `… given twice` / `unexpected "…"` | The `schedule add` tail is malformed — a dangling flag, a typo in a flag name (they are listed), a duplicated flag, or a stray word | Read the message: it names the exact token and, for unknown options, lists the valid ones. Fixed in 5.1.22 — these used to crash with a raw traceback (pre-5.1.22) |
+| ``schedule list: unexpected "…" — `pushframe schedule list` takes no arguments`` / `schedule remove: unexpected "…" — usage: pushframe schedule remove <job>` | A stray extra word after the single argument these verbs take — exit 2, nothing listed or removed. Fixed in 5.1.25 — extras were ignored silently | `schedule list` takes no arguments; `schedule remove` takes exactly one job name |
 | A timer "fails" repeatedly | Read the job log | `~/.local/state/pushframe/<job>.log`; the unit ends on the first failure on purpose — the next tick is the retry |
 
 ## Anything else
