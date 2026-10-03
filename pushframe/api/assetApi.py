@@ -69,7 +69,7 @@ class AssetApi(BaseApi):
 
         json_response = self._client.put(f'/assets/batch_update.json', data={
             "assets": [
-                item.dict(
+                item.model_dump(
                     include={
                         'data_uti': True,
                         'favorite': True,
@@ -179,7 +179,7 @@ class AssetApi(BaseApi):
         :param asset: Asset containing new rotation/rect data.
         :return: The asset with modified crop fields.
         """
-        json_response = self._client.post(f'/assets/crop.json', data=asset.dict(
+        json_response = self._client.post(f'/assets/crop.json', data=asset.model_dump(
             include={
                 'id': True,
                 'local_identifier': True,

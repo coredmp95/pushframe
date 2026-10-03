@@ -21,7 +21,7 @@ from pydantic import ValidationError
 
 from pushframe.models.asset import Asset, AssetPartial, AssetPartialId
 
-# The exact allowlist AssetApi.batch_update uses for its `.dict(include=...)`
+# The exact allowlist AssetApi.batch_update uses for its `.model_dump(include=...)`
 # call (pushframe/api/assetApi.py:19-38) -- AssetPartial must serialize to
 # precisely this shape.
 BATCH_UPDATE_ALLOWLIST = {
@@ -51,7 +51,7 @@ def test_asset_partial_constructs_with_id_unset():
 
 
 def test_asset_partial_serializes_to_batch_update_payload_shape():
-    """.dict(include=...) over batch_update's allowlist returns exactly
+    """.model_dump(include=...) over batch_update's allowlist returns exactly
     those keys, regardless of which fields were actually set."""
     partial = AssetPartial(
         local_identifier='local-id-1',
@@ -65,7 +65,7 @@ def test_asset_partial_serializes_to_batch_update_payload_shape():
         upload_priority=1,
     )
 
-    payload = partial.dict(include=BATCH_UPDATE_ALLOWLIST)
+    payload = partial.model_dump(include=BATCH_UPDATE_ALLOWLIST)
 
     assert set(payload.keys()) == set(BATCH_UPDATE_ALLOWLIST.keys())
     assert payload['local_identifier'] == 'local-id-1'

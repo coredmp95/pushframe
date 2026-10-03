@@ -145,7 +145,7 @@ class FrameApi(BaseApi):
         :return: Returns the hydrated frame with changes.
         """
         json_response = self._client.put(f'/frames/{frame_id}.json',
-                                         data={'frame': frame_partial.dict(exclude_unset=True)})
+                                         data={'frame': frame_partial.model_dump(exclude_unset=True)})
         return Frame(**json_response.get('frame'))
 
     def select_asset(self, frame_id: str, asset_partial_ids: AssetPartialId | list[AssetPartialId]) -> int:

@@ -137,7 +137,7 @@ Python toolchain, so we know exactly what survives before building anything new.
 - Partial model pattern via custom `AllOptional` metaclass (`meta.py`): `class FramePartial(Frame, metaclass=AllOptional)`
 - Enums used for known string-valued discriminators: `ActivityType`, `ReactionType`, `Feature`
 - Pydantic `@validator` used for cross-field validation: `AssetPartialId.check_id_or_local_id`
-- `.dict(include={...})` used to build API request payloads from model instances
+- `.model_dump(include={...})` used to build API request payloads from model instances
 ## Configuration
 - Credentials passed via env vars: `AURA_EMAIL`, `AURA_PASSWORD`
 - AWS pool IDs hardcoded as module constants (flagged as TODO to move to config)
@@ -172,7 +172,7 @@ Python toolchain, so we know exactly what survives before building anything new.
 ## Pattern Overview
 - `Aura` is the single public entry point; callers never instantiate API classes directly
 - Each `*Api` class is a thin wrapper over one REST resource domain with zero business logic of its own
-- Pydantic models serve as both validated DTOs and serialization targets (`.dict()` for request payloads, `**json_response` for hydration)
+- Pydantic models serve as both validated DTOs and serialization targets (`.model_dump()` for request payloads, `**json_response` for hydration)
 - AWS auth uses Cognito anonymous identity pools — no long-lived AWS credentials needed
 - All HTTP is synchronous (`httpx.Client`); the codebase has acknowledged debt to migrate to async
 ## Layers
@@ -231,7 +231,7 @@ Python toolchain, so we know exactly what survives before building anything new.
 - Pattern: Constructor injection of `Client`; no interface/protocol defined
 - Purpose: Validate, hydrate, and serialise API response JSON
 - Examples: `auraframes/models/frame.py`, `auraframes/models/asset.py`
-- Pattern: `Model(**json_response.get('key'))` for hydration; `.dict(include={...})` for request payloads
+- Pattern: `Model(**json_response.get('key'))` for hydration; `.model_dump(include={...})` for request payloads
 - Purpose: Generates a "partial" variant of any model (all fields become `Optional`) for PATCH-style updates
 - Examples: `auraframes/models/meta.py` — used by `FramePartial` in `auraframes/models/frame.py:93`
 - Pattern: `class FramePartial(Frame, metaclass=AllOptional): pass`

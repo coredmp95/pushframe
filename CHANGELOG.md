@@ -12,6 +12,20 @@ every channel.
 `pushframe` is an unofficial community CLI for Aura Frames digital photo
 frames; it is not affiliated with Aura Frames Inc.
 
+## [Unreleased]
+
+### Changed
+
+- Replaced the deprecated `datetime.utcnow()` in `get_utc_now()` with the
+  deprecation-free naive-UTC equivalent
+  (`datetime.now(timezone.utc).replace(tzinfo=None)`) — same value, same
+  naive contract every caller relies on (`parse_aura_dt` diffs,
+  `WriteBudget` arithmetic and its persisted `updated_at`).
+- Replaced Pydantic's deprecated `.dict()` with `.model_dump()` in the
+  API request-payload builders (`AssetApi.batch_update`,
+  `AssetApi.crop_asset`, `FrameApi.update_frame`) — Python 3.13-clean,
+  ready for Pydantic V3.
+
 ## [5.1.26] - 2026-10-03
 
 ### Added
