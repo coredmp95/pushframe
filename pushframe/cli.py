@@ -1088,6 +1088,7 @@ def _schedule_status_section() -> list[str]:
     for svc_path in services:
         job = svc_path.stem.replace('pushframe-', '')
         what = '(unreadable unit)'
+        exec_line = ''
         try:
             unit_text = svc_path.read_text(encoding='utf-8')
             exec_line = next((l for l in unit_text.splitlines()
@@ -1097,8 +1098,62 @@ def _schedule_status_section() -> list[str]:
             pass
         when = next_fire.get(f'pushframe-{job}.timer', '(timer not enabled)')
         lines.append(f'  {job}: {what} — next: {when}')
+        if exec_line:
+            try:
+                problem = _unit_argv_parse_problem(exec_line)
+            except Exception:
+                problem = None  # status degrades; it never fails here
+            if problem:
+                lines.append(f'    ⚠ would FAIL to start: {problem} — '
+                             f're-add the job (`pushframe schedule add ...`) '
+                             f'or fix the unit')
     lines.append('  (detail: `pushframe schedule list`)')
     return lines
+
+
+def _unit_argv_parse_problem(exec_line: str) -> str | None:
+    """Would this unit's ExecStart survive the CURRENT binary's argparse?
+
+    The tokens from the verb onward go through the real parser
+    (parse_known_args): unrecognized flags, missing required arguments or
+    invalid values surface here as a one-line reason — None when the
+    command line is accepted verbatim. This is the guard against the
+    sync-dir class of breakage (units installed passing a flag the parser
+    of the day rejects die on EVERY tick — argparse exit 2, before any
+    sync — with nothing but journalctl to explain why): hand-edited units
+    and version drift (unit newer or older than the binary) are exactly
+    what it surfaces. Never raises — status degrades, it does not fail.
+    """
+    import contextlib
+    import io
+    import shlex
+    body = exec_line.removeprefix('ExecStart=')
+    try:
+        tokens = shlex.split(body)
+    except ValueError:
+        return 'ExecStart is not shell-quoted correctly'
+    parser = build_parser()
+    try:
+        sub = next(a for a in parser._actions if a.dest == 'command')
+        verbs = set(sub.choices)
+    except Exception:
+        return None  # cannot introspect the parser — refuse to guess
+    verb_idx = next((i for i, t in enumerate(tokens) if t in verbs), None)
+    if verb_idx is None:
+        return 'no pushframe command found in ExecStart'
+    argv = tokens[verb_idx:]
+    err = io.StringIO()
+    try:
+        with contextlib.redirect_stderr(err):
+            _, extras = parser.parse_known_args(argv)
+    except SystemExit:
+        detail = err.getvalue().split('error:', 1)[-1]
+        detail = ' '.join(detail.split())[:160]
+        return f'argparse refused: {detail}' if detail \
+            else 'argparse refused the command line'
+    if extras:
+        return f'unrecognized arguments: {" ".join(map(str, extras))[:160]}'
+    return None
 
 
 def _frame_flag_needs_value(rest: list[str], flag: str) -> bool:

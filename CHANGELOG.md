@@ -23,6 +23,13 @@ frames; it is not affiliated with Aura Frames Inc.
 
 ### Added
 
+- `status` flags any installed scheduled unit whose ExecStart the current
+  binary's argparse refuses (`⚠ would FAIL to start: …` with the exact
+  reason) — hand-edited or version-drifted units otherwise die on every
+  tick with nothing but journalctl to explain why. The same contract is
+  enforced offline by a test over every ExecStart `schedule_add` can
+  generate, and on the host by a deliberate `pytest -m live` check over
+  the real installed units.
 - Scheduled `sync` jobs (`--sync-dir`) write the same run bookkeeping as
   scheduled `google-sync`: the `=== run … ===` header (with the job tag),
   the `=== run end rc=<rc> elapsed=<s>s ===` footer, and the 5 MiB log

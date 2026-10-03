@@ -458,3 +458,105 @@ def test_schedule_add_sync_dir_exec_start_carries_the_tag(
     unit = (sch.UNIT_DIR / 'pushframe-photosync.service').read_text()
     assert '--scheduled' in unit
     assert '--report-tag "photosync"' in unit
+
+
+# --- units whose ExecStart the parser refuses (status warning) ----------------
+
+def _install_unit(job: str, exec_start: str) -> None:
+    """Drop a hand-written unit pair into UNIT_DIR (no schedule_add)."""
+    from pushframe import schedule as sch
+    (sch.UNIT_DIR / f'pushframe-{job}.service').write_text(
+        f'[Service]\nExecStart={exec_start}\n')
+    (sch.UNIT_DIR / f'pushframe-{job}.timer').write_text('[Timer]\n')
+
+
+def _status_lines(monkeypatch) -> list[str]:
+    from pushframe import schedule as sch
+    from pushframe.cli import _schedule_status_section
+    monkeypatch.setattr(
+        sch, 'run_systemctl',
+        lambda *a: ('NEXT LEFT LAST PASSED UNIT ACTIVATES\n', ''))
+    return _schedule_status_section()
+
+
+def test_unit_argv_parse_problem_shapes(unit_dir, cfg_path):
+    """The probe answers None on a healthy command line, names the exact
+    argparse reason otherwise (unrecognized flag, missing required), and
+    degrades honestly on a malformed ExecStart — never raises."""
+    from pushframe.cli import _unit_argv_parse_problem as probe
+    assert probe('ExecStart=/usr/bin/pushframe sync "/p" '
+                 '--frame F --apply --yes --scheduled') is None
+    assert 'unrecognized arguments: --nope' in probe(
+        'ExecStart=/usr/bin/pushframe sync "/p" --frame F --nope')
+    assert 'required' in probe('ExecStart=/usr/bin/pushframe sync "/p"')
+    assert probe('ExecStart=') is not None
+    assert 'not shell-quoted' in probe(
+        'ExecStart=/bin/pushframe sync "unterminated')
+    assert 'no pushframe command' in probe(
+        'ExecStart=/bin/other --version')
+
+
+def test_status_flags_a_unit_the_parser_rejects(unit_dir, cfg_path,
+                                                monkeypatch):
+    """A unit whose ExecStart the CURRENT parser refuses (hand-edited, or
+    installed by a mismatched pushframe version) is flagged in `status`
+    under its own job line with the exact reason — it would otherwise die
+    on every tick, argparse exit 2, before any sync."""
+    _install_unit('broken', '/usr/bin/pushframe sync "/srv/p" '
+                  '--frame "F" --apply --yes --scheduled --nope')
+    _install_unit('good', '/usr/bin/pushframe google-sync --pair fam '
+                  '--apply --yes --scheduled')
+    lines = _status_lines(monkeypatch)
+    broken_idx = next(i for i, l in enumerate(lines)
+                      if l.strip().startswith('broken:'))
+    assert 'would FAIL to start' in lines[broken_idx + 1]
+    assert 'unrecognized arguments: --nope' in lines[broken_idx + 1]
+    good_idx = next(i for i, l in enumerate(lines)
+                    if l.strip().startswith('good:'))
+    assert 'would FAIL' not in lines[good_idx + 1]
+
+
+def test_every_generated_exec_start_parses(unit_dir, cfg_path, monkeypatch):
+    """THE contract: every ExecStart schedule_add can generate must survive
+    the real argparse parser — a unit that dies at parse is a unit that
+    never runs (the --sync-dir --scheduled regression shipped in units
+    while the parser never accepted the flag)."""
+    from pushframe import schedule as sch
+    from pushframe.cli import _unit_argv_parse_problem
+    monkeypatch.setattr(sch, 'systemd_user_session_ok', lambda: True)
+    monkeypatch.setattr(sch, 'run_systemctl', lambda *a: ('', ''))
+    _pair()
+    assert sch.schedule_add('nightly', pair='cadre-venus', every='1d') == 0
+    assert sch.schedule_add('mail', pair='cadre-venus', every='1d',
+                            report='ERROR') == 0
+    assert sch.schedule_add('photos', sync_dir='/srv/photos',
+                            frame='Salon', every='1d') == 0
+    for job in ('nightly', 'mail', 'photos'):
+        unit = (sch.UNIT_DIR / f'pushframe-{job}.service').read_text()
+        exec_line = next(l for l in unit.splitlines()
+                         if l.startswith('ExecStart='))
+        assert _unit_argv_parse_problem(exec_line) is None, unit
+
+
+@pytest.mark.live
+def test_live_installed_units_all_parse():
+    """Against THIS host's real units: every installed pushframe-*.service
+    ExecStart must survive the current binary's argparse. Run deliberately
+    (`pytest -m live`) — a flagged unit dies on every tick until re-added
+    or fixed. Skipped on machines with no units installed."""
+    from pushframe import schedule as sch
+    from pushframe.cli import _unit_argv_parse_problem
+    services = sorted(sch.UNIT_DIR.glob('pushframe-*.service')) \
+        if sch.UNIT_DIR.is_dir() else []
+    if not services:
+        pytest.skip('no pushframe units installed on this host')
+    problems = []
+    for svc in services:
+        exec_line = next(
+            (l for l in svc.read_text(encoding='utf-8').splitlines()
+             if l.startswith('ExecStart=')), '')
+        problem = _unit_argv_parse_problem(exec_line)
+        if problem:
+            problems.append(f'{svc.name}: {problem}')
+    assert not problems, \
+        'units that would die at parse:\n' + '\n'.join(problems)
