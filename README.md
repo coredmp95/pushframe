@@ -550,6 +550,48 @@ hosts need lingering enabled once: `loginctl enable-linger $USER` (without it
 the timer only fires while you are logged in — see the note in the
 quickstart).
 
+## Several albums, several directories
+
+One frame has **one source of truth**. Keep that rule in mind and combine
+sources freely:
+
+| You want | Do this |
+|---|---|
+| 1 album → several frames | Named **pairs**, one per album↔frame mapping, then `google-sync --all --apply --yes` |
+| Several albums → several frames (one each) | More pairs — the same `--all` runs every one of them |
+| Several directories → one frame | **`push`** per directory — it only ever adds, directories can't fight each other |
+| Several directories → several frames (one each) | One scheduled `--sync-dir` job per directory/frame pairing |
+
+```bash
+# One album, two frames — one pair per mapping, state kept separately:
+pushframe config pair add salon  --album famille --frame "Salon"
+pushframe config pair add bureau --album famille --frame "Bureau"
+pushframe google-sync --all --apply --yes
+```
+
+How `--all` behaves: pairs run in sorted-name order, each with **its own
+mirror state** (its own manifest and cache — two pairs never share dedupe
+memory), one `[ok]`/`[FAILED]` line per pair in the closing report; a
+failing pair never blocks the others (exit 1 if any failed).
+
+**Pacing stays account-wide.** Every write — `--all`, separate jobs,
+whatever — draws from the same persisted per-account write budget, so five
+pairs do not mean five times the request rate. Scheduling one job per pair
+is fine: they share the same budget, and each job keeps its own
+`<job>.log`.
+
+**The one combination to avoid: two mirroring sources on the same frame** —
+two albums (`--pair` A and `--pair` B) or two `sync` directories pointed at
+one frame. Each run sees the other's photos as "on the frame but not in my
+source" and **hides** them; the other run re-shows them (`To re-show`,
+without re-uploading) and hides yours in return. Nothing is ever lost —
+hides are reversible and no verb here deletes — but the frame never
+settles, and scheduled runs can start skipping on the 20 % mass-hide guard.
+When several frames should show the same album, that is the pair system's
+job (one album → several frames). When one frame should show several
+albums' or folders' contents, feed it with `push` — the additive verb — or
+merge the sources into a single album.
+
 ## Safety model — a mistaken run should never cost photos
 
 - **Hide, don't delete.** Removals are hidden by default everywhere; the
