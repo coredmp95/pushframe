@@ -5,14 +5,14 @@
 ## Directory Layout
 
 ```
-auraframes/                    # Project root
+pushframe/                    # Project root
 ├── main.py                    # Script entry point — demonstrates client usage
 ├── requirements.txt           # Pinned Python dependencies
 ├── README.md                  # Project overview, upload/download flow docs
 ├── .gitignore
 ├── .planning/
 │   └── codebase/              # Architecture analysis documents
-└── auraframes/                # Main Python package
+└── pushframe/                # Main Python package
     ├── __init__.py
     ├── aura.py                # Facade class (Aura) — primary public API
     ├── client.py              # HTTP client (httpx/HTTP2 wrapper)
@@ -50,45 +50,45 @@ auraframes/                    # Project root
 
 ## Directory Purposes
 
-**`auraframes/api/`:**
+**`pushframe/api/`:**
 - Purpose: One class per REST resource domain; each class maps Python methods to HTTP calls and hydrates Pydantic models
 - Contains: `*Api` classes, all extending `BaseApi`
 - Key files: `frameApi.py` (largest; covers assets, playlists, activities, frame control)
 
-**`auraframes/aws/`:**
+**`pushframe/aws/`:**
 - Purpose: AWS service clients authenticated via Cognito anonymous identity pools
 - Contains: `AWSClient` (base), `S3Client` (images), `SQSClient` (frame event queues)
 - Key files: `s3client.py` — hardcodes bucket `images.senseapp.co` and pool ID
 
-**`auraframes/models/`:**
+**`pushframe/models/`:**
 - Purpose: Pydantic BaseModel definitions matching the Aura REST API response schema
 - Contains: Domain models for all major resources
 - Key files: `asset.py` (most complex model, ~130 fields), `frame.py` (includes `FramePartial` using `AllOptional`)
 
-**`auraframes/utils/`:**
-- Purpose: Stateless helper functions; no imports from other `auraframes` subpackages
+**`pushframe/utils/`:**
+- Purpose: Stateless helper functions; no imports from other `pushframe` subpackages
 - Contains: `settings.py`, `dt.py`, `io.py`
 
 ## Key File Locations
 
 **Entry Points:**
 - `main.py`: Script-level entry; run with `python main.py`
-- `auraframes/aura.py`: `Aura` class — start here for any programmatic use
+- `pushframe/aura.py`: `Aura` class — start here for any programmatic use
 
 **Configuration:**
-- `auraframes/utils/settings.py`: All env-var-based settings (`AURA_LOCALE`, `AURA_APP_IDENTIFIER`, `AURA_DEVICE_IDENTIFIER`, `IMAGE_PROXY_BASE_URL`)
+- `pushframe/utils/settings.py`: All env-var-based settings (`AURA_LOCALE`, `AURA_APP_IDENTIFIER`, `AURA_DEVICE_IDENTIFIER`, `IMAGE_PROXY_BASE_URL`)
 - `requirements.txt`: Python dependency pinning
 
 **Core Logic:**
-- `auraframes/aura.py`: High-level workflows (dump_frame, upload_image, clone)
-- `auraframes/client.py`: HTTP session management; auth header injection
-- `auraframes/export.py`: Image download and local file caching logic
-- `auraframes/exif.py`: EXIF write pipeline (datetime + GPS lookup via geopy)
+- `pushframe/aura.py`: High-level workflows (dump_frame, upload_image, clone)
+- `pushframe/client.py`: HTTP session management; auth header injection
+- `pushframe/export.py`: Image download and local file caching logic
+- `pushframe/exif.py`: EXIF write pipeline (datetime + GPS lookup via geopy)
 
 **AWS Integration:**
-- `auraframes/aws/awsclient.py`: Cognito credential exchange
-- `auraframes/aws/s3client.py`: Image upload (`put_object`) to S3
-- `auraframes/aws/sqsclient.py`: SQS long-polling for upload confirmation
+- `pushframe/aws/awsclient.py`: Cognito credential exchange
+- `pushframe/aws/s3client.py`: Image upload (`put_object`) to S3
+- `pushframe/aws/sqsclient.py`: SQS long-polling for upload confirmation
 
 **Testing:**
 - Not present — no test files detected
@@ -117,27 +117,27 @@ auraframes/                    # Project root
 ## Where to Add New Code
 
 **New API resource (e.g., `GiftApi`):**
-- Implementation: `auraframes/api/giftApi.py` — extend `BaseApi`, inject `Client` via `super().__init__(client)`
-- Register in facade: Add `self.gift_api = GiftApi(self._client)` in `Aura.__init__` (`auraframes/aura.py`)
-- Models: Add `auraframes/models/gift.py` with Pydantic `BaseModel` subclass
+- Implementation: `pushframe/api/giftApi.py` — extend `BaseApi`, inject `Client` via `super().__init__(client)`
+- Register in facade: Add `self.gift_api = GiftApi(self._client)` in `Aura.__init__` (`pushframe/aura.py`)
+- Models: Add `pushframe/models/gift.py` with Pydantic `BaseModel` subclass
 
 **New model:**
-- Implementation: `auraframes/models/{resource}.py`
-- Use `Optional[T]` for nullable fields; use `parse_aura_dt()` from `auraframes/utils/dt.py` for datetime properties
+- Implementation: `pushframe/models/{resource}.py`
+- Use `Optional[T]` for nullable fields; use `parse_aura_dt()` from `pushframe/utils/dt.py` for datetime properties
 - For PATCH/partial models: define base model then `class {Name}Partial({Name}, metaclass=AllOptional): pass`
 
 **New AWS service integration:**
-- Implementation: `auraframes/aws/{service}client.py` — extend `AWSClient`, override `auth()` to build the boto3 service client after calling `super().auth(pool_id)`
+- Implementation: `pushframe/aws/{service}client.py` — extend `AWSClient`, override `auth()` to build the boto3 service client after calling `super().auth(pool_id)`
 
 **New utility:**
-- Shared stateless helpers: `auraframes/utils/{name}.py`
-- No imports from `auraframes.api` or `auraframes.aws` in utils (keep utils dependency-free)
+- Shared stateless helpers: `pushframe/utils/{name}.py`
+- No imports from `pushframe.api` or `pushframe.aws` in utils (keep utils dependency-free)
 
 **New workflow / orchestration:**
-- Add a method on the `Aura` class in `auraframes/aura.py`; do not add business logic to `*Api` classes
+- Add a method on the `Aura` class in `pushframe/aura.py`; do not add business logic to `*Api` classes
 
 **Configuration / settings:**
-- Add new env vars to `auraframes/utils/settings.py` using `os.getenv('VAR_NAME', 'default')`
+- Add new env vars to `pushframe/utils/settings.py` using `os.getenv('VAR_NAME', 'default')`
 
 ## Special Directories
 
@@ -152,7 +152,7 @@ auraframes/                    # Project root
 - Committed: No (should be in `.gitignore`)
 
 **`cache/` (runtime-generated):**
-- Purpose: File-based JSON cache for API responses (opt-in via `@cache` decorator in `auraframes/cache.py`)
+- Purpose: File-based JSON cache for API responses (opt-in via `@cache` decorator in `pushframe/cache.py`)
 - Generated: Yes, at runtime when `@cache`-decorated functions are called
 - Committed: No
 

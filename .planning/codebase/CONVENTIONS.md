@@ -46,7 +46,7 @@
 **Order observed:**
 1. Standard library imports (`os`, `sys`, `json`, `uuid`, `time`, `datetime`, `io`, `typing`)
 2. Third-party imports (`boto3`, `httpx`, `loguru`, `pydantic`, `PIL`, `piexif`, `geopy`, `tqdm`)
-3. Local package imports (`from auraframes.api...`, `from auraframes.models...`, `from auraframes.utils...`)
+3. Local package imports (`from pushframe.api...`, `from pushframe.models...`, `from pushframe.utils...`)
 
 **Pattern:**
 - Each import group separated by blank line (observed in `aura.py`, `client.py`, `export.py`)
@@ -54,18 +54,18 @@
 - `from __future__ import annotations` used in files with forward references (`asset.py`, `activity.py`)
 
 **Path Aliases:**
-- None — all imports use full `auraframes.*` package paths
+- None — all imports use full `pushframe.*` package paths
 
 ## Error Handling
 
 **Patterns:**
-- Minimal error handling throughout; many API error paths have `# TODO: Error handling` comments with a bare `pass` (see `accountApi.py:29`, `accountApi.py:57`)
+- Minimal error handling remains in the inherited API layer; one `# TODO: Error handling` stub with a bare `pass` survives (`accountApi.py:60`) — every write/delete endpoint and the whole CLI surface raise typed errors
 - HTTP error responses checked via `json_response.get('error')` but not acted upon in most cases
-- Broad `except:` clauses with no exception type used in `exif.py` — e.g., `except:` catches all exceptions silently, logging only via `logger.info`
+- `exif.py` uses only typed `except Exception:` handlers; EXIF write failures fail loudly (D-11) — the old silent empty-`BytesIO` behavior is gone
 - `try/except Exception as e` used in `aura.py:download_images_from_assets()` — failed assets are collected but not re-raised
-- No custom exception classes defined anywhere in the codebase
+- Typed exception hierarchy: `AuraError` base with `AuthenticationError` / `WriteEndpointError` / `RateLimitError` (`client.py`), plus `SafeSyncError` (`gsync.py`), `ScheduleError` (`schedule.py`), `PreflightError` (`preflight.py`), `ConfigError` (`config_store.py`)
 - Pydantic validation is the primary mechanism for catching bad data from the API (model construction raises on invalid types)
-- `AssetPartialId` uses a Pydantic `@validator` for cross-field validation: `asset.py:118`
+- `AssetPartialId` uses a Pydantic `@model_validator(mode='after')` for cross-field validation (`asset.py:145`)
 
 **Example of current error handling approach:**
 ```python
@@ -80,7 +80,7 @@ if json_response.get('error') or not json_response.get('result'):
 **Framework:** `loguru` (`~=0.6.0`)
 
 **Configuration:**
-- Configured once in `Aura._init_logger()` (`aura.py:131`)
+- Configured once in `Aura._init_logger()` (`aura.py:187`) under the MOD-04 process guard — the first `Aura()` construction sets the stderr + file sinks, later constructions are sink no-ops (no teardown; `cli.py`'s `_configure_cli_logging()` owns wholesale reconfiguration)
 - Two sinks: `sys.stderr` at `INFO` level and `logs/file_{time}.log` (all levels)
 - Structured format with timestamp, level, module/function/line, message, and `{extra}` context
 
@@ -93,10 +93,10 @@ if json_response.get('error') or not json_response.get('result'):
 ## Comments
 
 **When to Comment:**
-- TODOs are pervasive (28+ instances) — used to mark unimplemented features, known issues, and open questions
+- TODOs remain (~26 instances) — mostly inherited-library markers in `api/`/`aws/` and open questions about the undocumented upstream API
 - Inline comments explain unclear API behavior: `# Typical use of this endpoint results in a single AssetPartialId being sent per call.`
 - Attribution comments for borrowed code: `# Most of the exif writing is from: <url>` (`exif.py:14`)
-- Commented-out code left in place: `# logger.remove()` in `aura.py:132`
+- The old commented-out `# logger.remove()` in `aura.py` is gone — MOD-04's `_LOGGER_READY` process guard replaced it
 
 **Docstrings:**
 - All public API methods in `frameApi.py`, `accountApi.py`, `assetApi.py`, `activityApi.py` have docstrings
@@ -136,38 +136,33 @@ def get_assets(self, frame_id: str, limit: int = 1000, cursor: str = None) -> tu
 
 **Exports:**
 - No `__all__` declarations in any module
-- `auraframes/models/__init__.py` and `auraframes/api/__init__.py` are empty
-- `auraframes/__init__.py` is empty — consumers must import specific submodules
+- `pushframe/models/__init__.py` and `pushframe/api/__init__.py` are empty
+- `pushframe/__init__.py` defines `__version__` only (single-sourced with pyproject, pinned by `tests/test_version.py`); `models/__init__.py` and `api/__init__.py` are empty — consumers import specific submodules
 
 **Barrel Files:**
-- Not used; imports go directly to source modules: `from auraframes.api.frameApi import FrameApi`
+- Not used; imports go directly to source modules: `from pushframe.api.frameApi import FrameApi`
 
 ## Data Modeling
 
-**Framework:** Pydantic v1 (`~=1.10.4`)
+**Framework:** Pydantic v2 (>=2; migrated from v1.10 in v1.0)
 
 **Patterns:**
 - All API response shapes modeled as `pydantic.BaseModel` subclasses
 - Fields typed with `Optional[T]` for nullable/missing API fields
 - `Any` used when field type is unknown: `burst_id: Any`, `playlist: typing.Any`
 - `from __future__ import annotations` enables forward references in models
-- Partial model pattern via custom `AllOptional` metaclass (`meta.py`): `class FramePartial(Frame, metaclass=AllOptional)`
+- Partial model pattern via the `make_partial()` `create_model` factory (`meta.py`): `FramePartial = make_partial(Frame, "FramePartial")`
 - Enums used for known string-valued discriminators: `ActivityType`, `ReactionType`, `Feature`
-- Pydantic `@validator` used for cross-field validation: `AssetPartialId.check_id_or_local_id`
-- `.dict(include={...})` used to build API request payloads from model instances
+- Pydantic `@model_validator` used for cross-field validation: `AssetPartialId.check_id_or_local_id`
+- `.model_dump(include={...})` used to build API request payloads from model instances
 
 ## Configuration
 
-**Pattern:** Module-level constants read from environment variables at import time (`utils/settings.py`)
+**Pattern:** Call-time resolution from a `SETTINGS` registry (`utils/settings.py`) — `PUSHFRAME_*` env vars primary, `AURA_*` legacy fallback, then config.json, then defaults; never read at import time (the v1.0 HTTP-475 early-bound-default lesson)
 
-```python
-LOCALE = os.getenv('AURA_LOCALE', 'en-US')
-DEVICE_IDENTIFIER = os.getenv('AURA_DEVICE_IDENTIFIER', '0000000000000000')
-```
-
-- Credentials passed via env vars: `AURA_EMAIL`, `AURA_PASSWORD`
-- AWS pool IDs hardcoded as module constants (flagged as TODO to move to config)
+- Credentials: token-first sessions — `auth_token` in `~/.config/pushframe/config.json` (0600); `PUSHFRAME_EMAIL`/`PUSHFRAME_PASSWORD` (legacy `AURA_*`) remain the CI/script override; the password is never persisted
+- AWS pool IDs and bucket name are settings-backed since MOD-02 (`AWS_S3_BUCKET`, `AWS_UPLOAD_IDENTITY_POOL_ID`, `AWS_SQS_IDENTITY_POOL_ID`) — no hardcoded literals
 
 ---
 
-*Convention analysis: 2026-06-29*
+*Convention analysis: 2026-06-29, corrected 2026-10-04 against the 5.1.28 tree.*

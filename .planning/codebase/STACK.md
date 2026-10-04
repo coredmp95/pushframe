@@ -10,60 +10,59 @@
 ## Runtime
 
 **Environment:**
-- Python 3 (no version pin file detected; system Python used)
+- Python 3.14 (`requires-python >=3.14` — the floor the dependency set is resolved and tested against)
 
 **Package Manager:**
-- pip with `requirements.txt`
-- Lockfile: Not present (no `requirements.lock` or `poetry.lock`)
+- `uv` — PEP 621 `pyproject.toml` + committed `uv.lock` for reproducible installs; dev/test commands run via `uv run`
 
 ## Frameworks
 
 **Core:**
-- None - This is a standalone Python library/CLI tool; no web framework is used
+- None - Standalone CLI tool; no web framework. Console script: `pushframe = "pushframe.cli:main"`
 
 **Data Validation:**
-- pydantic ~=1.10.4 - All API response models and domain objects use `BaseModel`; see `auraframes/models/`
+- pydantic >=2 - All API response models and domain objects use `BaseModel` (v2 idioms only); see `pushframe/models/`
 
 **Testing:**
-- Not detected - No test files, pytest config, or test runner found
+- pytest >=8 (dev extra) - offline suite (636 tests, zero warnings, DeprecationWarning errors) plus `@live`-marked drift oracle; `uv run --extra dev pytest -q -m "not live"`
 
 **Build/Dev:**
-- None detected - No build tooling or Makefile present
+- hatchling + custom build hook (`hatch_build.py`); `uv build` emits wheel + sdist
 
 ## Key Dependencies
 
 **HTTP Client:**
-- httpx==0.23.1 - Primary HTTP client used in `auraframes/client.py`; HTTP/2 enabled via `httpx.Client(http2=True)`
-- h2==4.1.0 - HTTP/2 protocol implementation required by httpx for `http2=True` mode
-- requests==2.28.1 - Listed in `requirements.txt` but not observed in active source files; httpx is the actual client used
+- httpx[http2]>=0.27 - Primary HTTP client used in `pushframe/client.py`; HTTP/2 enabled via `httpx.Client(http2=True)`
+- h2>=4 - HTTP/2 protocol implementation required by httpx for `http2=True` mode
+- requests>=2.31 - declared but not imported by the package source (kept as a resolved pin)
 
 **AWS SDK:**
-- boto3==1.26.38 - Used in `auraframes/aws/awsclient.py`, `auraframes/aws/s3client.py`, `auraframes/aws/sqsclient.py`
-- botocore~=1.29.38 - AWS SDK core, used in `auraframes/aws/awsclient.py` for `botocore.config.Config`
+- boto3>=1.34 - Used in `pushframe/aws/awsclient.py`, `pushframe/aws/s3client.py`, `pushframe/aws/sqsclient.py`
+- botocore>=1.34 - AWS SDK core, used in `pushframe/aws/awsclient.py` for `botocore.config.Config`
 
 **Image Processing:**
-- Pillow~=9.5.0 - Image reading and thumbnail generation in `auraframes/aura.py` and `auraframes/export.py`
-- piexif~=1.1.3 - EXIF data reading and writing in `auraframes/exif.py`
+- Pillow>=10.4 - Image reading and thumbnail generation in `pushframe/aura.py` and `pushframe/export.py`
+- pillow-heif>=1.6 - HEIC passthrough uploads (D-09: original bytes untouched, `data_uti='public.heic'`)
+- piexif>=1.1.3 - EXIF data reading and writing in `pushframe/exif.py`
 
 **Geocoding:**
-- geopy~=2.3.0 - Reverse geocoding via Nominatim in `auraframes/exif.py`
+- geopy>=2.4 - Reverse geocoding via Nominatim in `pushframe/exif.py`
 
 **Logging:**
-- loguru~=0.6.0 - Structured logging throughout; configured in `auraframes/aura.py` via `_init_logger()`; writes to `logs/file_{time}.log` and stderr
+- loguru>=0.7 - Structured logging throughout; configured in `pushframe/aura.py` via `_init_logger()` under the MOD-04 process-level sink guard; writes to `logs/file_{time}.log` and stderr
 
 **Progress Display:**
-- tqdm~=4.65.0 - Progress bars for batch download operations in `auraframes/aura.py`
+- tqdm>=4.66 - Progress bars for batch operations
 
 ## Configuration
 
 **Environment:**
-- Configured exclusively via environment variables, read in `auraframes/utils/settings.py`
-- Required vars: `AURA_EMAIL`, `AURA_PASSWORD`
-- Optional vars with defaults: `AURA_LOCALE` (default: `en-US`), `AURA_APP_IDENTIFIER` (default: `com.pushd.client`), `AURA_DEVICE_IDENTIFIER` (default: `0000000000000000`)
-- No `.env` file loader detected; vars must be set in shell environment
+- Primary: `~/.config/pushframe/config.json` (mode 0600, atomic tmp+rename writes) — email, `auth_token` (token-first sessions; the password is never persisted), default frame, named pairs; managed by `pushframe config` (wizard / show / import / set / get)
+- `PUSHFRAME_*` env vars are primary, `AURA_*` kept as a legacy fallback (IDN-04 deprecation window); values resolve at call time via `pushframe/utils/settings.py`, never at import
+- AWS identifiers are settings-backed since MOD-02 (`AWS_S3_BUCKET`, `AWS_UPLOAD_IDENTITY_POOL_ID`, `AWS_SQS_IDENTITY_POOL_ID` with `PUSHFRAME_AWS_*` overrides)
 
 **Build:**
-- No build config files present (`setup.py`, `pyproject.toml`, `Makefile` absent)
+- `pyproject.toml` (PEP 621) + committed `uv.lock`; hatchling build backend with custom hook
 
 ## Platform Requirements
 
@@ -73,9 +72,9 @@
 - Network access to `api.pushd.com`, `imgproxy.pushd.com`, AWS us-east-1 endpoints
 
 **Production:**
-- Not applicable; this is an offline/scripting tool intended for direct execution via `main.py`
-- Entry point: `python main.py` (see `main.py`)
+- Shipped as the `pushframe` package (PyPI + signed APT repo + GitHub Releases — one tag, every channel)
+- Entry point: the `pushframe` console script (`pushframe/cli.py`); `main.py` remains the legacy facade-only demo
 
 ---
 
-*Stack analysis: 2026-06-29*
+*Stack analysis: 2026-06-29, corrected 2026-10-04 against the 5.1.28 tree.*

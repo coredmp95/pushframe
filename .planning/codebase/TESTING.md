@@ -31,8 +31,8 @@
 **Current state:** 0% — there are no automated tests of any kind.
 
 **Explicit acknowledgement in source:**
-- `auraframes/api/assetApi.py:3` — `# TODO: Untested`
-- `auraframes/api/notificationApi.py:4` — `# TODO: Test`
+- `pushframe/api/assetApi.py:3` — `# TODO: Untested`
+- `pushframe/api/notificationApi.py:4` — `# TODO: Test`
 
 ## Test Types
 
@@ -46,30 +46,30 @@
 
 The following areas have zero test coverage and represent the highest-value targets for initial test authoring:
 
-**Data models (`auraframes/models/`):**
+**Data models (`pushframe/models/`):**
 - Pydantic model construction from realistic API JSON payloads
 - `AssetPartialId` validator: `check_id_or_local_id` (`asset.py:118`) — requires either `id` or `local_identifier`
 - `AllOptional` metaclass behavior (`meta.py`) making all fields optional on `FramePartial`
 - Enum deserialization for `ActivityType`, `ReactionType`, `Feature`
 
-**HTTP client (`auraframes/client.py`):**
+**HTTP client (`pushframe/client.py`):**
 - `Client.get/post/put/delete` request formation and cookie forwarding
 - `_set_cookies` behavior
 - History deque rotation (maxlen enforcement)
 
-**API layer (`auraframes/api/`):**
+**API layer (`pushframe/api/`):**
 - `FrameApi.get_frames` — JSON-to-model mapping
 - `FrameApi.get_assets` — pagination cursor handling
 - `AccountApi.login` — credential payload construction and error path (currently a `pass`)
 - `AssetApi.batch_update` — `include={}` dict field filtering
 - `ActivityApi` — comment creation and deletion
 
-**Utility functions (`auraframes/utils/`):**
+**Utility functions (`pushframe/utils/`):**
 - `parse_aura_dt` / `format_dt_to_aura` round-trip (`dt.py`)
 - `build_path` with and without `make_dir=True` (`io.py`)
 - `write_model` for both single models and lists (`io.py`)
 
-**Business logic (`auraframes/aura.py`):**
+**Business logic (`pushframe/aura.py`):**
 - `get_all_assets` cursor pagination loop
 - `download_images_from_assets` failure collection behavior
 
@@ -83,7 +83,7 @@ pip install pytest pytest-httpx pytest-mock coverage
 
 # Run tests (once written)
 pytest                         # Run all tests
-pytest --cov=auraframes        # With coverage
+pytest --cov=pushframe        # With coverage
 pytest -x                      # Stop on first failure
 ```
 
@@ -94,7 +94,7 @@ pytest -x                      # Stop on first failure
 **Example pattern for future tests:**
 ```python
 # tests/test_dt.py
-from auraframes.utils.dt import parse_aura_dt, format_dt_to_aura
+from pushframe.utils.dt import parse_aura_dt, format_dt_to_aura
 
 def test_parse_aura_dt_round_trip():
     dt_str = '2023-06-15T14:30:00.000000Z'
@@ -104,7 +104,7 @@ def test_parse_aura_dt_round_trip():
 ```python
 # tests/api/test_frame_api.py
 from unittest.mock import MagicMock
-from auraframes.api.frameApi import FrameApi
+from pushframe.api.frameApi import FrameApi
 
 def test_get_frames_returns_frame_list():
     client = MagicMock()
@@ -122,7 +122,7 @@ def test_get_frames_returns_frame_list():
 No convention exists yet. Suggested approach consistent with Python norms:
 
 ```
-auraframes-repo/
+pushframe-repo/
 ├── tests/
 │   ├── __init__.py
 │   ├── test_client.py
