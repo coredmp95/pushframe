@@ -249,3 +249,57 @@ def test_clash_refuses_everything_before_any_pair_runs(tmp_path, cfg_path, capsy
     assert "=== pair [" not in out
     assert "a-clash1" in out and "b-clash2" in out
     assert "c-healthy" not in out        # only the clash is named
+
+
+@pytest.mark.live
+def test_live_all_refuses_same_frame_pairs_before_any_network(
+        tmp_path, monkeypatch, capsys):
+    """Live proof (run deliberately: `pytest -m live -k same_frame_pairs`):
+    with REAL credentials available, a two-clashing-pairs config is refused
+    by the guard with ZERO network requests — not even reads. The offline
+    sibling above cannot prove that (its fakes never reach the network);
+    here a regression that let the run proceed would fire real HTTP calls,
+    and the funnel counter below catches them.
+
+    Safety: `apply=False` — even a fully regressed guard could at worst
+    make real READ calls, never a write. Skips without credentials, like
+    every live test (D-02)."""
+    import os
+    if not os.getenv("AURA_EMAIL") or not os.getenv("AURA_PASSWORD"):
+        pytest.skip("AURA_EMAIL/AURA_PASSWORD not set; skipping live tests")
+
+    import httpx
+
+    from pushframe.gsync import run_google_sync
+    from pushframe import pairs as pairs_mod
+    from pushframe.utils import settings
+
+    # A real pair store (real pair_add/pair_resolve against a real file) —
+    # just parked at a temp path so the operator's config stays untouched.
+    monkeypatch.setattr(settings, "CONFIG_PATH", tmp_path / "config.json")
+    pairs_mod.pair_add("live-a", album="Album A", frame="Frame A")
+    pairs_mod.pair_add("live-b", album="Album B", frame="Frame A")
+
+    # Count EVERY httpx request through the one funnel all verbs share.
+    calls = []
+    original_send = httpx.Client.send
+
+    def counting_send(self, request, **kwargs):
+        calls.append(str(request.url))
+        return original_send(self, request, **kwargs)
+
+    monkeypatch.setattr(httpx.Client, "send", counting_send)
+
+    rc = run_google_sync("Frame A", "--all", apply=False, run_all=True,
+                         session=None, aura=None,
+                         s3_client=None, sqs_client=None,
+                         cache_dir=tmp_path / "c",
+                         manifest_path=tmp_path / "m.json")
+
+    out = capsys.readouterr().out
+    assert rc == 2
+    assert "SAME frame" in out
+    assert "live-a" in out and "live-b" in out
+    assert calls == [], (
+        "the same-frame guard fired AFTER real network calls — it must "
+        "refuse before any pair touches the network:\n" + "\n".join(calls))
