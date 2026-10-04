@@ -12,6 +12,21 @@ every channel.
 `pushframe` is an unofficial community CLI for Aura Frames digital photo
 frames; it is not affiliated with Aura Frames Inc.
 
+## [Unreleased]
+
+### Changed
+
+- The agent-facing codebase context (`CLAUDE.md` and its GSD sources in
+  `.planning/codebase/`) is re-audited against the 5.1.28 tree: module paths
+  `auraframes/` → `pushframe/`, pydantic v2 idioms (`model_dump`,
+  `@model_validator`, `make_partial()` instead of the retired `AllOptional`
+  metaclass), the typed exception hierarchy, settings-backed AWS pool/bucket
+  IDs (MOD-02), call-time `PUSHFRAME_*`-primary configuration, and the
+  CLI/scheduling subsystems now documented alongside the inherited library.
+- pytest now fails on `DeprecationWarning`
+  (`filterwarnings = ["error::DeprecationWarning"]`) — the zero-warning
+  state reached in 5.1.27 is locked instead of drifting back silently.
+
 ## [5.1.28] - 2026-10-04
 
 ### Added
