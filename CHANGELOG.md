@@ -12,6 +12,16 @@ every channel.
 `pushframe` is an unofficial community CLI for Aura Frames digital photo
 frames; it is not affiliated with Aura Frames Inc.
 
+## [Unreleased]
+
+### Fixed
+
+- `geopy` locked at 2.5.0 (floor raised to `>=2.5`): CVE-2026-77387 is a
+  known vulnerability in 2.4.1, fixed upstream in 2.5.0 — the
+  `dependency-audit` CI job (pip-audit over the locked tree) had been
+  failing since the advisory landed. No behavior change: geopy only backs
+  the reverse-geocoding of EXIF GPS writes.
+
 ## [5.1.31] - 2026-10-04
 
 ### Added
