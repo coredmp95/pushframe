@@ -56,3 +56,9 @@ packages = ["pushframe"]
 markers = [
     "live: hits the live Aura API; requires AURA_EMAIL/AURA_PASSWORD. Deselect with -m 'not live'.",
 ]
+# Lock the zero-warning state reached in 5.1.27 (refactor(api): drop deprecated
+# pydantic .dict() and datetime.utcnow()): any DeprecationWarning — ours or a
+# dependency's — fails the suite instead of drifting back silently.
+filterwarnings = [
+    "error::DeprecationWarning",
+]
