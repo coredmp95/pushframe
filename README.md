@@ -61,10 +61,12 @@ pushframe config pair add family --album family --frame "Living Room"
 pushframe schedule add nightly --pair family --every 1d
 ```
 
-On a server or any headless machine, enable lingering once so the timer fires
-without a logged-in session: `loginctl enable-linger $USER`. Only the one-time
-`google-link` needs a screen — on a server, connect with `ssh -X` for that one
-command; everything else is headless by nature.
+On a server or any headless machine, run `loginctl enable-linger $USER` once
+(on that machine, as your user): without it, systemd user timers only fire
+while you are logged in — the nightly mirror would silently stop the moment
+you log out. Only the one-time `google-link` needs a screen — on a server,
+connect with `ssh -X` for that one command; everything else is headless by
+nature.
 
 → Full walkthrough with real outputs: [Google Photos albums](#google-photos-albums--google-link--google-album)
 and [`google-sync`](#google-sync--mirror-a-google-album-onto-a-frame) below.
@@ -161,7 +163,8 @@ command runs inside the project's managed environment.
 
 The easy path is the wizard — it asks once, verifies the login against the
 real API before writing anything, and stores the result in
-`~/.config/pushframe/config.json` (mode `0600`):
+`~/.config/pushframe/config.json` (mode `0600` — a file only your user can
+read):
 
 ```bash
 pushframe config          # interactive wizard: email → password (hidden) → live login test
@@ -218,8 +221,7 @@ Boolean variables accept `1`, `true`, `yes`, `on` (case-insensitive); anything e
 
 ## Everyday use
 
-A CLI wraps the library (installed as the `pushframe` entry point). There are
-twelve commands — the Google trio first (the flagship flow, see the
+There are twelve commands — the Google trio first (the flagship flow, see the
 [highlight](#the-highlight-your-frame-follows-a-google-photos-album) above),
 then the rest alphabetically:
 
@@ -247,11 +249,17 @@ pushframe status
 ```
 
 ```
-PUSHFRAME_EMAIL: set
-PUSHFRAME_PASSWORD: set
+Config: stored session (/home/you/.config/pushframe/config.json — created by `pushframe config`, no password needed)
 Logged in as you@example.com
 1 frames:
   - Living Room (id: 00000000-0000-0000-0000-000000000000)
+Google:
+  linked: yes
+  account: you@example.com
+  session: usable
+Scheduled:
+  nightly: mirror album "Holidays" → frame "Living Room" — next: Sat 2026-10-03 00:03
+  (detail: `pushframe schedule list`)
 ```
 
 `--frame` (on every frame-targeting command) takes a **case-insensitive
@@ -268,6 +276,11 @@ These commands read your **Google Photos** shared albums (a separate account
 from the Aura API) — together with `google-sync` below they form the flagship
 mirror flow, summarized in the
 [highlight section](#the-highlight-your-frame-follows-a-google-photos-album).
+`google-album --list` shows the account's **shared** albums — the rows this
+proven path reads each carry a share token. A purely personal album may not
+appear there: if yours doesn't, open it in Google Photos, create its share
+link, and target that URL (or its `AF1Qip…` id) directly — direct targets
+bypass name resolution entirely.
 The first command, `google-link`, opens a **visible** Chrome window on a
 dedicated profile (default `~/.config/pushframe/chrome-profile`, created on
 demand — your daily-driver profile is structurally unreachable); you log into
@@ -275,7 +288,11 @@ Google inside it, the command auto-detects the completed login, closes the
 window, and saves the session to `~/.config/pushframe/google-cookies.json`
 (`0600`, outside the repository). Every later operation is plain authenticated
 HTTP — no browser runs again. **Re-linking is the same command**: when the
-session expires (it does, eventually), run `google-link` again.
+session expires (it does, eventually), runs start failing with a named error
+and `pushframe status` stops showing `session: usable` — re-run `google-link`
+and the next night is back to normal. To be *told* instead of noticing, add
+`--report ERROR` when installing the job (see the email-reports section of
+[`docs/CLI.md`](docs/CLI.md#email-run-reports--schedule-report--google-sync---report)).
 
 Then select and enumerate an album by name, share link, or id:
 
@@ -360,7 +377,15 @@ Nothing to do — the frame already mirrors the album (757 unchanged, 8 already 
   **hidden** on the frame — it stops displaying but stays. Re-add it to the
   album and the next run re-shows it **without re-uploading a byte**.
   (Both directions were proven live against a real album.)
-- **Videos are skipped with a counted line** — never silently dropped.
+- **The mirror is photos-only, by design** — a photo frame shows photos. A
+  video in the album is skipped, and the run says so with a counted line
+  (never silently).
+- **Photos on the frame that are not in the album** (added from the phone
+  app, say) are **hide candidates** at the next `--apply` — the album is
+  the source of truth. The 20 % mass-hide guard stands between such a plan
+  and your frame: interactively you confirm with the counts on screen;
+  scheduled, the run skips and logs instead (and the album itself is not
+  synced that night — review with a manual `google-sync` dry run).
 - An **empty or truncated album listing aborts** with an error instead of
   producing a plan — a Google-side glitch can never read as "delete/hide
   everything".
@@ -498,17 +523,32 @@ pushframe schedule list
 pushframe schedule remove nightly
 ```
 
+`--every 1d` means **daily at midnight** (plus up to 15 minutes of random
+delay, so several machines never fire in the same second). For a specific
+time, use `--at` with a systemd calendar expression, e.g.
+`--at "*-*-* 03:30"` (every day at 03:30). If the machine was off at the
+tick, the run catches up at the next boot.
+
 The timer runs a `google-sync` **of the Google album onto the frame** at every
 tick (`--pair` resolves the named pair; `--sync-dir DIR --frame F` schedules a
-local-directory `sync` instead; `--at "OnCalendar"` allows exact times like
-`"Mon *-*-* 02:00"`). The pair NAME is the label you chose at
+local-directory `sync` instead; `--at` accepts any systemd calendar
+expression). The pair NAME is the label you chose at
 `pushframe config pair add <name> --album A --frame F` — list existing names
 with `pushframe config pair list`. Units live under `~/.config/systemd/user/` — no root.
 Everything comes from stored config (session, pair), so a timed run **never
 prompts**. On failure the unit just ends and the next tick is the retry; logs
-land in `~/.local/state/pushframe/<job>.log`. In scheduled mode the mass-hide
+land in `~/.local/state/pushframe/<job>.log`, where every run stamps a
+`=== run … ===` header and closes with `=== run end rc=0 … ===` — `rc=0`
+means the night went fine, a missing footer means it died mid-run. The easy
+morning-after check: `pushframe status` (the `Scheduled:` line names the next
+run), or install the job with `--report ERROR` and let an email tell you when
+a night goes wrong (see the email-reports section of
+[`docs/CLI.md`](docs/CLI.md#email-run-reports--schedule-report--google-sync---report)).
+In scheduled mode the mass-hide
 check **skips and logs** instead of proceeding — review manually. Headless
-hosts need lingering enabled once: `loginctl enable-linger $USER`.
+hosts need lingering enabled once: `loginctl enable-linger $USER` (without it
+the timer only fires while you are logged in — see the note in the
+quickstart).
 
 ## Safety model — a mistaken run should never cost photos
 
@@ -549,6 +589,23 @@ are idempotent.
 
 **Session expired / a command says to run the wizard.** `pushframe config` —
 Enter keeps your stored email, a fresh login refreshes the token.
+
+**You changed your Aura account password.** Nothing breaks on the spot —
+commands run on the stored token session, not the password. The next time
+the stored token is refused, a terminal run offers **one** re-login: type
+your new password and the session refreshes in place (or just run
+`pushframe config`). A scheduled run cannot prompt: it fails named with the
+`pushframe config` remedy and the next tick recovers. If you authenticate
+by environment variables instead, update `PUSHFRAME_PASSWORD` — that path
+has no stored token.
+
+**The frame stopped following the album (the nightly mirror stopped working).**
+The Google session most likely expired. Check `pushframe status` — the Google
+section reports the session state — and re-run `pushframe google-link` (a
+browser is needed, once); the next scheduled tick recovers by itself. With
+`--report ERROR` on the job (see
+[Scheduling](#scheduling--systemd-user-timers-no-root)), a failing night
+emails you instead of waiting to be noticed.
 
 **`google-link` can't open a browser (server).** Connect with `ssh -X` for
 that one command — see [Headless servers](#headless-servers-google-link-without-a-screen).

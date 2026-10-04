@@ -2,8 +2,9 @@
 
 Complete reference for every command, flag, and exit code, with real output.
 
-`pushframe` talks to the Aura **cloud** API (`api.pushd.com/v5`) plus AWS S3/SQS. It never
-talks to the frame over your local network — everything goes through your Aura account.
+`pushframe` talks to the Aura **cloud** API (`api.pushd.com/v5`) plus AWS
+S3/SQS — the service's photo-storage side. It never talks to the frame over
+your local network — everything goes through your Aura account.
 
 > The API is unofficial and reverse-engineered. It is undocumented and can change without
 > notice. Every write path here has been exercised against a live frame, but that is a
@@ -28,6 +29,11 @@ talks to the frame over your local network — everything goes through your Aura
 - [Known issues](#known-issues)
 
 ## Global usage
+
+**How you're logged in (the short version):** run `pushframe config` once —
+after that every command just works, using the stored session (no password
+is stored, no login call happens). That is the whole story for most
+people; the details below matter for scripts and troubleshooting.
 
 One session path: every command authenticates the same way —
 `PUSHFRAME_EMAIL`/`PUSHFRAME_PASSWORD` env (override; discouraged for
@@ -706,18 +712,20 @@ requests.
 ### Write budget and geo guard
 
 `push` and `sync --apply` both run a client-side token-bucket budget and a geo pre-flight
-check before any write, so the anti-abuse lockout is difficult to reach by accident.The budget is persisted between runs under `AURA_STATE_DIR` (default
-`~/.config/pushframe/`), keyed by a hash of the **account identity**: the
-`PUSHFRAME_EMAIL`/`AURA_EMAIL` override when set, otherwise the email of
-the stored session (the same env-then-config resolution auth uses —
-5.1.6). A run with no resolvable identity at all skips pacing with a
+check before any write, so the anti-abuse lockout is difficult to reach by
+accident. The budget is persisted between runs under `PUSHFRAME_STATE_DIR`
+(default `~/.config/pushframe/`), keyed by a hash of the **account
+identity**: the
+`PUSHFRAME_EMAIL` (legacy `AURA_EMAIL`) override when set, otherwise the
+email of the stored session (the same env-then-config resolution auth uses
+— 5.1.6). A run with no resolvable identity at all skips pacing with a
 named stderr line instead of crashing.
 
 | Flag | Effect |
 |---|---|
 | `--max-wait S` | Cap how long a run will wait for the budget to refill (default 3600) |
 | `--no-wait` | Don't wait at all — stop as soon as the budget is dry |
-| `--country XX` | Expected account country for the geo check (default `AURA_COUNTRY`) |
+| `--country XX` | Expected account country for the geo check (default `PUSHFRAME_COUNTRY`) |
 | `--ignore-budget` | Bypass the budget entirely. Escape hatch. |
 
 When the budget runs dry:
@@ -732,7 +740,7 @@ When the exit IP country doesn't match:
 VPN/exit IP in BE, account expects FR — switch your VPN and retry.
 ```
 
-The geo check only runs if `AURA_COUNTRY` (or `--country`) is set; unset means skipped.
+The geo check only runs if `PUSHFRAME_COUNTRY` (or `--country`) is set; unset means skipped.
 
 > These flags live on `push` only. `sync --apply` still gets the same budget and geo
 > protection — it just takes its settings from the environment rather than per-run flags.
@@ -1006,38 +1014,41 @@ to adopt one.
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `AURA_COUNTRY` | *(unset)* | Expected account country for the geo pre-flight check. Unset disables the check. |
-| `AURA_GEO_FAIL_OPEN` | `true` | If the country lookup fails, continue rather than block |
-| `AURA_WRITE_BUDGET_CAPACITY` | `30` | Token-bucket capacity, in requests |
-| `AURA_WRITE_BUDGET_REFILL_PER_MIN` | `0.75` | Refill rate per minute |
-| `AURA_WRITE_BUDGET_WAIT` | `true` | Wait for refill instead of stopping |
-| `AURA_WRITE_BUDGET_MAX_WAIT` | `3600` | Max seconds to wait |
-| `AURA_STATE_DIR` | `~/.config/pushframe` | Where the persisted budget lives |
+| `PUSHFRAME_COUNTRY` | *(unset)* | Expected account country for the geo pre-flight check. Unset disables the check. |
+| `PUSHFRAME_GEO_FAIL_OPEN` | `true` | If the country lookup fails, continue rather than block |
+| `PUSHFRAME_WRITE_BUDGET_CAPACITY` | `30` | Token-bucket capacity, in requests |
+| `PUSHFRAME_WRITE_BUDGET_REFILL_PER_MIN` | `0.75` | Refill rate per minute |
+| `PUSHFRAME_WRITE_BUDGET_WAIT` | `true` | Wait for refill instead of stopping |
+| `PUSHFRAME_WRITE_BUDGET_MAX_WAIT` | `3600` | Max seconds to wait |
+| `PUSHFRAME_STATE_DIR` | `~/.config/pushframe` | Where the persisted budget lives |
+
+(The old `AURA_*` spellings are still read as fallbacks — see the legacy
+note in the README.)
 
 **Optional — client identity**
 
 | Variable | Default |
 |---|---|
-| `AURA_LOCALE` | `en-US` |
-| `AURA_APP_IDENTIFIER` | `com.pushd.client` |
-| `AURA_DEVICE_IDENTIFIER` | `0000000000000000` |
-| `AURA_USER_AGENT` | `Aura/4.7.4271 (Android 36; Client)` |
+| `PUSHFRAME_LOCALE` | `en-US` |
+| `PUSHFRAME_APP_IDENTIFIER` | `com.pushd.client` |
+| `PUSHFRAME_DEVICE_IDENTIFIER` | `0000000000000000` |
+| `PUSHFRAME_USER_AGENT` | `Aura/4.7.4271 (Android 36; Client)` |
 
 These are **what the Aura API sees as your client** — treat them as an
 identity, not a preference:
 
-- `AURA_LOCALE` — locale string presented at login. Leave unless Aura
+- `PUSHFRAME_LOCALE` — locale string presented at login. Leave unless Aura
   serves you a wrong-language experience.
-- `AURA_APP_IDENTIFIER` — the app bundle id presented at login
+- `PUSHFRAME_APP_IDENTIFIER` — the app bundle id presented at login
   (`com.pushd.client` is the phone app's). Changing it changes what class
   of client the server thinks you are.
-- `AURA_DEVICE_IDENTIFIER` — **the one that matters**: it must be unique
+- `PUSHFRAME_DEVICE_IDENTIFIER` — **the one that matters**: it must be unique
   per install. The all-zeros default is what every unprovisioned
   pushframe shares, and the server reads it as a non-phone client (the
   2026-09-30 lesson: reads stayed green for months while writes were
   401-refused). `pushframe config` provisions a unique one automatically;
   or `config set DEVICE_IDENTIFIER "$(uuidgen)"`.
-- `AURA_USER_AGENT` — the app version string. Its default tracks a
+- `PUSHFRAME_USER_AGENT` — the app version string. Its default tracks a
   current Play build (5.1.1 bumped it for exactly that reason); only
   touch it if Aura starts refusing the shipped one.
 
@@ -1072,6 +1083,11 @@ is rejected with the list); `pushframe config set --help` prints the same
 guide from the terminal. Wizard-managed `email`/`auth_token` are refused —
 the wizard login-tests them. Precedence is always environment → config file
 → default, and `config show` labels every value's source.
+
+> Naming note: a few stored keys keep their historical `AURA_…` spelling
+> (they predate the v5.0 rename) — that is the key name, not a typo. The
+> environment-variable names are the `PUSHFRAME_*` ones from the tables
+> above; the old `AURA_*` env spellings still work as fallbacks.
 
 **Wizard-managed**
 
