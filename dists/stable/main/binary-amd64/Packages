@@ -1,0 +1,27 @@
+Package: pushframe
+Version: 5.1.32
+Architecture: amd64
+Maintainer: Fabrice DIDIERJEAN <coredmp95@gmail.com>
+Installed-Size: 215864
+Depends: ca-certificates, libc6
+Filename: pool/main/p/pushframe/pushframe_5.1.32_amd64.deb
+Size: 59350028
+MD5sum: 67b22a1318b2f5675cab1974ffd67bd7
+SHA1: 35435d39e7b5a9b6e4433b18325cc8b716d41ac0
+SHA256: 2584775b37f9eab82a92d92ba3294c7c8365913eac8b241c6bda63719be69e75
+Section: utils
+Priority: optional
+Homepage: https://github.com/coredmp95/pushframe
+Description: unofficial community CLI for Aura Frames digital photo frames
+ pushframe syncs a local photo folder or a Google Photos album onto an Aura
+ digital photo frame through its own local pipeline: content-hash dedupe,
+ hide-by-default mirror semantics, a pruned download cache with a persistent
+ manifest, and an anti-abuse paced write path.
+ .
+ The package embeds its own Python 3.14 runtime (no system Python is used or
+ modified); amd64-only for that reason.
+ .
+ Unofficial community tool — not affiliated with or endorsed by Aura Frames
+ Inc. Originally a fork of zmanowar's auraframes; see the project README for
+ provenance.
+
