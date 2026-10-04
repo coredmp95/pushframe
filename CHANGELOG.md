@@ -12,6 +12,37 @@ every channel.
 `pushframe` is an unofficial community CLI for Aura Frames digital photo
 frames; it is not affiliated with Aura Frames Inc.
 
+## [Unreleased]
+
+### Changed
+
+- Documentation readability pass for non-developer users, with every claim
+  verified against the code before writing it. The README now answers the
+  beginner questions it used to leave open: when a `--every 1d` timer
+  actually fires (midnight + up to 15 min of jitter, boot catch-up via
+  `Persistent=true`), what happens to frame photos that are not in the
+  album (hide candidates at the next `--apply`, guarded by the 20 %
+  mass-hide gate — skip-and-log when scheduled), how to tell last night ran
+  (the `rc=0` run footer, the `Scheduled:` line of `status` — whose example
+  now shows the real output with the `Google:`/`Scheduled:` sections — or
+  `--report ERROR` emails), what an expired Google session looks like
+  (named error + `status` losing `session: usable`) and how to recover, and
+  what `loginctl enable-linger` really does (without it, user timers fire
+  only while logged in — the nightly mirror silently stops at logout).
+- Troubleshooting grows two entries: changed-Aura-password behavior (the
+  stored token keeps working; ONE re-login refreshes it, scheduled runs
+  fail named instead of prompting, env users update `PUSHFRAME_PASSWORD`)
+  and "the frame stopped following the album" (the expired-Google-session
+  chain: check `status`, re-run `google-link`, next tick recovers).
+- `google-album --list` is documented as reading the account's shared
+  albums; a purely personal album may not appear — create its share link
+  and target the URL (or `AF1Qip…` id) directly, which bypasses name
+  resolution.
+- `docs/CLI.md` now uses the `PUSHFRAME_*` environment-variable spellings
+  in its env tables (the `AURA_*` ones were legacy fallbacks), glosses AWS
+  S3/SQS, opens with a plain-language login summary, and notes that a few
+  `config set` keys keep their historical `AURA_…` spelling on purpose.
+
 ## [5.1.29] - 2026-10-04
 
 ### Changed
