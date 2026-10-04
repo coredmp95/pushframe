@@ -581,16 +581,20 @@ is fine: they share the same budget, and each job keeps its own
 `<job>.log`.
 
 **The one combination to avoid: two mirroring sources on the same frame** —
-two albums (`--pair` A and `--pair` B) or two `sync` directories pointed at
-one frame. Each run sees the other's photos as "on the frame but not in my
-source" and **hides** them; the other run re-shows them (`To re-show`,
-without re-uploading) and hides yours in return. Nothing is ever lost —
-hides are reversible and no verb here deletes — but the frame never
-settles, and scheduled runs can start skipping on the 20 % mass-hide guard.
-When several frames should show the same album, that is the pair system's
-job (one album → several frames). When one frame should show several
-albums' or folders' contents, feed it with `push` — the additive verb — or
-merge the sources into a single album.
+two albums or two `sync` directories pointed at one frame. Each run would
+see the other's photos as "on the frame but not in my source" and **hide**
+them; the other run re-shows them (`To re-show`, without re-uploading) and
+hides yours in return. Nothing is ever lost — hides are reversible and no
+verb here deletes — but the frame never settles, and scheduled runs can
+start skipping on the 20 % mass-hide guard. `google-sync --all` **refuses
+that configuration up front**: two pairs resolving to the same frame name
+(case-insensitive) stop the whole run with a named error before anything
+executes. Two *separate* single-pair jobs on one frame are still your call
+to make — keep one source per frame. When several frames should show the
+same album, that is the pair system's job (one album → several frames).
+When one frame should show several albums' or folders' contents, feed it
+with `push` — the additive verb — or merge the sources into a single
+album.
 
 ## Safety model — a mistaken run should never cost photos
 

@@ -278,6 +278,32 @@ def run_google_sync(album_target: str, frame_arg: str, *, apply: bool = False,
                 print('google-sync: no pairs configured — add one with '
                       '`pushframe config pair add <name> --album A --frame F`')
                 return 2
+            # Anti-ping-pong guard (5.1.31): two mirroring pairs that resolve
+            # to the SAME frame fight forever — each run sees the other's
+            # photos as "on the frame but not in my album" and hides them,
+            # the other run re-shows them (and hides back). Hides are
+            # reversible so nothing is lost, but the frame never settles and
+            # scheduled runs start tripping the mass-hide gate. Refuse up
+            # front — before any pair runs — instead of a silent fight.
+            frames: dict[str, list[str]] = {}
+            for name in names:
+                spec = pairs_mod.pair_resolve(name)
+                frames.setdefault(str(spec['frame']).casefold(), []).append(name)
+            clashing = {f: ns for f, ns in frames.items() if len(ns) > 1}
+            if clashing:
+                for f, ns in sorted(clashing.items()):
+                    print(
+                        f'google-sync: pairs {", ".join(sorted(ns))} all '
+                        f'mirror the SAME frame ("{f}") — two mirroring '
+                        f"sources on one frame hide each other's photos and "
+                        f're-show them in turn; the frame never settles and '
+                        f'scheduled runs start tripping the mass-hide guard. '
+                        f'Remove one pair (`pushframe config pair remove '
+                        f'<name>`) or re-point it at another frame, or feed '
+                        f'one frame from several sources with `push` '
+                        f'(additive) instead.'
+                    )
+                return 2
         else:
             try:
                 pairs_mod.pair_resolve(pair)

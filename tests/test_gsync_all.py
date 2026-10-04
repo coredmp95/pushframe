@@ -176,3 +176,76 @@ def test_all_zero_pairs_named_error(tmp_path, cfg_path, capsys):
     out = capsys.readouterr().out
     assert rc == 2
     assert "no pairs configured" in out
+
+
+# --- anti-ping-pong: two pairs on the SAME frame are refused (5.1.31) ---------
+
+def test_all_refuses_two_pairs_on_the_same_frame(tmp_path, cfg_path, capsys):
+    """Two mirroring pairs resolving to one frame fight forever (each run
+    hides the other's photos, the next re-shows them). --all refuses up
+    front with a named error instead of running the silent ping-pong."""
+    _pair("a-salon", "Cadre", "Frame A")
+    _pair("b-salon", "Cadre", "Frame A")
+    from pushframe.gsync import run_google_sync
+    rc = run_google_sync("Cadre", "--all", apply=True, yes=True, run_all=True,
+                         session=_google_session(_GoogleRouter()),
+                         aura=_TwoFrameAura(),
+                         s3_client=_FakeS3(), sqs_client=_FakeSQS(),
+                         cache_dir=tmp_path / "c",
+                         manifest_path=tmp_path / "m.json")
+    out = capsys.readouterr().out
+    assert rc == 2
+    assert "a-salon" in out and "b-salon" in out
+    assert "SAME frame" in out
+    assert 'pair remove' in out          # the remedy names the exact command
+    assert 'push' in out                 # ... and the additive alternative
+
+
+def test_same_frame_guard_is_case_insensitive(tmp_path, cfg_path, capsys):
+    """Frame resolution downstream is case-insensitive substring matching,
+    so the guard compares casefolded names — 'Frame A' and 'frame a' clash."""
+    _pair("a-salon", "Cadre", "Frame A")
+    _pair("b-salon", "Cadre", "frame a")
+    from pushframe.gsync import run_google_sync
+    rc = run_google_sync("Cadre", "--all", apply=True, yes=True, run_all=True,
+                         session=_google_session(_GoogleRouter()),
+                         aura=_TwoFrameAura(),
+                         s3_client=_FakeS3(), sqs_client=_FakeSQS(),
+                         cache_dir=tmp_path / "c",
+                         manifest_path=tmp_path / "m.json")
+    assert rc == 2
+    assert "SAME frame" in capsys.readouterr().out
+
+
+def test_clash_refuses_everything_before_any_pair_runs(tmp_path, cfg_path, capsys):
+    """One clashing duo refuses the WHOLE --all run — nothing executes,
+    not even the healthy pairs; only the clashing pairs are named."""
+    _pair("a-clash1", "Cadre", "Frame A")
+    _pair("b-clash2", "Cadre", "Frame A")
+    _pair("c-healthy", "Cadre", "Frame B")
+    from pushframe.gsync import run_google_sync
+
+    ran = []
+    import pushframe.sync as sync_mod
+    mp = pytest.MonkeyPatch()
+    mp.setattr(sync_mod, 'execute_plan',
+               lambda plan, aura_, frame_id, **k: ran.append(frame_id) or
+               __import__('pushframe.sync', fromlist=['ExecutionResult'])
+               .ExecutionResult(upload_succeeded=len(plan.to_upload)))
+    try:
+        rc = run_google_sync("Cadre", "--all", apply=True, yes=True,
+                             run_all=True,
+                             session=_google_session(_GoogleRouter()),
+                             aura=_TwoFrameAura(),
+                             s3_client=_FakeS3(), sqs_client=_FakeSQS(),
+                             cache_dir=tmp_path / "c",
+                             manifest_path=tmp_path / "m.json")
+    finally:
+        mp.undo()
+
+    out = capsys.readouterr().out
+    assert rc == 2
+    assert ran == []                     # nothing executed — fail closed
+    assert "=== pair [" not in out
+    assert "a-clash1" in out and "b-clash2" in out
+    assert "c-healthy" not in out        # only the clash is named

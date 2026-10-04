@@ -12,6 +12,21 @@ every channel.
 `pushframe` is an unofficial community CLI for Aura Frames digital photo
 frames; it is not affiliated with Aura Frames Inc.
 
+## [Unreleased]
+
+### Added
+
+- Anti-ping-pong guard: `google-sync --all` refuses, with a named error
+  (exit 2, before any pair runs), two pairs that resolve to the same
+  frame (case-insensitive) — their runs would otherwise fight forever
+  (each hides the other's photos and re-shows its own), the frame never
+  settles, and scheduled runs start tripping the mass-hide guard. The
+  error names the clashing pairs and the exact remedies (`config pair
+  remove`, re-point at another frame, or feed one frame from several
+  sources with `push`). Three new tests: clash refused, case-insensitive
+  match, and one clashing duo refusing the whole `--all` run without
+  executing anything.
+
 ## [5.1.30] - 2026-10-04
 
 ### Changed
