@@ -20,6 +20,8 @@ from pushframe.gsync import (  # noqa: E402
     SENTINEL_SUFFIX,
     SafeSyncError,
     build_demand,
+    default_cache_dir,
+    format_noop_message,
     format_plan_report,
     run_google_sync_plan,
 )
@@ -215,3 +217,79 @@ def test_compute_plan_imported_not_forked():
     calls = [n for n in ast.walk(tree) if isinstance(n, ast.Call)
              and isinstance(n.func, ast.Name)]
     assert any(c.func.id == "compute_plan" for c in calls)
+
+
+# --- 2026-10-12 review quick fixes: B1 (cache dir expanduser) + B2 (unmanaged) ---
+
+
+def test_default_cache_dir_is_absolute_under_home(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    result = default_cache_dir("TOKEN")
+    assert result == tmp_path / ".config" / "pushframe" / "google-cache" / "TOKEN"
+    assert result.is_absolute()
+    assert "~" not in str(result)
+
+
+def test_no_unexpanded_tilde_path_literals_in_package():
+    """B1 guard: a `Path("~...")` literal is only legal when expanded on the
+    same line or held in a module-level UPPER_CASE constant whose consumers
+    expand it."""
+    import re
+    pkg = Path(__file__).resolve().parent.parent / "pushframe"
+    literal = re.compile(r"""Path\(\s*['"]~""")
+    constant = re.compile(r"^[A-Z_]+\s*=\s*Path\(")
+    offenders = []
+    for py in sorted(pkg.rglob("*.py")):
+        for no, line in enumerate(py.read_text().splitlines(), 1):
+            text = line.strip()
+            if text.startswith("#") or not literal.search(text):
+                continue
+            if "expanduser" in text or constant.match(text):
+                continue
+            offenders.append(f"{py.relative_to(pkg.parent)}:{no}: {text}")
+    assert offenders == []
+
+
+def test_compute_plan_lists_visible_hashless_assets_as_unmanaged():
+    visible = _asset("frame-video-v", None)
+    hidden = _asset("frame-video-h", None, selected=False)
+    kept = _asset("frame-kept", get_md5(b"photo-1"))
+    plan = compute_plan({get_md5(b"photo-1"): [Path("a.jpg")]},
+                        [visible, hidden, kept])
+    assert len(plan.unmanaged_visible) == 1
+    assert plan.unmanaged_visible[0] is visible
+    assert plan.frame_no_hash == 2
+    assert plan.unchanged == 1
+    assert plan.to_delete == []
+    assert plan.to_reshow == []
+    assert plan.already_hidden == 0
+
+
+def _unmanaged_plan(n: int):
+    assets = [_asset(f"frame-nohash-{i}", None) for i in range(n)]
+    return compute_plan({}, assets)
+
+
+def test_format_plan_report_names_unmanaged_visible():
+    plan = _unmanaged_plan(1)
+    report = format_plan_report(plan, [], None)
+    assert ("1 visible photo(s) on the frame have no content hash and are "
+            "NOT managed by the mirror") in report
+    assert "frame-nohash-0" not in report
+    detailed = format_plan_report(plan, [], None, detail_ids=True)
+    line = [l for l in detailed.splitlines() if "frame-nohash-0" in l]
+    assert len(line) == 1 and "(taken " in line[0]
+    assert "NOT managed" not in format_plan_report(_unmanaged_plan(0), [], None)
+
+
+def test_noop_message_does_not_claim_a_perfect_mirror_when_unmanaged():
+    clean = SimpleNamespace(unchanged=3, already_hidden=1, unmanaged_visible=[])
+    assert format_noop_message(clean) == (
+        "Nothing to do \u2014 the frame already mirrors the album "
+        "(3 unchanged, 1 already hidden).")
+    dirty = SimpleNamespace(unchanged=3, already_hidden=1,
+                            unmanaged_visible=[object(), object()])
+    msg = format_noop_message(dirty)
+    assert msg.startswith("Nothing to do")
+    assert "already mirrors" not in msg
+    assert "2" in msg and "NOT managed by the mirror" in msg
