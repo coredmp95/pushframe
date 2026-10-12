@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from pushframe.aws.s3client import get_md5
+from pushframe.utils.io import ensure_private_dir, write_private_bytes
 
 
 class CacheError(RuntimeError):
@@ -74,7 +75,7 @@ def _download_one(session, item: dict, cache_dir: Path,
             f"truncated download: expected {expected_size} != received {len(body)}"
         )
     path = cache_dir / google_media_id
-    path.write_bytes(body)
+    write_private_bytes(path, body)
     return {
         "google_media_id": google_media_id,
         "path": str(path),
@@ -97,8 +98,7 @@ def download_to_cache(session, listing, cache_dir: Path, *,
     is invoked per RESOLVED item (success or failure) after the merge, so a
     CLI can drive a progress bar (CSE-08) without thread races.
     """
-    cache_dir = Path(cache_dir)
-    cache_dir.mkdir(parents=True, exist_ok=True)
+    cache_dir = ensure_private_dir(cache_dir)
     expected_sizes = expected_sizes or {}
     outcome = CacheOutcome()
 

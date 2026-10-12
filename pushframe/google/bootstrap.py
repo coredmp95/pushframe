@@ -23,6 +23,7 @@ from pathlib import Path
 
 from pushframe.google import vault
 from pushframe.google.client import PHOTOS_HOME
+from pushframe.utils.io import ensure_private_dir
 
 PROFILE_ENV_VAR = "PUSHFRAME_PROBE_CHROME_PROFILE"
 # IDN-04: the AURA_* spelling stays readable for one release of grace.
@@ -77,10 +78,13 @@ def _require_profile() -> Path:
                     f"your shell profile, or unset it to use the default "
                     f"profile at {DEFAULT_PROFILE_DIR}"
                 )
-        DEFAULT_PROFILE_DIR.mkdir(parents=True, exist_ok=True)
+        # Holds a logged-in Google browser profile and is always ours: private
+        # (0700), tightened if an earlier version left it loose (S5).
+        ensure_private_dir(DEFAULT_PROFILE_DIR, tighten=True)
         return DEFAULT_PROFILE_DIR
     path = Path(profile).expanduser().resolve()
-    path.mkdir(parents=True, exist_ok=True)
+    # User-chosen dir: created private, but never chmod-ed retroactively.
+    ensure_private_dir(path)
     return path
 
 

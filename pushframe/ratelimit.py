@@ -31,6 +31,8 @@ from pathlib import Path
 import httpx
 from loguru import logger
 
+from pushframe.utils.io import ensure_private_dir, write_private_bytes
+
 
 class BudgetExhausted(Exception):
     """Raised by `WriteBudget.acquire()` in stop mode (`wait=False`, or a
@@ -142,14 +144,15 @@ class WriteBudget:
 
         WR-02: the write is atomic (temp file in the same dir + `os.replace`)
         so an interrupted write (Ctrl-C, disk full, crash mid-write) can never
-        leave a truncated JSON file that would brick every subsequent run."""
-        self.path.parent.mkdir(parents=True, exist_ok=True)
+        leave a truncated JSON file that would brick every subsequent run.
+        The file is written 0600 and its directory 0700 (S5)."""
+        ensure_private_dir(self.path.parent)
         payload = json.dumps({
             'tokens': self.tokens,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
         })
         tmp_path = self.path.with_name(self.path.name + '.tmp')
-        tmp_path.write_text(payload)
+        write_private_bytes(tmp_path, payload.encode('utf-8'))
         os.replace(tmp_path, self.path)
 
     @classmethod

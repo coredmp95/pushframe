@@ -24,6 +24,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
+from pushframe.utils.io import ensure_private_dir
+
 DEFAULT_MANIFEST_PATH = Path("~/.config/pushframe/google-manifest.json")
 
 # The ONLY keys a manifest entry may carry. Anything else fails loud on load —
@@ -98,7 +100,7 @@ class GoogleManifest:
         """Persist atomically (temp file + os.replace) with 0600 permissions —
         a crash mid-save can never leave a truncated manifest behind."""
         p = Path(path).expanduser() if path else DEFAULT_MANIFEST_PATH.expanduser()
-        p.parent.mkdir(parents=True, exist_ok=True)
+        ensure_private_dir(p.parent)
         payload = json.dumps(self.entries, indent=2, sort_keys=True).encode("utf-8")
         tmp = p.with_name(p.name + ".tmp")
         fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
