@@ -10,6 +10,8 @@ A report failure NEVER fails the run. Transport is plain SMTP (stdlib);
 the SMTP socket is faked in-process, nothing touches a network.
 """
 import json
+import smtplib
+import ssl
 from pathlib import Path
 
 import pytest
@@ -37,10 +39,12 @@ def unit_dir(tmp_path, monkeypatch):
 class _FakeSMTP:
     """Records one session; the factory returns it directly (no network)."""
 
-    def __init__(self, calls, fail_login=False, fail_send=False):
+    def __init__(self, calls, fail_login=False, fail_send=False,
+                 fail_starttls=False):
         self._calls = calls
         self._fail_login = fail_login
         self._fail_send = fail_send
+        self._fail_starttls = fail_starttls
         self.entered = False
 
     def __enter__(self):
@@ -50,8 +54,11 @@ class _FakeSMTP:
     def __exit__(self, *a):
         return False
 
-    def starttls(self):
-        self._calls.append(('starttls',))
+    def starttls(self, context=None):
+        if self._fail_starttls:
+            raise smtplib.SMTPNotSupportedError(
+                'STARTTLS extension not supported by server.')
+        self._calls.append(('starttls', context))
 
     def login(self, user, password):
         if self._fail_login:
@@ -66,8 +73,10 @@ class _FakeSMTP:
 
 
 def _factory(calls, **kw):
-    def make(host, port, timeout):
+    def make(host, port, timeout, context=None):
         calls.append(('connect', host, port))
+        if context is not None:
+            calls.append(('ssl_context', context))
         return _FakeSMTP(calls, **kw)
     return make
 
@@ -795,3 +804,60 @@ def test_gsync_report_level_error_silent_on_success(cfg_path, monkeypatch,
                '--report', 'ERROR'])
     assert rc == 0
     assert [c for c in calls if c[0] == 'send'] == []   # gated
+
+
+# --- S4 (2026-10-12 review): verified TLS, never cleartext -------------------
+
+def _tls_cfg(port=587):
+    return {'to': 'me@example.com', 'from': 'me@example.com',
+            'smtp_host': 'smtp.example.com', 'smtp_port': port,
+            'smtp_user': 'me@example.com', 'smtp_password': 'pw'}
+
+
+def test_send_refuses_cleartext_when_starttls_fails():
+    from pushframe.report import send
+    calls = []
+    with pytest.raises(smtplib.SMTPException) as exc:
+        send(_tls_cfg(587), 'subj', 'body',
+             smtp_factory=_factory(calls, fail_starttls=True))
+    msg = str(exc.value)
+    assert 'STARTTLS' in msg and 'cleartext' in msg
+    assert not [c for c in calls if c[0] in ('login', 'send')]
+
+
+def test_deliver_starttls_failure_is_a_reason_never_a_crash(cfg_path, monkeypatch):
+    _clean_env(monkeypatch)
+    from pushframe.report import deliver
+    from pushframe import config_store
+    config_store.update(report={'to': 'me@example.com',
+                                'smtp_host': 'smtp.example.com',
+                                'smtp_port': '587',
+                                'smtp_user': 'me@example.com',
+                                'smtp_password': 'pw'})
+    calls = []
+    err = deliver('INFO', command='x', rc=0, output=OK_OUT, duration_s=1.0,
+                  smtp_factory=_factory(calls, fail_starttls=True))
+    assert isinstance(err, str) and err.startswith('email send failed:')
+    assert 'STARTTLS' in err
+
+
+def test_send_starttls_uses_a_verified_default_context():
+    from pushframe.report import send
+    calls = []
+    send(_tls_cfg(587), 'subj', 'body', smtp_factory=_factory(calls))
+    ctx = [c for c in calls if c[0] == 'starttls'][0][1]
+    assert isinstance(ctx, ssl.SSLContext)
+    assert ctx.verify_mode == ssl.CERT_REQUIRED
+    assert ctx.check_hostname is True
+
+
+def test_send_port_465_passes_a_verified_context_to_smtp_ssl():
+    from pushframe.report import send
+    calls = []
+    send(_tls_cfg(465), 'subj', 'body', smtp_factory=_factory(calls))
+    ctx = [c for c in calls if c[0] == 'ssl_context'][0][1]
+    assert isinstance(ctx, ssl.SSLContext)
+    assert ctx.verify_mode == ssl.CERT_REQUIRED and ctx.check_hostname is True
+    assert not [c for c in calls if c[0] == 'starttls']
+    assert [c for c in calls if c[0] == 'login']
+    assert [c for c in calls if c[0] == 'send']

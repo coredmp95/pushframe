@@ -161,3 +161,54 @@ def test_write_budget_save_private(tmp_path):
     assert _mode(path) == 0o600
     loaded = WriteBudget.load(path, capacity=30, refill_per_min=0.75)
     assert loaded.tokens == 9.0
+
+
+# --- config dir + CLI umask ------------------------------------------------
+
+def test_config_save_tightens_the_default_config_dir(tmp_path, monkeypatch):
+    from pushframe import config_store
+    from pushframe.utils import settings
+    monkeypatch.setenv("HOME", str(tmp_path))
+    cfg_dir = tmp_path / ".config" / "pushframe"
+    cfg_dir.mkdir(parents=True)
+    os.chmod(cfg_dir, 0o775)
+    monkeypatch.setattr(settings, "CONFIG_PATH", cfg_dir / "config.json")
+    config_store.save({})
+    assert _mode(cfg_dir) == 0o700
+    assert _mode(cfg_dir / "config.json") == 0o600
+
+
+def test_config_save_never_retro_chmods_a_user_chosen_dir(tmp_path, monkeypatch):
+    from pushframe import config_store
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    chosen = tmp_path / "elsewhere"
+    chosen.mkdir()
+    os.chmod(chosen, 0o775)
+    config_store.save({}, chosen / "config.json")
+    assert _mode(chosen) == 0o775
+    assert _mode(chosen / "config.json") == 0o600
+    config_store.save({}, tmp_path / "new" / "deep" / "config.json")
+    assert _mode(tmp_path / "new") == 0o700
+    assert _mode(tmp_path / "new" / "deep") == 0o700
+
+
+def _current_umask() -> int:
+    cur = os.umask(0)
+    os.umask(cur)
+    return cur
+
+
+def test_cli_main_tightens_umask(monkeypatch):
+    from pushframe import cli
+    monkeypatch.setattr(cli, "_main", lambda argv=None: 0)
+    os.umask(0o002)
+    assert cli.main([]) == 0
+    assert _current_umask() == 0o077
+
+
+def test_cli_main_never_loosens_a_stricter_umask(monkeypatch):
+    from pushframe import cli
+    monkeypatch.setattr(cli, "_main", lambda argv=None: 0)
+    os.umask(0o177)
+    assert cli.main([]) == 0
+    assert _current_umask() == 0o177
