@@ -1,8 +1,8 @@
 """Album → frame mirror engine (phase 18, plans 18-02/18-03).
 
 The plan-computing half is pure by construction (CSE-05, the structural
-dry-run rule): `build_demand`, `run_google_sync_plan` and
-`format_plan_report` contain no mutating call and no I/O — everything they
+dry-run rule): `build_demand`, `run_google_sync_plan`,
+`format_plan_report` and `format_noop_message` contain no mutating call and no I/O — everything they
 need (listing, manifest, staged outcome, frame assets) is passed in.
 
 The mutating half (`run_google_sync`) composes those with v2.0's
@@ -55,7 +55,9 @@ def _threshold() -> float:
 def default_cache_dir(album_share_token: str) -> Path:
     """D-03: staging is per-album, keyed by the album's share token —
     `~/.config/pushframe/google-cache/<share_token>/<google_media_id>`."""
-    return Path("~/.config/pushframe/google-cache") / album_share_token
+    # B1: expand at call time (HOME honoured like utils/settings.py) — a
+    # literal `~` Path is relative and would create a `~` dir under the CWD.
+    return Path("~/.config/pushframe/google-cache").expanduser() / album_share_token
 
 
 class SafeSyncError(RuntimeError):
@@ -197,6 +199,18 @@ def format_plan_report(plan, failures: list[tuple[str, str]],
             lines.append(f'  ~ {asset.id} (taken {asset.taken_at_dt}) — re-show')
         for asset in plan.to_delete:
             lines.append(f'  - {asset.id} (taken {asset.taken_at_dt})')
+    unmanaged = getattr(plan, 'unmanaged_visible', None) or []
+    if unmanaged:
+        lines.append(
+            f"Unmanaged: {len(unmanaged)} visible photo(s) on the frame have "
+            f"no content hash and are NOT managed by the mirror (left as-is "
+            f"\u2014 never hidden automatically)"
+        )
+        if detail_ids:
+            for asset in unmanaged:
+                lines.append(
+                    f'  ? {asset.id} (taken {asset.taken_at_dt}) '
+                    f'\u2014 no content hash, unmanaged')
     if videos_skipped is not None:
         lines.append(
             f"Videos skipped: {videos_skipped} (metadata delta — videos are "
@@ -216,6 +230,24 @@ def format_plan_report(plan, failures: list[tuple[str, str]],
             size_s = f"{size:,}" if size is not None else "?"
             lines.append(f"  {i:4d} | {redact_link(gid)} | {size_s}")
     return "\n".join(lines)
+
+
+def format_noop_message(plan) -> str:
+    """The no-op line for a plan with nothing to upload, re-show or hide.
+
+    Pure. When visible hashless frame assets exist (`unmanaged_visible`) the
+    mirror cannot vouch for them, so the message must not claim the frame
+    already mirrors the album. 'Nothing to do' stays the leading phrase —
+    report.py keys the 'OK — nothing to do' subject off it.
+    """
+    unmanaged = getattr(plan, 'unmanaged_visible', None) or []
+    if not unmanaged:
+        return (f'Nothing to do \u2014 the frame already mirrors the album '
+                f'({plan.unchanged} unchanged, {plan.already_hidden} already hidden).')
+    return (f'Nothing to do for the mirror ({plan.unchanged} unchanged, '
+            f'{plan.already_hidden} already hidden) \u2014 but {len(unmanaged)} '
+            f'visible photo(s) on the frame have no content hash and are NOT '
+            f'managed by the mirror, so the frame is not an exact copy of the album.')
 
 
 def run_google_sync(album_target: str, frame_arg: str, *, apply: bool = False,
@@ -488,8 +520,7 @@ def run_google_sync(album_target: str, frame_arg: str, *, apply: bool = False,
     # lets a scheduled non-interactive run end its steady-state night without
     # --yes, since it never reaches the mutating gate below.
     if not (plan.to_upload or plan.to_reshow or plan.to_delete):
-        print(f'Nothing to do — the frame already mirrors the album '
-              f'({plan.unchanged} unchanged, {plan.already_hidden} already hidden).')
+        print(format_noop_message(plan))
         # Same already-held persistence as the apply path: an item re-added
         # to the album under a fresh Google id whose bytes the frame already
         # holds gets its manifest entry, so the next run downloads nothing.

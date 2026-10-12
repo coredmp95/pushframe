@@ -366,6 +366,9 @@ class SyncPlan:
     already_hidden: int = 0
     skipped_non_image: int = 0
     frame_no_hash: int = 0
+    # Visible frame assets with no content hash: the mirror cannot match them
+    # to the album, so it never touches them -- and the report must say so.
+    unmanaged_visible: list = field(default_factory=list)
 
 
 def compute_plan(local_hashes: dict[str, list[Path]], frame_assets: list, skipped_non_image: int = 0) -> SyncPlan:
@@ -402,7 +405,9 @@ def compute_plan(local_hashes: dict[str, list[Path]], frame_assets: list, skippe
 
     This function stays PURE and MODE-AGNOSTIC: it never consults the removal
     mode. It reports what each asset's state *is*; choosing hide-vs-delete for
-    `to_delete` belongs to the executor.
+    `to_delete` belongs to the executor. Hashless frame assets are only
+    counted (`frame_no_hash`); the VISIBLE ones are also listed in
+    `unmanaged_visible` so the caller can report them -- never hidden.
     """
     demand = {h: 1 for h in local_hashes}
     to_delete: list = []
@@ -410,6 +415,7 @@ def compute_plan(local_hashes: dict[str, list[Path]], frame_assets: list, skippe
     unchanged = 0
     already_hidden = 0
     frame_no_hash = 0
+    unmanaged_visible: list = []
     consumed: set = set()  # id() of assets whose demand was already satisfied
 
     # Pass 1 -- satisfy each hash's demand preferring VISIBLE copies, so a
@@ -436,6 +442,8 @@ def compute_plan(local_hashes: dict[str, list[Path]], frame_assets: list, skippe
     for asset in frame_assets:
         if not asset.md5_hash:
             frame_no_hash += 1
+            if asset.selected:
+                unmanaged_visible.append(asset)
             continue
 
         if id(asset) in consumed:
@@ -472,6 +480,7 @@ def compute_plan(local_hashes: dict[str, list[Path]], frame_assets: list, skippe
         already_hidden=already_hidden,
         skipped_non_image=skipped_non_image,
         frame_no_hash=frame_no_hash,
+        unmanaged_visible=unmanaged_visible,
     )
 
 
