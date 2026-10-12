@@ -2139,7 +2139,17 @@ def _docs_hint() -> str:
             'https://github.com/coredmp95/pushframe/blob/master/docs/CLI.md')
 
 
+def _tighten_umask() -> None:
+    """Add 0o077 to the process umask; a stricter operator umask is kept."""
+    current = os.umask(0o077)
+    os.umask(current | 0o077)
+
+
 def main(argv=None) -> int:
+    # Blanket guard for everything the CLI creates (config, chrome-profile,
+    # caches, unit files, logs); the explicit per-site modes in
+    # utils/io.py cover library callers.
+    _tighten_umask()
     rc = _main(argv)
     if rc != 0:
         print(_docs_hint())

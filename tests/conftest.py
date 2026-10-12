@@ -98,3 +98,15 @@ def aura():
     instance = Aura()
     instance.login()
     return instance
+
+
+@pytest.fixture(autouse=True)
+def _restore_umask():
+    """cli.main() tightens the process umask (S5) and is called in-process by
+    several test files; restore it so 0o077 never leaks into later tests."""
+    old = os.umask(0)
+    os.umask(old)
+    try:
+        yield
+    finally:
+        os.umask(old)

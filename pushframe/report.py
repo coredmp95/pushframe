@@ -11,8 +11,10 @@ Three operator levels, chosen per job with `schedule add --report LEVEL`:
          non-zero exit, upload/download failures, a scheduled mass-hide
          skip, an aborted run.
 
-Transport: plain SMTP (STARTTLS when offered; SMTP_SSL on port 465)
-through stdlib smtplib. Configured once with
+Transport: stdlib smtplib. STARTTLS is REQUIRED on non-465 ports (a relay
+without it is refused, never used in cleartext) and SMTP_SSL is used on
+port 465; both verify the server certificate and hostname.
+Configured once with
 `pushframe schedule report --to ADDR --smtp-host HOST` — stored in the
 0600 config file's `report` key; PUSHFRAME_SMTP_* / PUSHFRAME_REPORT_TO
 environment variables override at use time.
@@ -25,6 +27,7 @@ from __future__ import annotations
 import os
 import smtplib
 import socket
+import ssl
 import time
 from email.message import EmailMessage
 from pathlib import Path
@@ -207,15 +210,28 @@ def tail_log(*, lines: int = 100, since: float | None = None) -> str | None:
 
 
 def send(cfg: dict, subject: str, body: str, *, smtp_factory=None) -> None:
-    """One email. Raises on failure (deliver() catches — never the run)."""
-    factory = smtp_factory or (
-        smtplib.SMTP_SSL if int(cfg['smtp_port']) == 465 else smtplib.SMTP)
-    with factory(cfg['smtp_host'], cfg['smtp_port'], timeout=30) as smtp:
-        if int(cfg['smtp_port']) != 465:
+    """One email. Raises on failure (deliver() catches — never the run).
+
+    Never cleartext: a STARTTLS failure on a non-465 port raises before any
+    login or message (S4) and both transports verify certificate + hostname.
+    """
+    port = int(cfg['smtp_port'])
+    ctx = ssl.create_default_context()
+    factory = smtp_factory or (smtplib.SMTP_SSL if port == 465 else smtplib.SMTP)
+    kwargs = {'timeout': 30}
+    if port == 465:
+        kwargs['context'] = ctx
+    with factory(cfg['smtp_host'], cfg['smtp_port'], **kwargs) as smtp:
+        if port != 465:
             try:
-                smtp.starttls()
-            except smtplib.SMTPException:
-                pass  # relay offers no STARTTLS — proceed (or fail at login)
+                smtp.starttls(context=ctx)
+            except smtplib.SMTPException as e:
+                raise smtplib.SMTPException(
+                    f"STARTTLS failed with {cfg['smtp_host']}:{port} ({e}) — "
+                    f"the report and the SMTP login are NOT sent over "
+                    f"cleartext; use a relay that offers STARTTLS, or port "
+                    f"465 for implicit SSL"
+                ) from e
         if cfg.get('smtp_user') and cfg.get('smtp_password'):
             smtp.login(cfg['smtp_user'], cfg['smtp_password'])
         msg = EmailMessage()

@@ -13,6 +13,7 @@ import tempfile
 from pathlib import Path
 
 from pushframe.utils import settings
+from pushframe.utils.io import ensure_private_dir
 
 SCHEMA_VERSION = 1
 
@@ -71,7 +72,13 @@ def save(data: dict, path: Path | None = None) -> Path:
     data['version'] = SCHEMA_VERSION
     data.setdefault('settings', {})
     data.setdefault('pairs', {})
-    path.parent.mkdir(parents=True, exist_ok=True)
+    # The DEFAULT config dir is pushframe's own (token, google cache,
+    # manifests, budget, chrome-profile): tighten it. A dir the operator
+    # chose via PUSHFRAME_CONFIG_FILE is never retro-chmod-ed.
+    default_dir = Path('~/.config/pushframe').expanduser().resolve()
+    ensure_private_dir(
+        path.parent,
+        tighten=path.parent.expanduser().resolve() == default_dir)
     fd, tmp = tempfile.mkstemp(dir=path.parent, prefix='.config-', suffix='.tmp')
     try:
         os.fchmod(fd, 0o600)
