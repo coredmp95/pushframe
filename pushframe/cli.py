@@ -1312,22 +1312,42 @@ class FrameResolution:
     candidates: list[Frame] = field(default_factory=list)
 
 
+def _name_tier_matches(target: str, items: list, name_of) -> list:
+    """The first non-empty name tier (B5): exact case-sensitive, then exact
+    after `.lower()` on both sides, then case-insensitive substring. Items
+    whose name is None/empty are skipped in every tier. Returns the first
+    tier's matches ([] when all three are empty); the caller treats exactly
+    one as resolved and several as ambiguous — a tie never picks silently."""
+    named = [(i, name_of(i)) for i in items]
+    named = [(i, n) for i, n in named if n]
+    target_lower = target.lower()
+    for tier in (lambda n: n == target,
+                 lambda n: n.lower() == target_lower,
+                 lambda n: target_lower in n.lower()):
+        matches = [i for i, n in named if tier(n)]
+        if matches:
+            return matches
+    return []
+
+
 def resolve_frame(target: str, frames: list[Frame]) -> FrameResolution:
     """Resolve a `--frame` value to a single Frame (CLI-04, D-01..D-04).
 
     Pure function — no I/O, no side effects. Resolution order:
-    1. Case-insensitive substring match on `Frame.name` (D-01).
-       - Exactly one match -> resolved (D-02).
-       - More than one match -> ambiguous; the id fallback is NOT
-         attempted (D-03).
-    2. Zero name matches -> fall back to an exact (case-sensitive)
-       match on `Frame.id`.
+    1. Name tiers on `Frame.name` (D-01), first non-empty tier wins: exact
+       case-sensitive, then exact case-insensitive, then case-insensitive
+       substring. An exact name beats longer names containing it ("Cadre"
+       next to "Cadre 2025" must resolve, not be ambiguous).
+       - Exactly one match in the tier -> resolved (D-02).
+       - More than one match in the tier -> ambiguous with exactly that
+         tier's candidates; the id fallback is NOT attempted (D-03).
+    2. Zero name matches in every tier -> fall back to an exact
+       (case-sensitive) match on `Frame.id`.
        - Exactly one match -> resolved (D-02).
        - Otherwise -> not_found, candidates is every frame on the
          account so the caller can list available names (D-04).
     """
-    target_lower = target.lower()
-    name_matches = [f for f in frames if target_lower in f.name.lower()]
+    name_matches = _name_tier_matches(target, frames, lambda f: f.name)
 
     if len(name_matches) == 1:
         return FrameResolution(frame=name_matches[0], status='resolved', candidates=[])
@@ -1364,9 +1384,12 @@ def resolve_album(target: str, albums: list) -> AlbumResolution:
     1. A target that LOOKS like a share URL (photos.google.com/share/…,
        photos.app.goo.gl/…) or a full AF1Qip… id resolves directly — no
        name matching (D-05's link/id path).
-    2. Otherwise: case-insensitive substring match on album titles —
-       exactly one -> resolved; several -> ambiguous (numbered choice is
-       the caller's print; no silent pick, T-17-06).
+    2. Otherwise the same name tiers as resolve_frame on album titles —
+       exact case-sensitive, exact case-insensitive, then case-insensitive
+       substring; the first non-empty tier decides: exactly one ->
+       resolved; several -> ambiguous with that tier's candidates
+       (numbered choice is the caller's print; no silent pick, T-17-06).
+       "Cadre" next to "Cadre 2025" resolves "Cadre".
     3. Zero matches -> not_found with every album as candidates.
     """
     import re as _re
@@ -1379,9 +1402,7 @@ def resolve_album(target: str, albums: list) -> AlbumResolution:
                                                   share_url=target),
                                status='resolved', candidates=[])
 
-    target_lower = target.lower()
-    name_matches = [a for a in albums
-                    if a.title and target_lower in a.title.lower()]
+    name_matches = _name_tier_matches(target, albums, lambda a: a.title)
     if len(name_matches) == 1:
         return AlbumResolution(album=name_matches[0], status='resolved', candidates=[])
     if len(name_matches) > 1:

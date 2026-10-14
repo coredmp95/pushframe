@@ -79,7 +79,7 @@ always written to `logs/file_{timestamp}.log` regardless of the flag.
 
 ### The `--frame` argument
 
-`--frame` accepts a **case-insensitive substring of the frame name**, or an exact frame id:
+`--frame` accepts the **exact frame name**, a **case-insensitive substring of it**, or an exact frame id (exact names are tried first):
 
 ```bash
 pushframe inspect --frame "living"                                  # substring
@@ -90,8 +90,9 @@ Resolution rules:
 
 | Situation | Behaviour |
 |---|---|
-| Exactly one name matches | Resolved |
-| More than one name matches | **Ambiguous** — the run stops and lists the matches. The id fallback is *not* attempted. |
+| A name equals the target exactly (case-sensitive, then case-insensitive) | Resolved — an exact name wins even when longer names contain it (`Cadre` next to `Cadre 2025` resolves `Cadre`) |
+| Otherwise, exactly one name contains the target (case-insensitive substring) | Resolved |
+| More than one name matches in the deciding tier (two frames named exactly the same, or several substring matches) | **Ambiguous** — the run stops and lists exactly that tier's matches. The id fallback is *not* attempted. |
 | No name matches | Falls back to an exact, case-sensitive id match |
 | Still nothing | Not found — every frame on the account is listed so you can pick |
 
@@ -927,8 +928,9 @@ usage: pushframe google-album [-h] [--list] [--verbose] [target]
 ```
 
 `--list` lists the account's shared albums (discovery aid). With a
-`target` (share URL, `AF1Qip…` id, or album-name substring — ambiguity
-prints a numbered list and exits 2), enumerates every item with its exact
+`target` (share URL, `AF1Qip…` id, or album name — the exact title wins,
+then a case-insensitive substring; ambiguity within a tier prints a
+numbered list and exits 2), enumerates every item with its exact
 disk weight. Read-only.
 
 Default output is a summary — item count, page/exhaustion state, and the

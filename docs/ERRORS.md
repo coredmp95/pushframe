@@ -44,7 +44,7 @@ twice.
 
 | Message | What it means | What to do |
 |---|---|---|
-| Several candidates, a numbered list, exit `2` | Your `--frame` / album name is a substring matching several things; the tool refuses to guess | Re-run with a more specific substring, or pass the exact id |
+| Several candidates, a numbered list, exit `2` | Your `--frame` / album name is a substring matching several things; the tool refuses to guess | Re-run with a more specific substring, or pass the exact id. An exact full name always wins over longer names containing it, so typing the full name resolves it |
 | No match, exit `2` | Nothing matched | Check spelling with `pushframe status` (frames) or `pushframe google-album --list` (albums) |
 
 ## Google sync (`google-link` / `google-album` / `google-sync`)
