@@ -12,6 +12,33 @@ every channel.
 `pushframe` is an unofficial community CLI for Aura Frames digital photo
 frames; it is not affiliated with Aura Frames Inc.
 
+## [5.1.33] - 2026-10-14
+
+### Fixed
+
+- `google-sync` no longer accepts a truncated Google album listing as
+  complete. A full snAcKc page answered WITHOUT a continuation token (a
+  transient Google answer seen live on 2026-10-13: 300 of 757 items) is
+  re-requested once; a listing still short of the album's metadata count
+  beyond a small tolerance (videos) refuses to plan with a named
+  `SafeSyncError` — in every mode, `--apply --yes` included — instead of
+  reporting the gap as "Videos skipped" and proposing to hide the rest.
+- The Google staging cache is created under the real home directory
+  (`~` was never expanded: a literal `./~/.config/...` tree appeared in the
+  working directory).
+- Visible frame photos without a content hash are now reported as
+  unmanaged by the mirror instead of being silently ignored (never hidden
+  automatically).
+
+### Security
+
+- Private-by-construction state: the CLI tightens the umask (077), and the
+  config dir, Chrome profile, Google cache, pair state and write budget
+  are created 0700/0600.
+- Report emails verify the SMTP server certificate, and a failed STARTTLS
+  aborts before the password is sent (previously it logged in over
+  cleartext).
+
 ## [5.1.32] - 2026-10-04
 
 ### Fixed
