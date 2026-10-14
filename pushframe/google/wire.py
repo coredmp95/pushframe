@@ -51,11 +51,14 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 
+from pushframe.google.redaction import redact_tokens
 from pushframe.utils.io import ensure_private_dir
 from pushframe.utils.names import safe_name_problem
 
 FINGERPRINT_FIELDS = ("inner", "cursor", "item", "albums")
 FORMAT_CHANGE_MARKER = "WARNING: Google response format changed"
+DIAGNOSTICS_HEADER = ("Diagnostics (Google wire shape only — no ids, links "
+                      "or titles):")
 RELEASES_URL = "https://github.com/coredmp95/pushframe/releases"
 
 STATE_VERSION = 1
@@ -273,3 +276,58 @@ class WireWatch:
         state["consecutive_failures"] = 0
         self._save(state)
         return self._take_notes() + lines
+
+
+# --- diagnostics --------------------------------------------------------------
+
+_PAGES_HEAD, _PAGES_TAIL, _PAGES_MAX = 6, 5, 12
+
+
+def format_diagnostics(*, pages, fingerprint, last_good=None,
+                       metadata_count: int | None = None,
+                       listed: int | None = None,
+                       show_last_good: bool = True) -> list[str]:
+    """Compact, user-data-free block printed after a Google listing failure.
+
+    One line per snAcKc answer (item count, cursor shape, note), the run's
+    fingerprint, the last good one and what changed, and the album metadata
+    count against the listed count with the shortfall tolerance. Pure: no
+    state access. Every line goes through `redact_tokens`."""
+    from pushframe.google.enumerate import listing_shortfall_tolerance
+
+    lines = [DIAGNOSTICS_HEADER]
+
+    def _page_line(page) -> str:
+        line = f"  page {page.post}: {page.items} item(s), cursor {page.cursor}"
+        return f"{line} — {page.note}" if page.note else line
+
+    pages = list(pages or [])
+    if not pages:
+        lines.append("  pages: none fetched")
+    elif len(pages) > _PAGES_MAX:
+        lines += [_page_line(p) for p in pages[:_PAGES_HEAD]]
+        lines.append(f"  … {len(pages) - _PAGES_HEAD - _PAGES_TAIL} more page(s)")
+        lines += [_page_line(p) for p in pages[-_PAGES_TAIL:]]
+    else:
+        lines += [_page_line(p) for p in pages]
+
+    lines.append(f"  fingerprint:   {render_fingerprint(fingerprint)}")
+    if show_last_good:
+        if last_good:
+            lines.append(f"  last good run: {render_fingerprint(last_good)}")
+            diff = fingerprint_diff(last_good, fingerprint)
+            if diff:
+                changes = "; ".join(f"{n} {a} → {b}" for n, a, b in diff)
+                lines.append(f"  changed since the last good run: {changes}")
+            elif fingerprint:
+                lines.append("  unchanged since the last good run")
+        else:
+            lines.append("  last good run: (none stored)")
+    if metadata_count is not None:
+        lines.append(
+            f"  album metadata: {metadata_count} item(s), listed: "
+            f"{'?' if listed is None else listed} (shortfall tolerance "
+            f"{listing_shortfall_tolerance(metadata_count)})")
+    elif listed is not None:
+        lines.append(f"  listed: {listed}")
+    return [redact_tokens(line) for line in lines]

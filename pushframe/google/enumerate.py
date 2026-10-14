@@ -102,7 +102,32 @@ _AT_RE = __import__("re").compile(r'"SNlM0e"\s*:\s*"([^"]+)"')
 
 
 class EnumerateError(RuntimeError):
-    """Album enumeration failed — fail loud, never a silent partial listing."""
+    """Album enumeration failed — fail loud, never a silent partial listing.
+
+    `kind` is a short machine-readable class (http, envelope, null-payload,
+    parse, page-cap, album-id, session-scalars, albums-http, other) used by
+    the wire watch's failure streak; `pages` / `fingerprint` carry the
+    per-answer trace and wire fingerprint gathered before the failure
+    (set by enumerate_album). `str(exc)` is unchanged by all of them."""
+
+    def __init__(self, message: str = "", *, kind: str = "other") -> None:
+        super().__init__(message)
+        self.kind = kind
+        self.detail: str | None = None
+        self.pages: list = []
+        self.fingerprint: dict | None = None
+
+
+@dataclass
+class PageTrace:
+    """One snAcKc POST answer, reduced to wire SHAPE only (no ids, no
+    cursor body): the 1-based POST number, the item count, the cursor shape
+    (`-` when there was no parsed answer) and an optional note."""
+
+    post: int
+    items: int
+    cursor: str
+    note: str = ""
 
 
 @dataclass
@@ -120,6 +145,8 @@ class AlbumListing:
     # Privacy-safe wire fingerprint of the final page-1 answer (see wire.py);
     # keys inner / cursor / item, None values when not observable.
     fingerprint: dict | None = None
+    # One PageTrace per snAcKc POST answer (wire diagnostics, TLX-2).
+    pages: list[PageTrace] = field(default_factory=list)
 
     @property
     def total_bytes(self) -> int:
@@ -144,7 +171,8 @@ def _session_scalars(session) -> _SessionScalars:
                                   ("cfb2h", bl_m)) if not m]
         raise EnumerateError(
             f"photos.google.com home lacks required batchexecute scalars: "
-            f"{missing} — session dead or page shape changed; failing loud"
+            f"{missing} — session dead or page shape changed; failing loud",
+            kind="session-scalars",
         )
     return _SessionScalars(at=at_m.group(1), fsid=fsid_m.group(1), bl=bl_m.group(1))
 
@@ -172,14 +200,18 @@ def _rpc_headers(session) -> dict[str, str]:
 
 def _snackc_page(session, scalars: _SessionScalars, album_id: str,
                  page_key: str | None,
-                 continuation_token: str | None) -> SnackcPage:
+                 continuation_token: str | None, *,
+                 trace: list | None = None) -> SnackcPage:
     """Issue ONE snAcKc batchexecute call; return the parsed SnackcPage
     (`.items`, `.continuation_token` — None = exhausted — and wire shapes).
 
     continuation_token=None is the live-proven batch-1 form. A null inner
     payload on HTTP 200 (live-observed transient) is retried exactly once
     with the same cursor while the global budget lasts; a persisting null
-    fails loud rather than emitting a partial listing."""
+    fails loud rather than emitting a partial listing.
+
+    `trace` (when given) receives one PageTrace per POST answer — wire shape
+    only — including the answers of a retry and the failing one."""
     args = [album_id, continuation_token, None, page_key]
     freq = _freq_envelope("snAcKc", args)
     url = (
@@ -192,24 +224,32 @@ def _snackc_page(session, scalars: _SessionScalars, album_id: str,
     body = f"f.req={quote(freq, safe='')}&at={quote(scalars.at, safe='')}&"
     headers = _rpc_headers(session)
 
+    def _note(items: int, cursor: str, note: str = "") -> None:
+        if trace is not None:
+            trace.append(PageTrace(len(trace) + 1, items, cursor, note))
+
     def _post() -> httpx.Response:
         return session.http.post(url, content=body.encode("utf-8"),
                                  headers=headers)
 
     def _snackc_entries(resp: httpx.Response) -> list:
         if resp.status_code != 200:
-            raise EnumerateError(
+            err = EnumerateError(
                 f"snAcKc batchexecute returned HTTP {resp.status_code} "
                 f"(album {album_id[:12]}…, continuation sent: "
                 f"{continuation_token is not None}) — failing loud; body head: "
-                f"{redact_tokens(resp.text[:200])}"
+                f"{redact_tokens(resp.text[:200])}",
+                kind="http",
             )
+            err.detail = f"http {resp.status_code}"
+            raise err
         entries = [e for e in parse_batchexecute(resp.text)
                    if e.rpcid == "snAcKc"]
         if not entries:
             raise EnumerateError(
                 "snAcKc batchexecute answer carries no wrb.fr/snAcKc entry — "
-                "malformed envelope; refusing to guess"
+                "malformed envelope; refusing to guess",
+                kind="envelope",
             )
         return entries
 
@@ -218,21 +258,29 @@ def _snackc_page(session, scalars: _SessionScalars, album_id: str,
         if (entries[0].payload is None
                 and _retry_budget["snAcKc_null_payload"] > 0):
             _retry_budget["snAcKc_null_payload"] -= 1
+            _note(0, "-", "null payload (retried)")
             entries = _snackc_entries(_post())
         if entries[0].payload is None:
             raise EnumerateError(
                 "snAcKc carries a null inner payload on HTTP 200 (live-observed "
                 "transient); the single bounded retry did not recover it — "
-                "failing loud, never a partial listing"
+                "failing loud, never a partial listing",
+                kind="null-payload",
             )
         page = parse_snackc_payload(entries[0].payload)
     except ProbeParseError as exc:
         # gsync / cli catch only EnumerateError: a parse failure must be a
         # named error with a remedy, not a traceback in the scheduled run.
+        _note(0, "-", "failed: parse")
         raise EnumerateError(
             f"snAcKc page could not be parsed: {exc} — failing loud, never "
-            f"a partial listing"
+            f"a partial listing",
+            kind="parse",
         ) from exc
+    except EnumerateError as exc:
+        _note(0, "-", f"failed: {exc.detail or exc.kind}")
+        raise
+    _note(len(page.items), page.cursor_shape)
     return page
 
 
@@ -263,15 +311,31 @@ def enumerate_album(session, album_id: str, *, page_key: str | None = None,
     the caller's safety gate names it).
     """
     if not album_id or not isinstance(album_id, str):
-        raise EnumerateError("album_id is required — refusing to guess")
+        raise EnumerateError("album_id is required — refusing to guess",
+                             kind="album-id")
+    listing = AlbumListing(album_id=album_id)
+    try:
+        return _enumerate_pages(session, album_id, listing, page_key=page_key,
+                                max_pages=max_pages,
+                                expected_count=expected_count)
+    except EnumerateError as exc:
+        # Hand the wire trace gathered so far to the caller's diagnostics.
+        exc.pages = list(listing.pages)
+        exc.fingerprint = listing.fingerprint
+        raise
+
+
+def _enumerate_pages(session, album_id: str, listing: AlbumListing, *,
+                     page_key: str | None, max_pages: int,
+                     expected_count: int | None) -> AlbumListing:
     _retry_budget["snAcKc_null_payload"] = 1  # one bounded retry per run
     scalars = _session_scalars(session)
 
-    listing = AlbumListing(album_id=album_id)
     token: str | None = None
     tokenless_retries_left = 1  # local: one same-cursor retry per enumeration
     while listing.page_count < max_pages:
-        page = _snackc_page(session, scalars, album_id, page_key, token)
+        page = _snackc_page(session, scalars, album_id, page_key, token,
+                            trace=listing.pages)
         page_items, next_token = page.items, page.continuation_token
         listing.page_count += 1
         known = {i["id"] for i in listing.items}
@@ -287,8 +351,11 @@ def enumerate_album(session, album_id: str, *, page_key: str | None = None,
 
         if _tokenless_full_short() and tokenless_retries_left > 0:
             tokenless_retries_left -= 1
-            page = _snackc_page(session, scalars, album_id, page_key, token)
+            page = _snackc_page(session, scalars, album_id, page_key, token,
+                                trace=listing.pages)
             page_items, next_token = page.items, page.continuation_token
+            last = listing.pages[-1]
+            last.note = f"{last.note}; tokenless retry" if last.note else "tokenless retry"
             known = {i["id"] for i in listing.items}
             listing.items.extend(i for i in page_items if i["id"] not in known)
         if listing.page_count == 1:
@@ -323,7 +390,8 @@ def enumerate_album(session, album_id: str, *, page_key: str | None = None,
     raise EnumerateError(
         f"album enumeration hit the {max_pages}-page cap (T-17-04) with "
         f"{len(listing.items)} items and a live continuation token — "
-        f"listing is INCOMPLETE; raise max_pages or investigate"
+        f"listing is INCOMPLETE; raise max_pages or investigate",
+        kind="page-cap",
     )
 
 
@@ -341,7 +409,8 @@ def list_shared_albums(session) -> list:
     if resp.status_code != 200:
         raise EnumerateError(
             f"photos.google.com/albums returned HTTP {resp.status_code} "
-            f"— failing loud"
+            f"— failing loud",
+            kind="albums-http",
         )
     try:
         ds5 = extract_initdata(resp.text, "ds:5")

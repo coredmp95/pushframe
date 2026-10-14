@@ -1500,6 +1500,14 @@ def run_google_album(target: str, *, debug: bool = False, session=None,
         listing = enumerate_album(session, album.album_id, page_key=page_key)
     except EnumerateError as e:
         print(f'google-album failed: {redact_tokens(str(e))}')
+        # Wire-shape diagnostics (no ids/links/titles). google-album keeps no
+        # state, so there is no last-good comparison.
+        from pushframe.google import wire
+        for line in wire.format_diagnostics(
+                pages=getattr(e, 'pages', []),
+                fingerprint=getattr(e, 'fingerprint', None),
+                metadata_count=album.item_count, show_last_good=False):
+            print(line)
         return 1
 
     base_urls = [i['base_url'] for i in listing.items]

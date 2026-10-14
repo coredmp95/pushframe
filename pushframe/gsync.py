@@ -82,43 +82,54 @@ class SafeSyncError(RuntimeError):
     manifest entry the frame no longer holds (B4: --apply forgets them)."""
 
     drifted_ids: tuple[str, ...] = ()
+    # Machine-readable class (wire watch streak): listing:* are Google-side
+    # listing gates; frame:* / manifest:* are never counted as wire failures.
+    kind: str = "other"
 
     @classmethod
     def empty_listing(cls) -> "SafeSyncError":
-        return cls(
+        err = cls(
             "album listing is EMPTY — an empty listing cannot be "
             "distinguished from a truncated one and must never be read as "
             "'hide everything on the frame'; refusing to plan (safety gate)"
         )
+        err.kind = "listing:empty"
+        return err
 
     @classmethod
     def truncated_listing(cls) -> "SafeSyncError":
-        return cls(
+        err = cls(
             "album listing is NOT exhausted cleanly — a truncated "
             "listing would understate demand and mass-hide the difference; "
             "refusing to plan (safety gate) — usually a transient Google "
             "answer: nothing was hidden; re-run later"
         )
+        err.kind = "listing:truncated"
+        return err
 
     @classmethod
     def listing_below_metadata(cls, listed: int, expected: int) -> "SafeSyncError":
         from pushframe.google.enumerate import listing_shortfall_tolerance
         tolerance = listing_shortfall_tolerance(expected)
-        return cls(
+        err = cls(
             f"album metadata says {expected} items, listing returned {listed} "
             f"\u2014 {expected - listed} missing exceeds the {tolerance}-item "
             f"video tolerance: a truncated Google answer, NOT videos; "
             f"refusing to plan (safety gate) \u2014 nothing was hidden; "
             f"re-run later"
         )
+        err.kind = "listing:below-metadata"
+        return err
 
     @classmethod
     def empty_frame_listing(cls) -> "SafeSyncError":
-        return cls(
+        err = cls(
             "frame asset listing is EMPTY — indistinguishable from "
             "the live-observed get_assets drift; verify "
             "the frame's assets and re-run (safety gate)"
         )
+        err.kind = "frame:empty-listing"
+        return err
 
     @classmethod
     def manifest_drift(cls, drifted_ids=()) -> "SafeSyncError":
@@ -134,6 +145,7 @@ class SafeSyncError(RuntimeError):
             "Aura app; nothing was uploaded or hidden this run (safety gate)"
         )
         err.drifted_ids = ids
+        err.kind = "manifest:drift"
         return err
 
 
@@ -522,6 +534,9 @@ def run_google_sync(album_target: str, frame_arg: str, *, apply: bool = False,
         resolved = resolve_album(album_target, albums)
     except EnumerateError as e:
         print(f'google-sync failed: {redact_tokens(str(e))}')
+        for line in wire.format_diagnostics(
+                pages=[], fingerprint=None, last_good=watch.last_good()):
+            print(line)
         return 1
 
     if resolved.status == 'ambiguous':
@@ -553,6 +568,11 @@ def run_google_sync(album_target: str, frame_arg: str, *, apply: bool = False,
                                   expected_count=metadata_count)
     except EnumerateError as e:
         print(f'google-sync failed: {redact_tokens(str(e))}')
+        for line in wire.format_diagnostics(
+                pages=getattr(e, 'pages', []),
+                fingerprint=getattr(e, 'fingerprint', None),
+                last_good=watch.last_good(), metadata_count=metadata_count):
+            print(line)
         return 1
 
     # SAFE-01 prechecks happen BEFORE any frame contact.
@@ -560,6 +580,14 @@ def run_google_sync(album_target: str, frame_arg: str, *, apply: bool = False,
         check_listing_trust(listing, metadata_count)
     except SafeSyncError as e:
         print(f'google-sync failed: {e}')
+        if e.kind.startswith('listing:'):
+            for line in wire.format_diagnostics(
+                    pages=getattr(listing, 'pages', []),
+                    fingerprint=_run_fingerprint(listing, album, albums),
+                    last_good=watch.last_good(),
+                    metadata_count=metadata_count,
+                    listed=len(listing.items)):
+                print(line)
         return 1
 
     # The listing passed every SAFE-01 gate: fingerprint the Google wire and
