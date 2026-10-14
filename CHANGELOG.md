@@ -12,6 +12,26 @@ every channel.
 `pushframe` is an unofficial community CLI for Aura Frames digital photo
 frames; it is not affiliated with Aura Frames Inc.
 
+## [5.1.36] - 2026-10-14
+
+### Added
+
+- Google wire-format drift detection, so the next silent change on
+  Google's side is obvious from the nightly report alone:
+  - Every listing records a privacy-safe structural fingerprint of the
+    Google answers (value kinds, length buckets, the cursor's first 4
+    characters — never ids, links, titles or tokens), stored 0600 per
+    sync target. A change prints `WARNING: Google response format
+    changed: …`, even on a successful run, and the report email gets an
+    `ATTENTION` subject at every report level.
+  - A listing failure is followed by a `Diagnostics` block: per-page item
+    counts and cursor shape, the fingerprint and what changed since the
+    last good run, and the metadata count against the listed count.
+  - Consecutive failures of the same class are counted: the first one is
+    flagged as a possible transient Google answer; from the second in a
+    row, the run and the email subject say `ATTENTION: probable Google
+    protocol change — pushframe likely needs an update`.
+
 ## [5.1.35] - 2026-10-14
 
 ### Fixed
