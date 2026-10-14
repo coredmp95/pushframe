@@ -1135,10 +1135,10 @@ def _unit_argv_parse_problem(exec_line: str) -> str | None:
     """
     import contextlib
     import io
-    import shlex
+    from pushframe.schedule import exec_start_argv
     body = exec_line.removeprefix('ExecStart=')
     try:
-        tokens = shlex.split(body)
+        tokens = exec_start_argv(body)
     except ValueError:
         return 'ExecStart is not shell-quoted correctly'
     parser = build_parser()
@@ -1177,10 +1177,10 @@ def _frame_flag_needs_value(rest: list[str], flag: str) -> bool:
 
 def _describe_exec_start(exec_line: str) -> str:
     """Human summary of an ExecStart= line: verb + what flows where."""
-    import shlex
+    from pushframe.schedule import exec_start_argv
     body = exec_line.removeprefix('ExecStart=')
     try:
-        tokens = shlex.split(body)
+        tokens = exec_start_argv(body)
     except ValueError:
         return '(unreadable unit)'
     # tokens[0] is the executable (absolute since 2026-10-02); find the verb
@@ -2330,6 +2330,9 @@ def _rotate_job_log_if_large(report_tag: str | None, *,
     """
     if not report_tag:
         return False
+    from pushframe.utils.names import safe_name_problem
+    if safe_name_problem(report_tag, what='job name') is not None:
+        return False  # never build a path from an unsafe tag
     if keep is None:
         keep = _job_log_keep()
     if keep < 1:

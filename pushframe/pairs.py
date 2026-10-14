@@ -11,10 +11,16 @@ Per-pair state (MTF-02) shards under the pair NAME (stable across album
 re-shares, unlike share ids):
     manifest: ~/.config/pushframe/pairs/<name>/google-manifest.json
     cache:    ~/.local/state/pushframe/pairs/<name>/cache/
+
+Because the name becomes a directory component it obeys the shared safe-name
+rule (pushframe/utils/names.py: 1-64 ASCII letters, digits, ".", "_", "-",
+starting alphanumeric), enforced at pair_add and again at pair_state_paths
+(a hand-edited config.json must not steer a path).
 """
 from pathlib import Path
 
 from pushframe import config_store
+from pushframe.utils.names import safe_name_problem
 
 
 class PairError(Exception):
@@ -30,6 +36,9 @@ def all_pairs() -> dict:
 def pair_add(name: str, *, album: str, frame: str) -> None:
     if not name or not name.strip():
         raise PairError('pair name must not be empty')
+    problem = safe_name_problem(name, what='pair name')
+    if problem:
+        raise PairError(problem)
     stored = all_pairs()
     if name in stored:
         raise PairError(f'pair "{name}" already exists (album '
@@ -41,7 +50,10 @@ def pair_add(name: str, *, album: str, frame: str) -> None:
 
 
 def pair_remove(name: str) -> bool:
-    """Remove a pair; True when it existed, False when already absent."""
+    """Remove a pair; True when it existed, False when already absent.
+
+    Deliberately NOT name-validated: this is the remedy for a hand-edited
+    unsafe name, so it must accept whatever the config file holds."""
     stored = all_pairs()
     if name not in stored:
         return False
@@ -94,7 +106,14 @@ def pair_list() -> None:
 
 def pair_state_paths(name: str) -> tuple[Path, Path]:
     """(manifest, cache) shard paths for a pair (MTF-02). Derived from the
-    pair NAME — stable across album re-shares."""
+    pair NAME — stable across album re-shares. Refuses an unsafe name
+    BEFORE any Path is built."""
+    problem = safe_name_problem(name, what='pair name')
+    if problem:
+        raise PairError(
+            f'{problem}. This name was not created by `config pair add` '
+            f'(hand-edited config.json?) — remove it with `pushframe config '
+            f'pair remove <name>` and re-add it under a valid name')
     manifest = Path('~/.config/pushframe').expanduser() / 'pairs' / name \
         / 'google-manifest.json'
     cache = Path('~/.local/state/pushframe').expanduser() / 'pairs' / name \

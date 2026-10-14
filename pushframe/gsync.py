@@ -380,7 +380,14 @@ def run_google_sync(album_target: str, frame_arg: str, *, apply: bool = False,
         results = []
         for name in sorted(names):                    # deterministic order
             spec = pairs_mod.pair_resolve(name)
-            m_path, c_path = pairs_mod.pair_state_paths(name)
+            try:
+                m_path, c_path = pairs_mod.pair_state_paths(name)
+            except pairs_mod.PairError as e:
+                # D-02: a hand-edited unsafe pair name fails ITSELF, named;
+                # the loop (and the --all report) carries on.
+                print(f'google-sync: {e}')
+                results.append((name, 1))
+                continue
             print(f'=== pair [{name}]: album "{spec["album"]}" → frame '
                   f'"{spec["frame"]}" ===')
             rc = run_google_sync(spec['album'], spec['frame'], apply=apply,

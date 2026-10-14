@@ -10,8 +10,12 @@ The unit renderers are PURE (string in, string out) so tests assert
 content; the systemctl wrappers are the only impurity and are
 monkeypatched in tests.
 """
+import shlex
 import subprocess
+import unicodedata
 from pathlib import Path
+
+from pushframe.utils.names import safe_name_problem
 
 # Patched by tests (real paths: ~/.config/systemd/user, ~/.local/state/pushframe)
 UNIT_DIR = Path('~/.config/systemd/user').expanduser()
@@ -63,9 +67,49 @@ def every_to_oncalendar(every: str) -> str:
     raise ValueError(f'unknown --every "{every}" — use Nmin/Nh/Nd or --at')
 
 
+def _check_job(job: str) -> None:
+    problem = safe_name_problem(job, what='job name')
+    if problem:
+        raise ScheduleError(problem)
+
+
+def _has_control_char(value: str) -> bool:
+    return any(unicodedata.category(ch) == 'Cc' for ch in value)
+
+
+def _systemd_arg(value, *, what: str, bare_ok: bool = False) -> str:
+    """The ONE renderer of an ExecStart argv element (systemd.service(5),
+    COMMAND LINES): inside double quotes `\\` -> `\\\\` and `"` -> `\\"`;
+    `%` (specifier) -> `%%` and `$` (variable) -> `$$` everywhere. Unit files
+    are line-based, so a control character (category Cc: newline, CR, tab,
+    NUL, DEL, C1) cannot be represented and is refused by name. Ordinary
+    values keep today's `"value"` shape; `bare_ok` words with nothing
+    special stay unquoted (constant flags, the executable path)."""
+    text = str(value)
+    if _has_control_char(text):
+        raise ScheduleError(
+            f'{what} {text!r} contains a control character — unit files are '
+            f'line-based, so it would break the unit or inject directives; '
+            f'nothing was written. Remove the character from the value.')
+    text = text.replace('%', '%%').replace('$', '$$')
+    if bare_ok and text and not any(
+            c.isspace() or c in '"\'\\;' for c in text):
+        return text
+    return '"' + text.replace('\\', '\\\\').replace('"', '\\"') + '"'
+
+
+def exec_start_argv(text: str) -> list[str]:
+    """Inverse of the ExecStart rendering: the exact argv systemd would run.
+    shlex (POSIX) undoes the double-quote escapes; then `%%` -> `%` and
+    `$$` -> `$`. ValueError (unbalanced quotes) propagates: status callers
+    rely on it."""
+    return [t.replace('%%', '%').replace('$$', '$') for t in shlex.split(text)]
+
+
 def render_service(job: str, exec_start: str) -> str:
     """The service unit: oneshot, no restart (the next tick is the retry),
     per-job append log with a Type=oneshot-compatible shape."""
+    _check_job(job)
     log = LOG_DIR / f'{job}.log'
     return f"""[Unit]
 Description=pushframe scheduled job '{job}'
@@ -84,7 +128,13 @@ StandardError=append:{log}
 def render_timer(job: str, every: str | None = None, at: str | None = None) -> str:
     """The timer unit: calendar-based, randomized to de-sync jobs/hosts,
     Persistent to catch up after downtime."""
+    _check_job(job)
     if at:
+        if _has_control_char(at):
+            raise ScheduleError(
+                f'--at {at!r} contains a control character — OnCalendar= is '
+                f'one line of the .timer file; nothing was written. Remove '
+                f'the character.')
         calendar = at
     elif every:
         calendar = every_to_oncalendar(every)
@@ -130,28 +180,48 @@ def _exec_start_for(pair: str | None = None, album: str | None = None,
                    report_to: str | None = None) -> str:
     """Non-interactive ExecStart from STORED config only (TMR-03)."""
     from pushframe import config_store
-    parts = [_pushframe_command()]
+    command = _pushframe_command()
+    if '$' in command:
+        raise ScheduleError(
+            f'executable path {command!r} contains "$" — systemd never '
+            f'expands variables in the program name, so no escape exists. '
+            f'Reinstall pushframe somewhere without "$" in the path (e.g. '
+            f'`uv tool install` into ~/.local/bin).')
+    parts = [_systemd_arg(command, what='executable path', bare_ok=True)]
+
+    def lit(word: str) -> str:
+        return _systemd_arg(word, what='flag', bare_ok=True)
+
+    def val(value, what: str) -> str:
+        return _systemd_arg(value, what=what)
+
     if sync_dir:
         # --report-tag carries the job identity into the run's log header
         # and its rotation (sync jobs have no --report email; the tag is
         # what makes <job>.log self-describing).
-        parts += ['sync', f'"{sync_dir}"', f'--frame "{frame}"',
-                  '--apply', '--yes', '--scheduled',
-                  '--report-tag', f'"{job}"']
+        parts += [lit('sync'), val(sync_dir, 'sync dir'), lit('--frame'),
+                  val(frame, 'frame'),
+                  lit('--apply'), lit('--yes'), lit('--scheduled'),
+                  lit('--report-tag'), val(job, 'job name')]
     else:
         spec = (config_store.load().get('pairs', {}) or {}).get(pair or '', {})
         album = spec.get('album', album)
         frame = spec.get('frame', frame)
-        parts += ['google-sync', f'"{album}"', f'--frame "{frame}"',
-                  '--apply', '--yes', '--scheduled']
+        parts += [lit('google-sync'), val(album, 'album'), lit('--frame'),
+                  val(frame, 'frame'),
+                  lit('--apply'), lit('--yes'), lit('--scheduled')]
         if spec.get('batch_size') or batch_size:
-            parts += ['--batch-size', str(spec.get('batch_size') or batch_size)]
+            parts += [lit('--batch-size'),
+                      _systemd_arg(spec.get('batch_size') or batch_size,
+                                   what='batch size', bare_ok=True)]
         if report:
-            parts += ['--report', report]
+            parts += [lit('--report'),
+                      _systemd_arg(report, what='report level',
+                                   bare_ok=True)]
             if job:
-                parts += ['--report-tag', f'"{job}"']
+                parts += [lit('--report-tag'), val(job, 'job name')]
             if report_to:
-                parts += ['--report-to', f'"{report_to}"']
+                parts += [lit('--report-to'), val(report_to, 'report-to')]
     return ' '.join(parts)
 
 
@@ -162,8 +232,9 @@ def schedule_add(job: str, *, pair: str | None = None,
                  batch_size: int | None = None,
                  report: str | None = None,
                  report_to: str | None = None) -> int:
-    if not job.replace('-', '').isalnum():
-        print(f'schedule: job name "{job}" must be alphanumeric/dashes')
+    problem = safe_name_problem(job, what='job name')
+    if problem:
+        print(f'schedule: {problem}')
         return 1
     report_level = None
     if report is not None:
@@ -195,19 +266,22 @@ def schedule_add(job: str, *, pair: str | None = None,
         if pair:
             from pushframe import pairs as pairs_mod
             pairs_mod.pair_resolve(pair)          # named error if unknown
+        # Render ALL unit text before the first write: any refusal prints
+        # `schedule: ...`, returns 1 and leaves no half-written unit pair.
         timer = render_timer(job, every=every, at=at)
+        exec_start = _exec_start_for(pair=pair, album=album, frame=frame,
+                                     sync_dir=sync_dir, batch_size=batch_size,
+                                     job=job, report=report_level,
+                                     report_to=report_to)
+        service = render_service(job, exec_start)
     except (Exception,) as e:
         print(f'schedule: {e}')
         return 1
 
     UNIT_DIR.mkdir(parents=True, exist_ok=True)
-    exec_start = _exec_start_for(pair=pair, album=album, frame=frame,
-                                 sync_dir=sync_dir, batch_size=batch_size,
-                                 job=job, report=report_level,
-                                 report_to=report_to)
-    (UNIT_DIR / f'pushframe-{job}.service').write_text(
-        render_service(job, exec_start))
-    (UNIT_DIR / f'pushframe-{job}.timer').write_text(timer)
+    (UNIT_DIR / f'pushframe-{job}.service').write_text(service,
+                                                       encoding='utf-8')
+    (UNIT_DIR / f'pushframe-{job}.timer').write_text(timer, encoding='utf-8')
     run_systemctl('daemon-reload')
     run_systemctl('enable', '--now', f'pushframe-{job}.timer')
     print(f'installed: pushframe-{job}.service/.timer (user units) — '
@@ -225,6 +299,12 @@ def schedule_list() -> int:
 
 
 def schedule_remove(job: str) -> int:
+    problem = safe_name_problem(job, what='job name')
+    if problem:
+        print(f'schedule: {problem}')
+        print('nothing removed; a unit with such a name can only be '
+              'hand-made: delete it from ~/.config/systemd/user/')
+        return 1
     svc = UNIT_DIR / f'pushframe-{job}.service'
     tmr = UNIT_DIR / f'pushframe-{job}.timer'
     if not tmr.exists() and not svc.exists():
