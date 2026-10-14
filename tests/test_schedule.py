@@ -612,3 +612,162 @@ def test_handwritten_push_unit_with_bookkeeping_flags_parses(
     assert _unit_argv_parse_problem(good) is None
     bad = 'ExecStart=/usr/bin/pushframe push "/srv/buffet" --frame "Salon" --nope'
     assert 'unrecognized arguments: --nope' in _unit_argv_parse_problem(bad)
+
+
+# --- quick-261014-nim (NIM-S1/S2): systemd-correct ExecStart quoting ----------
+
+_PF = "/opt/pf/bin/pushframe"
+
+
+@pytest.fixture
+def fake_cmd(monkeypatch):
+    monkeypatch.setattr("pushframe.schedule._pushframe_command", lambda: _PF)
+
+
+def test_exec_start_byte_identical_for_ordinary_values(unit_dir, cfg_path, fake_cmd):
+    """Characterization pin: ordinary values render exactly as 5.1.33 did
+    (the live venus unit has this shape)."""
+    from pushframe.schedule import _exec_start_for, render_service
+    _pair()
+    got = _exec_start_for(pair='cadre-venus', job='nightly', report='ERROR',
+                          report_to='me@example.invalid', batch_size=5)
+    assert got == (
+        '/opt/pf/bin/pushframe google-sync "Cadre" --frame "Cadre de Fabrice" '
+        '--apply --yes --scheduled --batch-size 5 --report ERROR '
+        '--report-tag "nightly" --report-to "me@example.invalid"')
+    got = _exec_start_for(sync_dir='/srv/photos', frame='Salon', job='nightly')
+    assert got == ('/opt/pf/bin/pushframe sync "/srv/photos" --frame "Salon" '
+                   '--apply --yes --scheduled --report-tag "nightly"')
+    assert "Description=pushframe scheduled job 'nightly'" in \
+        render_service('nightly', got)
+
+
+def test_exec_start_round_trips_hostile_values(unit_dir, cfg_path, fake_cmd):
+    from pushframe.schedule import _exec_start_for, exec_start_argv
+    album = 'A"q\\b\\ 100% $HOME ${X} it\'s été\\'
+    frame = 'Salon; rm -rf ~'
+    to = 'a"b%c$d@example.invalid'
+    _pair('hostile', album=album, frame=frame)
+    raw = _exec_start_for(pair='hostile', job='nightly', report='ERROR',
+                          report_to=to)
+    assert exec_start_argv(raw) == [
+        _PF, 'google-sync', album, '--frame', frame, '--apply', '--yes',
+        '--scheduled', '--report', 'ERROR', '--report-tag', 'nightly',
+        '--report-to', to]
+    assert '100%%' in raw and '$$HOME' in raw and '\\"' in raw
+    import re
+    assert not re.search(r'(?<!%)%(?!%)', raw.replace('%%', ''))
+    # frame exactly ';'
+    from pushframe import config_store
+    config_store.update(pairs={'semi': {'album': 'A', 'frame': ';'}})
+    raw = _exec_start_for(pair='semi', job='nightly')
+    assert exec_start_argv(raw)[3:5] == ['--frame', ';']
+
+
+def test_executable_path_quoting(unit_dir, cfg_path, monkeypatch):
+    from pushframe.schedule import (_exec_start_for, exec_start_argv,
+                                    ScheduleError)
+    _pair()
+    monkeypatch.setattr("pushframe.schedule._pushframe_command",
+                        lambda: '/home/John Doe/100%/pushframe')
+    raw = _exec_start_for(pair='cadre-venus', job='n')
+    assert raw.startswith('"/home/John Doe/100%%/pushframe" ')
+    assert exec_start_argv(raw)[0] == '/home/John Doe/100%/pushframe'
+    monkeypatch.setattr("pushframe.schedule._pushframe_command",
+                        lambda: '/opt/$x/pushframe')
+    with pytest.raises(ScheduleError) as exc:
+        _exec_start_for(pair='cadre-venus', job='n')
+    assert 'executable' in str(exc.value)
+
+
+@pytest.mark.parametrize('bad', ['\n', '\r', '\t', '\x00', '\x7f', '\x85'])
+def test_control_characters_refused_named(unit_dir, cfg_path, fake_cmd, bad):
+    from pushframe import config_store
+    from pushframe.schedule import _exec_start_for, ScheduleError
+    config_store.update(pairs={'p': {'album': f'A{bad}B', 'frame': 'F'}})
+    with pytest.raises(ScheduleError) as exc:
+        _exec_start_for(pair='p', job='n')
+    assert 'control character' in str(exc.value) and 'album' in str(exc.value)
+    config_store.update(pairs={'p': {'album': 'A', 'frame': f'F{bad}'}})
+    with pytest.raises(ScheduleError) as exc:
+        _exec_start_for(pair='p', job='n')
+    assert 'control character' in str(exc.value) and 'frame' in str(exc.value)
+    with pytest.raises(ScheduleError) as exc:
+        _exec_start_for(sync_dir=f'/s{bad}', frame='F', job='n')
+    assert 'control character' in str(exc.value)
+    config_store.update(pairs={'p': {'album': 'A', 'frame': 'F'}})
+    with pytest.raises(ScheduleError) as exc:
+        _exec_start_for(pair='p', job='n', report='ERROR',
+                        report_to=f'a{bad}@x')
+    assert 'control character' in str(exc.value)
+
+
+def _arm(monkeypatch):
+    from pushframe import schedule as sch
+    calls = []
+    monkeypatch.setattr(sch, 'run_systemctl',
+                        lambda *a: calls.append(a) or ('', ''))
+    monkeypatch.setattr(sch, 'systemd_user_session_ok', lambda: True)
+    return sch, calls
+
+
+def test_schedule_add_refuses_injection_without_writing(
+        unit_dir, cfg_path, fake_cmd, monkeypatch, capsys):
+    from pushframe import config_store
+    sch, calls = _arm(monkeypatch)
+    config_store.update(pairs={
+        'evil': {'album': 'A\nExecStartPre=/bin/evil', 'frame': 'F'},
+        'ok': {'album': 'A', 'frame': 'F'}})
+    cases = [
+        dict(pair='evil', every='1d'),
+        dict(pair='ok', at='daily\nUnit=evil.service'),
+        dict(pair='ok', every='1d', report='ERROR',
+             report_to='a@x\nExecStartPre=/bin/evil'),
+    ]
+    for kw in cases:
+        capsys.readouterr()
+        assert sch.schedule_add('nightly', **kw) == 1
+        out = capsys.readouterr().out
+        assert 'schedule:' in out and 'control character' in out
+        assert list(unit_dir.glob('pushframe-*')) == []
+        assert calls == []
+
+
+def test_job_names_one_rule(unit_dir, cfg_path, fake_cmd, monkeypatch, capsys):
+    sch, calls = _arm(monkeypatch)
+    _pair()
+    for bad in ['', '.', '..', '../x', 'a/b', '-x', 'café', 'a\nb', 'x' * 65]:
+        assert sch.schedule_add(bad, pair='cadre-venus', every='1d') == 1
+        assert sch.schedule_remove(bad) == 1
+        with pytest.raises(sch.ScheduleError):
+            sch.render_service(bad, 'x')
+        with pytest.raises(sch.ScheduleError):
+            sch.render_timer(bad, every='1d')
+    assert list(unit_dir.glob('pushframe-*')) == []
+    assert calls == []
+    for good in ['nightly', 'cadre-venus', 'living-room-nightly', 'job_2',
+                 'v1.2']:
+        assert sch.schedule_add(good, pair='cadre-venus', every='1d') == 0
+        assert (unit_dir / f'pushframe-{good}.service').exists()
+
+
+def test_status_unescapes_systemd_quoting(unit_dir, cfg_path, fake_cmd):
+    from pushframe.cli import _describe_exec_start, _unit_argv_parse_problem
+    from pushframe.schedule import _exec_start_for
+    _pair('hostile', album='100% $HOME "q"', frame='Salon')
+    raw = _exec_start_for(pair='hostile', job='nightly')
+    line = 'ExecStart=' + raw
+    out = _describe_exec_start(line)
+    assert '100% $HOME "q"' in out and '%%' not in out and '$$' not in out
+    assert _unit_argv_parse_problem(line) is None
+
+
+def test_rotate_refuses_unsafe_tag(unit_dir):
+    from pushframe import schedule
+    from pushframe.cli import _rotate_job_log_if_large
+    schedule.LOG_DIR.mkdir(parents=True, exist_ok=True)
+    victim = schedule.LOG_DIR.parent / 'x.log'
+    victim.write_text('z' * 50)
+    assert _rotate_job_log_if_large('../x', limit_bytes=1) is False
+    assert victim.read_text() == 'z' * 50
+    assert not (victim.parent / 'x.log.1').exists()

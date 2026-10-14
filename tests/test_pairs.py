@@ -214,3 +214,42 @@ def test_pair_remove_flag_is_a_named_error(cfg_path, capsys):
                       stdin_isatty=True) == 2
     out = capsys.readouterr().out
     assert "pair remove: needs a pair name" in out
+
+
+# --- quick-261014-nim (NIM-S2): one safe-name rule ---------------------------
+
+_BAD_NAMES = ['', '.', '..', '.hidden', '../x', 'a/b', '-x', 'café', 'a\nb',
+              'x' * 65]
+
+
+def test_pair_names_one_rule(cfg_path):
+    for bad in _BAD_NAMES:
+        with pytest.raises(pairs_mod.PairError):
+            pairs_mod.pair_add(bad, album='A', frame='F')
+    assert config_store.load().get('pairs', {}) == {}
+    with pytest.raises(pairs_mod.PairError) as exc:
+        pairs_mod.pair_add('../x', album='A', frame='F')
+    assert 'letters' in str(exc.value)
+    for good in ['cadre-venus', 'a-pair', 'live-a', 'salon', 'b.2', 'x_y']:
+        pairs_mod.pair_add(good, album='A', frame='F')
+
+
+def test_state_paths_refuse_hand_edited_names(cfg_path):
+    config_store.update(pairs={'../evil': {'album': 'A', 'frame': 'F'}})
+    with pytest.raises(pairs_mod.PairError) as exc:
+        pairs_mod.pair_state_paths('../evil')
+    assert 'pair remove' in str(exc.value)
+    assert pairs_mod.pair_remove('../evil') is True
+
+
+@pytest.mark.parametrize('kw', [{'pair': '../evil'}, {'run_all': True}])
+def test_gsync_unsafe_pair_fails_named_and_loop_continues(
+        cfg_path, tmp_path, monkeypatch, capsys, kw):
+    from pushframe import gsync
+    monkeypatch.setenv('HOME', str(tmp_path))
+    config_store.update(pairs={'../evil': {'album': 'A', 'frame': 'F'}})
+    before = {p for p in tmp_path.rglob('*')}
+    assert gsync.run_google_sync('', '', **kw) == 1
+    out = capsys.readouterr().out
+    assert 'pair remove' in out and '[FAILED]' in out
+    assert {p for p in tmp_path.rglob('*')} == before
