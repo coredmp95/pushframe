@@ -177,3 +177,52 @@ def test_parse_snackc_malformed_cursor_fails_loud_without_echo(bad):
     assert "inner[2]" in msg
     assert bad[:60] not in msg
     assert bad not in msg
+
+
+# --- SWA: item-safe legacy fallback + cursor redaction -----------------------
+
+def test_parse_snackc_legacy_fallback_ignores_item_embedded_ah_strings():
+    inner = [[
+        "AF1QipFAKElegacy" + "0" * 30,
+        ["https://lh3.googleusercontent.com/pw/AH_" + "U" * 44, 1, 2],
+        1,
+        "AH_" + "D" * 44,
+    ]]
+    page = parse_snackc_payload(_payload(inner))
+    assert page.continuation_token is None
+    assert len(page.items) == 1
+
+
+def test_parse_snackc_legacy_fallback_standalone_token_beats_later_item_decoys():
+    real = "AH_" + "R" * 40 + "0001"
+    inner = [[real], [_akfe_item(1, sig="AH_" + "D" * 44)]]
+    page = parse_snackc_payload(_payload(inner))
+    assert page.continuation_token == real
+
+
+def test_parse_snackc_legacy_fallback_last_standalone_token_wins():
+    inner = [[_akfe_item(1)], ["AH_" + "R" * 40 + "0001"], ["AH_" + "R" * 40 + "0002"]]
+    page = parse_snackc_payload(_payload(inner))
+    assert page.continuation_token == "AH_" + "R" * 40 + "0002"
+
+
+def test_redact_tokens_collapses_akfe_and_ah_cursors():
+    akfe = "AKFE" + "K" * 218 + "WXYZ"
+    ah = "AH_" + "N" * 40 + "0001"
+    out = redact_tokens(f"cursor={akfe} next={ah}")
+    assert out == "cursor=AKFE…WXYZ next=AH_…0001"
+    assert akfe not in out and ah not in out
+
+
+def test_redact_tokens_mixed_is_idempotent_and_keeps_af1qip():
+    af = "AF1Qip" + "x" * 44 + "ABCD"
+    akfe = "AKFE" + "K" * 218 + "WXYZ"
+    ah = "AH_" + "N" * 40 + "0001"
+    s = f"{af} {akfe} {ah}"
+    out = redact_tokens(s)
+    assert out == "AF1Qip…ABCD AKFE…WXYZ AH_…0001"
+    assert redact_tokens(out) == out
+
+
+def test_redact_tokens_leaves_short_prose_alone():
+    assert redact_tokens("AKFE cursor, AH_ token") == "AKFE cursor, AH_ token"
