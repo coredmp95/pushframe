@@ -59,6 +59,8 @@ FINGERPRINT_FIELDS = ("inner", "cursor", "item", "albums")
 FORMAT_CHANGE_MARKER = "WARNING: Google response format changed"
 DIAGNOSTICS_HEADER = ("Diagnostics (Google wire shape only — no ids, links "
                       "or titles):")
+ESCALATION_MARKER = ("probable Google protocol change — pushframe likely "
+                     "needs an update")
 RELEASES_URL = "https://github.com/coredmp95/pushframe/releases"
 
 STATE_VERSION = 1
@@ -144,6 +146,20 @@ def _clean(fp: dict | None) -> dict:
             value = value[:_MAX_VALUE_LEN - 3] + "..."
         out[name] = value
     return out
+
+
+def failure_class(exc) -> str | None:
+    """The streak class of a Google-side failure, None when it is not a wire
+    failure (frame-side / manifest errors are never counted). Duck-typed on
+    `kind` so this module never imports gsync."""
+    from pushframe.google.enumerate import EnumerateError
+
+    if isinstance(exc, EnumerateError):
+        return f"enumerate:{exc.kind}"
+    kind = getattr(exc, "kind", None)
+    if isinstance(kind, str) and kind.startswith("listing:"):
+        return kind
+    return None
 
 
 # --- state file ---------------------------------------------------------------
@@ -254,6 +270,45 @@ class WireWatch:
         if self._path is None:
             return None
         return dict(self._load()["fingerprint"]) or None
+
+    def on_failure(self, failure_cls: str | None,
+                   fingerprint: dict | None) -> list[str]:
+        """A Google-side failure of class `failure_cls`: bump the consecutive
+        streak (a different class restarts it) and return the lines to print.
+        The stored fingerprint is NEVER touched — last good stays last good.
+        A None class (not a wire failure) is a no-op."""
+        if self._path is None or failure_cls is None:
+            return []
+        state = self._load()
+        if state["failure_class"] == failure_cls:
+            state["consecutive_failures"] += 1
+        else:
+            state["failure_class"] = failure_cls
+            state["consecutive_failures"] = 1
+        count = state["consecutive_failures"]
+        self._save(state)
+        lines = self._take_notes()
+        if count == 1:
+            lines.append(
+                f'note: first "{failure_cls}" failure in a row for this sync '
+                f"target — may be a transient Google answer; nothing on the "
+                f"frame was changed and the next run retries (a second "
+                f'"{failure_cls}" failure in a row is escalated as an '
+                f"ATTENTION).")
+        else:
+            lines.append(
+                f'ATTENTION: {ESCALATION_MARKER}: "{failure_cls}" failed '
+                f"{count} runs in a row for this sync target — check "
+                f"{RELEASES_URL} for a newer pushframe; if there is none "
+                f"yet, open an issue with this run's output (it carries no "
+                f"ids, links or titles).")
+            diff = fingerprint_diff(state["fingerprint"], _clean(fingerprint))
+            if diff:
+                changes = "; ".join(f"{n} {a} → {b}" for n, a, b in diff)
+                lines.append(
+                    f"  wire fingerprint changed since the last good run: "
+                    f"{changes}")
+        return lines
 
     def on_listing_ok(self, fingerprint: dict | None) -> list[str]:
         """The listing passed every SAFE-01 gate: compare, store, return the

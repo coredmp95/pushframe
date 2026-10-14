@@ -9,7 +9,9 @@ Three operator levels, chosen per job with `schedule add --report LEVEL`:
          per-pair sections of a --all run).
 - ERROR  email ONLY when the run failed or carries a potential problem:
          non-zero exit, upload/download failures, a scheduled mass-hide
-         skip, an aborted run.
+         skip, an aborted run, a Google "response format changed" warning
+         or a "probable Google protocol change" escalation (both printed by
+         pushframe.google.wire).
 
 Transport: stdlib smtplib. STARTTLS is REQUIRED on non-465 ports (a relay
 without it is refused, never used in cleartext) and SMTP_SSL is used on
@@ -73,6 +75,12 @@ _PROBLEM_MARKERS = (
     # succeeded (exit 0): the operator must still hear about a silent Google
     # protocol change.
     'WARNING: Google response format changed',
+    # 'ATTENTION: probable Google protocol change — pushframe likely needs an
+    # update: "<class>" failed N runs in a row …' — printed by
+    # pushframe.google.wire.WireWatch.on_failure on the second and later
+    # consecutive failure of the same Google listing class. build_subject
+    # turns it into the FAILED / ATTENTION subject at every level.
+    'probable Google protocol change',
 )
 
 _USAGE = (
@@ -146,6 +154,11 @@ def _first_line(output: str, prefixes: tuple[str, ...]) -> str:
 
 def build_subject(tag: str | None, level: str, rc: int, output: str) -> str:
     prefix = f'[pushframe] {tag}: ' if tag else '[pushframe] '
+    if 'probable Google protocol change' in output:
+        # Repeated same-class Google failures: escalation outranks everything.
+        status = 'FAILED' if rc != 0 else 'ATTENTION'
+        return (f'{prefix}{status} — probable Google protocol change — '
+                f'pushframe likely needs an update')
     if rc == 0 and 'WARNING: Google response format changed' in output:
         return (f'{prefix}ATTENTION — Google response format changed '
                 f'(check for a pushframe update)')

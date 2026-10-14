@@ -356,7 +356,12 @@ def _run_fingerprint(listing, album, albums) -> dict:
     """The run's wire fingerprint: the listing's (inner / cursor / item) plus
     the resolved /albums ds:5 row length bucket, borrowed from the listed
     album with the same id when the resolved one (a share link) lacks it."""
-    fp = dict(getattr(listing, 'fingerprint', None) or {})
+    return _with_albums_shape(getattr(listing, 'fingerprint', None),
+                              album, albums)
+
+
+def _with_albums_shape(fingerprint, album, albums) -> dict:
+    fp = dict(fingerprint or {})
     row_shape = getattr(album, 'row_shape', None)
     if row_shape is None:
         row_shape = next(
@@ -537,6 +542,8 @@ def run_google_sync(album_target: str, frame_arg: str, *, apply: bool = False,
         for line in wire.format_diagnostics(
                 pages=[], fingerprint=None, last_good=watch.last_good()):
             print(line)
+        for line in watch.on_failure(wire.failure_class(e), None):
+            print(line)
         return 1
 
     if resolved.status == 'ambiguous':
@@ -573,6 +580,11 @@ def run_google_sync(album_target: str, frame_arg: str, *, apply: bool = False,
                 fingerprint=getattr(e, 'fingerprint', None),
                 last_good=watch.last_good(), metadata_count=metadata_count):
             print(line)
+        for line in watch.on_failure(
+                wire.failure_class(e),
+                _with_albums_shape(getattr(e, 'fingerprint', None),
+                                   album, albums)):
+            print(line)
         return 1
 
     # SAFE-01 prechecks happen BEFORE any frame contact.
@@ -587,6 +599,9 @@ def run_google_sync(album_target: str, frame_arg: str, *, apply: bool = False,
                     last_good=watch.last_good(),
                     metadata_count=metadata_count,
                     listed=len(listing.items)):
+                print(line)
+            for line in watch.on_failure(
+                    wire.failure_class(e), _run_fingerprint(listing, album, albums)):
                 print(line)
         return 1
 
