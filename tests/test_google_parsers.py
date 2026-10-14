@@ -7,6 +7,7 @@ parser, the batchexecute envelope splitter and the redaction helpers.
 """
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -25,6 +26,10 @@ from pushframe.google.redaction import redact_link, redact_tokens  # noqa: E402
 FIXTURES = Path(__file__).parent / "fixtures"
 SHARE_PAGE = FIXTURES / "google_share_page_sample.html"
 SNACKC_PAGE = FIXTURES / "google_rpc_snackc_page.json"
+SNACKC_AKFE_PAGE = FIXTURES / "google_rpc_snackc_page_akfe.json"
+
+# Live 2026-10-14 cursor shape (synthetic): AKFE + 222 URL-safe chars = 226.
+AKFE_FIXTURE_CURSOR = "AKFE" + "FAKECURSOR" * 22 + "01"
 
 # Fully synthetic share URL for redaction tests — shape-valid, never real.
 FAKE_FULL_URL = (
@@ -101,3 +106,74 @@ def test_redact_link_never_emits_full_url():
     # Defensive: even raw token text gets collapsed.
     token_only = FAKE_FULL_URL.rsplit("/", 1)[1]
     assert redact_tokens(token_only) == "AF1Qip…0123"
+
+
+# --- SWA: structural inner[2] cursor (live 2026-10-14 AKFE wire) -------------
+
+META42 = ["FAKE album"] + [None] * 41
+
+
+def _akfe_item(n: int, *, sig=None, base=None) -> list:
+    return [f"AF1QipFAKEstruct{n:04d}" + "0" * 30,
+            [base or f"https://lh3.googleusercontent.com/pw/FAKEstruct{n:04d}", 10, 20],
+            1700000000000 + n, sig or f"qsig{n}"]
+
+
+def _payload(inner) -> str:
+    return json.dumps(inner, separators=(",", ":"))
+
+
+def _decoy_items() -> list:
+    return [
+        _akfe_item(1, sig="AH_" + "D" * 44),
+        _akfe_item(2, base="https://lh3.googleusercontent.com/pw/AH_" + "U" * 44),
+    ]
+
+
+def test_parse_snackc_akfe_fixture_reads_cursor_from_inner2():
+    entries = [e for e in parse_batchexecute(SNACKC_AKFE_PAGE.read_text())
+               if e.rpcid == "snAcKc"]
+    assert len(entries) == 1
+    page = parse_snackc_payload(entries[0].payload)
+    assert [i["id"][-2:] for i in page.items] == ["01", "02", "03"]
+    assert page.continuation_token == AKFE_FIXTURE_CURSOR
+    assert len(page.continuation_token) == 226
+    assert not page.continuation_token.startswith("AH_")
+
+
+def test_parse_snackc_structural_cursor_beats_ah_decoys():
+    inner = [None, _decoy_items(), AKFE_FIXTURE_CURSOR, META42, None, 2]
+    page = parse_snackc_payload(_payload(inner))
+    assert page.continuation_token == AKFE_FIXTURE_CURSOR
+    assert len(page.items) == 2
+
+
+def test_parse_snackc_structural_empty_cursor_is_end_even_with_ah_decoys():
+    inner = [None, _decoy_items(), "", META42, None, 2]
+    page = parse_snackc_payload(_payload(inner))
+    assert page.continuation_token is None
+    assert len(page.items) == 2
+
+
+def test_parse_snackc_structural_null_cursor_is_end():
+    inner = [None, _decoy_items(), None, META42, None, 2]
+    page = parse_snackc_payload(_payload(inner))
+    assert page.continuation_token is None
+    assert len(page.items) == 2
+
+
+@pytest.mark.parametrize("bad", [
+    "AKFE" + "x" * 40 + "!",
+    "AKFE" + "x" * 40 + "/+=",
+    "AKFE" + "x" * 20 + " " + "x" * 20,
+    "AKFE" + "A" * 5000,
+    "AKFEshort1",
+], ids=["bang", "slash-plus-eq", "space", "too-long", "too-short"])
+def test_parse_snackc_malformed_cursor_fails_loud_without_echo(bad):
+    inner = [None, _decoy_items(), bad, META42, None, 2]
+    with pytest.raises(ProbeParseError) as exc:
+        parse_snackc_payload(_payload(inner))
+    msg = str(exc.value)
+    assert "inner[2]" in msg
+    assert bad[:60] not in msg
+    assert bad not in msg

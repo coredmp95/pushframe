@@ -71,6 +71,26 @@ def _rpc_response(items: list, next_token: str | None) -> str:
     return ")]}'\n\n" + line + "\n"
 
 
+def _akfe_token(n: int) -> str:
+    return "AKFE" + "K" * 218 + f"{n:04d}"
+
+
+def _rpc_items_akfe(page: int, count: int) -> list:
+    """Live-shape items: each carries a WHOLE-string AH_ decoy (4th slot)."""
+    return [item + ["AH_" + "D" * 40 + f"{page:02d}{i:04d}"]
+            for i, item in enumerate(_rpc_items(page, count), start=1)]
+
+
+def _rpc_response_akfe(items: list, cursor: str | None) -> str:
+    """Live 2026-10-14 inner: [None, items, cursor ("" = end), META, None, n]."""
+    meta = ["FAKE album"] + [None] * 41
+    payload = [None, items, cursor or "", meta, None, len(items)]
+    inner = json.dumps(payload, separators=(",", ":"))
+    line = json.dumps([["wrb.fr", "snAcKc", inner, None, None, None, "generic"]],
+                      separators=(",", ":"))
+    return ")]}'\n\n" + line + "\n"
+
+
 class _GoogleRouter:
     """Stateful MockTransport replaying the live-proven RPC-first protocol:
     it VALIDATES the client's side (triple-nested envelope, NULL batch-1
@@ -82,8 +102,10 @@ class _GoogleRouter:
                  albums_page: str | None = None,
                  null_positions: set[int] | None = None,
                  tokenless_positions: set[int] | None = None,
-                 token_on_last_page: bool = False) -> None:
+                 token_on_last_page: bool = False,
+                 wire: str = "legacy") -> None:
         self.pages = pages
+        self.wire = wire  # "legacy" ([items, [AH_]]) | "akfe" (inner[2] cursor)
         self.page_key = page_key
         self.rpc_status = rpc_status
         self.rpc_body = rpc_body
@@ -109,6 +131,11 @@ class _GoogleRouter:
         self.freq_inners: list[list] = []  # decoded args of every f.req POST
         self._expected_token: str | None = None  # batch-1 = NULL continuation
         self._pages_served = 0
+
+    def _page_body(self, page: int, count: int, token: str | None) -> str:
+        if self.wire == "akfe":
+            return _rpc_response_akfe(_rpc_items_akfe(page, count), token)
+        return _rpc_response(_rpc_items(page, count), token)
 
     def handler(self, request: httpx.Request) -> httpx.Response:
         path = request.url.path
@@ -156,8 +183,8 @@ class _GoogleRouter:
                 cur = self._pages_served
                 if cur >= len(self.pages):
                     return httpx.Response(400, text="too many pages requested")
-                return httpx.Response(200, text=_rpc_response(
-                    _rpc_items(cur + 1, self.pages[cur]), None))
+                return httpx.Response(200, text=self._page_body(
+                    cur + 1, self.pages[cur], None))
             page_idx = self._pages_served
             self._pages_served += 1
             if page_idx >= len(self.pages):
@@ -165,12 +192,13 @@ class _GoogleRouter:
             has_next = page_idx + 1 < len(self.pages)
             if has_next or (self.token_on_last_page
                             and page_idx + 1 == len(self.pages)):
-                next_token = _next_token(page_idx + 2)
+                next_token = (_akfe_token(page_idx + 2) if self.wire == "akfe"
+                              else _next_token(page_idx + 2))
             else:
                 next_token = None
             self._expected_token = next_token
-            return httpx.Response(200, text=_rpc_response(
-                _rpc_items(page_idx + 1, self.pages[page_idx]), next_token))
+            return httpx.Response(200, text=self._page_body(
+                page_idx + 1, self.pages[page_idx], next_token))
         return httpx.Response(404)
 
 
@@ -403,3 +431,58 @@ def test_listing_shortfall_tolerance_values():
     assert listing_shortfall_tolerance(250) == 5
     assert listing_shortfall_tolerance(251) == 6
     assert listing_shortfall_tolerance(0) == 5
+
+
+# --- SWA: live 2026-10-14 AKFE wire (cursor at inner[2], AH_ decoys in items)
+
+@pytest.mark.parametrize("expected", [None, 757])
+def test_enumerate_akfe_cursor_757_three_pages(expected):
+    router = _GoogleRouter([300, 300, 157], wire="akfe")
+    listing = enumerate_album(_session(router), ALBUM_ID, page_key=PAGE_KEY,
+                              expected_count=expected)
+    assert len(listing.items) == 757
+    assert len({i["id"] for i in listing.items}) == 757
+    assert listing.exhausted_cleanly is True
+    assert listing.page_count == 3
+    assert router.post_count == 3
+    assert router.nulls_served == 0
+    assert router.freq_inners[0][1] is None
+    assert router.freq_inners[1][1] == _akfe_token(2)
+    assert router.freq_inners[2][1] == _akfe_token(3)
+    assert len(router.freq_inners[1][1]) == 226
+    assert len(router.freq_inners[2][1]) == 226
+
+
+def test_enumerate_akfe_empty_cursor_on_full_page_is_the_tokenless_transient():
+    router = _GoogleRouter([300, 300, 157], wire="akfe", tokenless_positions={1})
+    listing = enumerate_album(_session(router), ALBUM_ID, page_key=PAGE_KEY,
+                              expected_count=757)
+    assert len(listing.items) == 757
+    assert router.post_count == 4
+    assert router.tokenless_served == 1
+    assert router.freq_inners[0] == router.freq_inners[1]
+
+
+def test_enumerate_akfe_short_page_with_cursor_is_terminal():
+    router = _GoogleRouter([300, 300, 157], wire="akfe", token_on_last_page=True)
+    listing = enumerate_album(_session(router), ALBUM_ID, page_key=PAGE_KEY)
+    assert len(listing.items) == 757
+    assert router.post_count == 3
+    assert router.nulls_served == 0
+
+
+def test_enumerate_akfe_null_payload_retry_unchanged():
+    router = _GoogleRouter([300, 300, 157], wire="akfe", null_positions={2})
+    listing = enumerate_album(_session(router), ALBUM_ID, page_key=PAGE_KEY)
+    assert len(listing.items) == 757
+    assert router.post_count == 4
+    assert router.nulls_served == 1
+
+
+def test_enumerate_malformed_cursor_is_a_named_enumerate_error():
+    bad = "AKFE" + "x" * 40 + "!bad"
+    router = _GoogleRouter(
+        [300], rpc_body=_rpc_response_akfe(_rpc_items_akfe(1, 300), bad))
+    with pytest.raises(EnumerateError, match=r"inner\[2\]") as exc:
+        enumerate_album(_session(router), ALBUM_ID, page_key=PAGE_KEY)
+    assert bad not in str(exc.value)
