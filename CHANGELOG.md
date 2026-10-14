@@ -12,6 +12,20 @@ every channel.
 `pushframe` is an unofficial community CLI for Aura Frames digital photo
 frames; it is not affiliated with Aura Frames Inc.
 
+## [5.1.35] - 2026-10-14
+
+### Fixed
+
+- `google-sync`/`google-album` follow Google's new album-page cursor.
+  Google Photos switched the snAcKc continuation cursor from an `AH_…`
+  token to an `AKFE…` string at a fixed slot of the answer; pushframe
+  looked for `AH_` anywhere in the payload, so it either saw no cursor
+  (listing truncated at 300 items — refused by the 5.1.33 safety gate) or
+  picked an `AH_`-looking string out of photo data (Google then answered a
+  "null inner payload"). The cursor is now read structurally, an
+  unexpected cursor shape fails loud with a named error, and AH_/AKFE
+  cursors are redacted from messages. Live-checked: 757/757 items.
+
 ## [5.1.34] - 2026-10-14
 
 ### Fixed
