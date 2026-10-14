@@ -12,6 +12,33 @@ every channel.
 `pushframe` is an unofficial community CLI for Aura Frames digital photo
 frames; it is not affiliated with Aura Frames Inc.
 
+## [5.1.34] - 2026-10-14
+
+### Fixed
+
+- A manifest-drift refusal (the manifest records a confirmed upload the
+  frame no longer holds, e.g. a photo deleted from the frame in the Aura
+  app) no longer deadlocks every later run. The run still fails loud and
+  now names the drifted items; an `--apply` run forgets exactly those
+  manifest entries so the next run re-downloads and re-uploads them. A
+  dry-run changes nothing.
+- `google-sync`/`--frame` name resolution prefers an exact title match
+  (case-sensitive, then case-insensitive) before a substring match:
+  "Cadre" no longer collides with "Cadre 2025".
+
+### Security
+
+- `pushframe schedule` quotes every systemd `ExecStart` argument per
+  systemd.service(5) (`\`, `"`, `%`, `$`) and refuses control characters,
+  so an album, frame or path value can no longer break the argv or inject
+  unit directives. Ordinary values render byte-identically.
+- Pair and job names must match `[A-Za-z0-9][A-Za-z0-9._-]{0,63}` wherever
+  they become a path or unit name (`pair remove` still accepts any stored
+  name, so a hand-edited config can be cleaned up).
+- Google media ids are validated before they become cache file names; an
+  unsafe id is a per-item failure and can never write or delete outside
+  the cache.
+
 ## [5.1.33] - 2026-10-14
 
 ### Fixed
