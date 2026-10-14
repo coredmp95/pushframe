@@ -24,6 +24,7 @@ from pushframe.google.client import GoogleSession  # noqa: E402
 from pushframe.google.enumerate import (  # noqa: E402
     EnumerateError,
     enumerate_album,
+    listing_shortfall_tolerance,
     measure_disk_weight,
 )
 
@@ -80,6 +81,7 @@ class _GoogleRouter:
                  rpc_status: int = 200, rpc_body: str | None = None,
                  albums_page: str | None = None,
                  null_positions: set[int] | None = None,
+                 tokenless_positions: set[int] | None = None,
                  token_on_last_page: bool = False) -> None:
         self.pages = pages
         self.page_key = page_key
@@ -89,6 +91,11 @@ class _GoogleRouter:
         # 1-based POST indices that answer the live-observed null-payload
         # transient instead of a page (a null consumes nothing).
         self.null_positions = null_positions or set()
+        # 1-based POST indices that answer the CURRENT page's items WITHOUT
+        # a continuation token and consume nothing (2026-10-13 transient:
+        # page 1 of the 757-item 'Cadre' came back full but tokenless; a
+        # re-run minutes later returned 300+300+157 with tokens).
+        self.tokenless_positions = tokenless_positions or set()
         # Live drift (2026-10-01, the 757-item "Cadre" album): Google emits
         # a continuation token even on a SHORT final page; requesting past
         # it answers the null-payload shape.
@@ -96,6 +103,7 @@ class _GoogleRouter:
         self.albums_gets = 0
         self.post_count = 0
         self.nulls_served = 0
+        self.tokenless_served = 0
         self.size_requests: list[tuple[str, str]] = []
         self.last_freq: str | None = None
         self.freq_inners: list[list] = []  # decoded args of every f.req POST
@@ -143,6 +151,13 @@ class _GoogleRouter:
             if self.post_count in self.null_positions:
                 self.nulls_served += 1
                 return httpx.Response(200, text=NULL_PAYLOAD_RESPONSE)
+            if self.post_count in self.tokenless_positions:
+                self.tokenless_served += 1
+                cur = self._pages_served
+                if cur >= len(self.pages):
+                    return httpx.Response(400, text="too many pages requested")
+                return httpx.Response(200, text=_rpc_response(
+                    _rpc_items(cur + 1, self.pages[cur]), None))
             page_idx = self._pages_served
             self._pages_served += 1
             if page_idx >= len(self.pages):
@@ -314,3 +329,77 @@ def test_short_page_is_terminal_even_when_google_mints_a_token():
     assert listing.page_count == 3
     assert router.post_count == 3               # the null page is never requested
     assert router.nulls_served == 0
+
+
+def test_tokenless_full_page_retried_once_same_cursor_then_continues():
+    """2026-10-13 incident shape (a): page 1 of the 757-item album is FULL but
+    carries no continuation token. With expected_count the identical call is
+    re-issued once; the tokened answer continues the walk to the real 757."""
+    router = _GoogleRouter([300, 300, 157], tokenless_positions={1})
+    listing = enumerate_album(_session(router), ALBUM_ID, page_key=PAGE_KEY,
+                              expected_count=757)
+    assert len(listing.items) == 757
+    assert listing.exhausted_cleanly is True
+    assert listing.page_count == 3               # the retry is not a new page
+    assert router.post_count == 4
+    assert router.tokenless_served == 1
+    assert router.freq_inners[0] == router.freq_inners[1]
+
+
+def test_tokenless_full_page_twice_returns_not_exhausted_cleanly():
+    """Incident shape (b): the tokenless full page persists across the single
+    retry and falls far short of expected_count -> the partial listing comes
+    back NOT clean (no raise): gsync's truncated_listing gate names it."""
+    router = _GoogleRouter([300, 300, 157], tokenless_positions={1, 2})
+    listing = enumerate_album(_session(router), ALBUM_ID, page_key=PAGE_KEY,
+                              expected_count=757)
+    assert len(listing.items) == 300
+    assert listing.exhausted_cleanly is False
+    assert router.post_count == 2
+    assert router.tokenless_served == 2
+
+
+def test_tokenless_retry_budget_is_one_per_enumeration():
+    router = _GoogleRouter([300, 300, 157], tokenless_positions={1, 3})
+    listing = enumerate_album(_session(router), ALBUM_ID, page_key=PAGE_KEY,
+                              expected_count=757)
+    assert len(listing.items) == 600
+    assert listing.exhausted_cleanly is False
+    assert router.post_count == 3                # no second retry
+
+
+def test_tokenless_full_page_without_expected_count_keeps_legacy_semantics():
+    router = _GoogleRouter([300, 300, 157], tokenless_positions={1})
+    listing = enumerate_album(_session(router), ALBUM_ID, page_key=PAGE_KEY)
+    assert len(listing.items) == 300
+    assert listing.exhausted_cleanly is True
+    assert router.post_count == 1
+
+
+def test_short_page_stays_terminal_with_expected_count():
+    router = _GoogleRouter([300, 157])
+    listing = enumerate_album(_session(router), ALBUM_ID, page_key=PAGE_KEY,
+                              expected_count=757)
+    assert len(listing.items) == 457
+    assert listing.exhausted_cleanly is True
+    assert router.post_count == 2                # a short page is never retried
+
+
+def test_tokenless_last_full_page_within_video_tolerance_is_clean():
+    """An album of exactly 600 photos + 2 videos (metadata 602) must never be
+    a false truncation: the last full page is legitimately tokenless."""
+    router = _GoogleRouter([300, 300], tokenless_positions={2, 3})
+    listing = enumerate_album(_session(router), ALBUM_ID, page_key=PAGE_KEY,
+                              expected_count=602)
+    assert len(listing.items) == 600
+    assert listing.exhausted_cleanly is True
+    assert router.post_count == 3
+
+
+def test_listing_shortfall_tolerance_values():
+    assert listing_shortfall_tolerance(757) == 16
+    assert listing_shortfall_tolerance(1096) == 22
+    assert listing_shortfall_tolerance(10) == 5
+    assert listing_shortfall_tolerance(250) == 5
+    assert listing_shortfall_tolerance(251) == 6
+    assert listing_shortfall_tolerance(0) == 5

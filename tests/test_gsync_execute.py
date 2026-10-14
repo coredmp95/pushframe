@@ -65,7 +65,10 @@ class _GoogleRouter:
 
     def __init__(self, *, item_bodies: dict[int, bytes] | None = None,
                  fail_downloads: set[int] | None = None,
-                 listing_ns: tuple[int, ...] = (1, 2, 3)):
+                 listing_ns: tuple[int, ...] = (1, 2, 3),
+                 metadata_count: int = 3):
+        self.metadata_count = metadata_count
+        self.rpc_posts = 0
         self.item_bodies = item_bodies or {}
         self.fail_downloads = fail_downloads or set()
         self.listing_ns = listing_ns
@@ -79,7 +82,7 @@ class _GoogleRouter:
             row_id = "AF1QipFAKErow00" + "0" * 30
             key_b64 = "RkFLRVBBR0VLRVkwMDAx"  # b64("FAKEPAGEKEY0001")
             # live-proven row shape: share token sits at index 8, >=9 elements
-            entry = [4, "Cadre", [["2026-01-01"]], 3, 1, key_b64, None, None, ALBUM_ID]
+            entry = [4, "Cadre", [["2026-01-01"]], self.metadata_count, 1, key_b64, None, None, ALBUM_ID]
             card = [row_id, ["https://lh3.example/cover", 100, 100], None, None,
                     {"72930366": entry}]
             ds5 = [[card]]
@@ -88,6 +91,7 @@ class _GoogleRouter:
                     "</body></html>")
             return httpx.Response(200, text=html)
         if request.method == "POST" and "batchexecute" in path:
+            self.rpc_posts += 1
             return httpx.Response(200, text=_snackc_response(None, self.listing_ns))
         if request.method == "GET" and path.endswith("=d"):
             import re as _re
@@ -231,6 +235,29 @@ def _assets_for(n: int, *, hidden: bool = False):
 
 
 # --- tests -----------------------------------------------------------------
+
+def test_tokenless_full_page_twice_fails_loud_before_any_frame_contact(
+        tmp_path, capsys, monkeypatch):
+    """2026-10-13 incident shape (b) end to end: a FULL tokenless page that
+    persists across the single retry while the album metadata says 757 ->
+    exit 1 `NOT exhausted cleanly`, no download, no frame write."""
+    monkeypatch.setattr("pushframe.google.enumerate.PAGE_SIZE", 3)
+    router = _GoogleRouter(metadata_count=757)
+    aura = _FakeAura(_assets_for(3))
+    rc = run_google_sync("Cadre", "Fabrice", apply=True, yes=True,
+                         session=_google_session(router), aura=aura,
+                         s3_client=_FakeS3(), sqs_client=_FakeSQS(),
+                         cache_dir=tmp_path / "cache",
+                         manifest_path=tmp_path / "manifest.json")
+    out = capsys.readouterr().out
+    assert rc == 1
+    assert "google-sync failed: album listing is NOT exhausted cleanly" in out
+    assert "Videos skipped" not in out
+    assert "Plan:" not in out
+    assert router.rpc_posts == 2        # expected_count wired: one retry
+    assert router.download_requests == []
+    assert aura.batch_calls == aura.select_calls == aura.exclude_calls == []
+
 
 def test_dry_run_prints_plan_and_executes_nothing(tmp_path, capsys):
     router = _GoogleRouter()
