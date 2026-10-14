@@ -23,8 +23,18 @@ _DS1_RE = re.compile(r"AF_initDataCallback\(\s*\{\s*key:\s*['\"]ds:1['\"]")
 # ds:N anything else the frontend carries).
 _ANY_DS_RE = re.compile(r"AF_initDataCallback\(\s*\{\s*key:\s*['\"](ds:\d+)['\"]")
 
-# snAcKc continuation cursors: AH_ followed by 40+ URL-safe chars (live-proven).
+# snAcKc continuation cursors: AH_ followed by 40+ URL-safe chars.
+# LEGACY cursor shape (live-proven ~2026-09 to 2026-10-01). Consulted only
+# when the inner payload has no structural inner[2] slot, and matched against
+# whole string values found OUTSIDE media items (never substrings, never item
+# data).
 AH_TOKEN_RE = re.compile(r"AH_[A-Za-z0-9_-]{40,}")
+
+# The structural cursor at inner[2]. Live 2026-10-14 cursors are 226-char
+# `AKFE...` strings; legacy `AH_...` ones are 43+. The 16-4096 bounds are
+# deliberately generous (always used with fullmatch): an out-of-bounds value
+# is a wire drift to fail loud on, not to guess at.
+_CURSOR_RE = re.compile(r"[A-Za-z0-9_-]{16,4096}")
 
 
 class ProbeParseError(RuntimeError):
@@ -185,12 +195,23 @@ def parse_af_initdata(html: str) -> list[dict]:
     return _dedupe(items)
 
 
+def _has_structural_cursor_slot(inner) -> bool:
+    """The live 2026-10-14 inner shape: `[None, <items>, <cursor>, <album
+    meta>, None, <int>]` — a list of >= 3 whose [1] is a list/None and whose
+    [2] is a str/None. (A legacy payload has an item list or nothing there.)"""
+    return (isinstance(inner, list) and len(inner) >= 3
+            and (inner[1] is None or isinstance(inner[1], list))
+            and (inner[2] is None or isinstance(inner[2], str)))
+
+
 @dataclass
 class SnackcPage:
-    """One snAcKc page: walked items + the freshest continuation token.
+    """One snAcKc page: walked items + the continuation cursor.
 
-    `continuation_token is None` means the album is exhausted — no further
-    snAcKc call should be issued (live-proven exhaustion signal).
+    The cursor is the inner payload's structural slot `inner[2]` (an `AKFE...`
+    string since 2026-10-14; `AH_...` before). `continuation_token is None`
+    means the album is exhausted ("" or null at inner[2]) — no further snAcKc
+    call should be issued (live-proven exhaustion signal).
     """
 
     items: list[dict]
@@ -201,8 +222,12 @@ def parse_snackc_payload(payload_str: str | None) -> SnackcPage:
     """Parse one snAcKc `wrb.fr` inner payload string (the wire's JSON-in-JSON).
 
     Runs the same item walker as the share page (the payload's item shape is
-    identical) and pulls the continuation cursor: the LAST AH_ token in the
-    payload is the freshest one (live-proven). No token = album exhausted.
+    identical) and reads the continuation cursor STRUCTURALLY from `inner[2]`
+    (live shape `[None, <items>, <cursor>, <album meta>, None, <int>]`): a
+    non-empty validated string is the cursor, "" / None = album exhausted, a
+    malformed value raises ProbeParseError naming `inner[2]` and the length
+    (never the value). Only when that slot is absent does the legacy AH_
+    fallback apply.
     """
     if not payload_str:
         raise ProbeParseError(
@@ -218,8 +243,23 @@ def parse_snackc_payload(payload_str: str | None) -> SnackcPage:
         ) from exc
     items: list[dict] = []
     _walk_items(inner, items)
-    tokens = AH_TOKEN_RE.findall(payload_str)
-    return SnackcPage(items=_dedupe(items), continuation_token=tokens[-1] if tokens else None)
+    if _has_structural_cursor_slot(inner):
+        raw = inner[2]
+        if not raw:
+            cursor = None  # "" / None = end of the album
+        elif _CURSOR_RE.fullmatch(raw):
+            cursor = raw
+        else:
+            raise ProbeParseError(
+                f"snAcKc continuation cursor at inner[2] has an unexpected "
+                f"shape (length {len(raw)}; expected 16-4096 chars of "
+                f"[A-Za-z0-9_-]) — Google changed the wire format; refusing "
+                f"to guess"
+            )
+    else:
+        tokens = AH_TOKEN_RE.findall(payload_str)
+        cursor = tokens[-1] if tokens else None
+    return SnackcPage(items=_dedupe(items), continuation_token=cursor)
 
 
 @dataclass

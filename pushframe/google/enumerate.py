@@ -6,20 +6,26 @@ phase-16 share-page bootstrap for the linked flow):
 - Batch-1 IS a snAcKc call with a NULL continuation:
   `snAcKc(album_id, null, null, page_key)` answers HTTP 200 with the first
   300 items — the share page is never fetched. (The authenticated share
-  page is an SPA shell: no ds:1 block, no AH_ cursor — the phase-16
+  page is an SPA shell: no ds:1 block, no continuation cursor — the phase-16
   share-page batch-1 only ever worked for the ANONYMOUS flow.)
 - `page_key` (4th argument) is OPTIONAL: a null page_key still answers
   (300 items on the live 1096-item album). The /albums listing carries it,
   so it is sent when known.
-- Continuation: the LAST AH_ token in each payload is the cursor; no token
-  = exhausted. Live proof: 300+300+300+194 = 1094, clean exhaustion.
+- Continuation: the cursor is the snAcKc inner payload's slot inner[2]
+  (live shape `[None, <items>, <cursor>, <album meta>, None, <int>]`) — a
+  226-char `AKFE...` string since 2026-10-14 (previously `AH_...`, still
+  accepted through a legacy fallback when the slot is absent); "" = exhausted.
+  Live proof: 2026-10-14 300+300+157 = 757; earlier 300+300+300+194 = 1094.
 - The album's item-count METADATA (the /albums ds:5 value) can exceed the
   photo count the walker returns (live: 1096 metadata vs 1094 photos — the
   delta matches the album's videos, which the §1b photo walker skips).
   The authoritative photo count is the enumeration's.
 - TOKENLESS FULL PAGE (live incident 2026-10-13): page 1 of the 757-item
   'Cadre' album answered a FULL 300-item page with NO AH_ token; the old
-  loop read that as exhaustion and the plan planned from 300 of 757. A
+  loop read that as exhaustion and the plan planned from 300 of 757. Root
+  cause (found 2026-10-14): the old regex missed the new AKFE cursor, or
+  picked an AH_ substring out of item data (the recurring null-payload
+  errors). The retry and gates below stay as defense in depth. A
   re-run minutes later returned 300+300+157 with tokens — the missing token
   is a transient Google answer. When the caller passes `expected_count`
   (the album metadata count) a tokenless FULL page short of it is re-issued
@@ -196,17 +202,26 @@ def _snackc_page(session, scalars: _SessionScalars, album_id: str,
             )
         return entries
 
-    entries = _snackc_entries(_post())
-    if entries[0].payload is None and _retry_budget["snAcKc_null_payload"] > 0:
-        _retry_budget["snAcKc_null_payload"] -= 1
+    try:
         entries = _snackc_entries(_post())
-    if entries[0].payload is None:
+        if (entries[0].payload is None
+                and _retry_budget["snAcKc_null_payload"] > 0):
+            _retry_budget["snAcKc_null_payload"] -= 1
+            entries = _snackc_entries(_post())
+        if entries[0].payload is None:
+            raise EnumerateError(
+                "snAcKc carries a null inner payload on HTTP 200 (live-observed "
+                "transient); the single bounded retry did not recover it — "
+                "failing loud, never a partial listing"
+            )
+        page = parse_snackc_payload(entries[0].payload)
+    except ProbeParseError as exc:
+        # gsync / cli catch only EnumerateError: a parse failure must be a
+        # named error with a remedy, not a traceback in the scheduled run.
         raise EnumerateError(
-            "snAcKc carries a null inner payload on HTTP 200 (live-observed "
-            "transient); the single bounded retry did not recover it — "
-            "failing loud, never a partial listing"
-        )
-    page = parse_snackc_payload(entries[0].payload)
+            f"snAcKc page could not be parsed: {exc} — failing loud, never "
+            f"a partial listing"
+        ) from exc
     return page.items, page.continuation_token
 
 
@@ -215,8 +230,8 @@ def enumerate_album(session, album_id: str, *, page_key: str | None = None,
                     expected_count: int | None = None) -> AlbumListing:
     """Enumerate EVERY photo of an album (D-06) via the RPC-first protocol:
 
-    batch-1 = snAcKc(album_id, None, None, page_key) → 300 items; swap the
-    LAST AH_ cursor per page until no token, a 0-item page, or a SHORT page
+    batch-1 = snAcKc(album_id, None, None, page_key) → 300 items; follow each
+    page's continuation cursor (inner[2]) until no token, a 0-item page, or a SHORT page
     (< PAGE_SIZE — the live-proven terminal signal, see the loop below).
     Fail-loud on HTTP != 200 or a malformed envelope (never a silent
     partial listing).
