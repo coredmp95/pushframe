@@ -20,6 +20,7 @@ from pushframe.gsync import (  # noqa: E402
     SENTINEL_SUFFIX,
     SafeSyncError,
     build_demand,
+    check_listing_trust,
     default_cache_dir,
     format_noop_message,
     format_plan_report,
@@ -402,3 +403,35 @@ def test_failure_lines_never_print_unsafe_ids():
     assert "(unsafe media id)" in text
     assert "a\nb" not in text
     assert redact_link(_gid(1)) in text
+
+
+# --- wire watch seams (quick-261014-tlx) ---------------------------------------
+
+def test_safe_sync_error_kinds():
+    assert SafeSyncError.empty_listing().kind == "listing:empty"
+    assert SafeSyncError.truncated_listing().kind == "listing:truncated"
+    assert SafeSyncError.listing_below_metadata(3, 757).kind == \
+        "listing:below-metadata"
+    assert SafeSyncError.empty_frame_listing().kind == "frame:empty-listing"
+    assert SafeSyncError.manifest_drift(()).kind == "manifest:drift"
+    assert SafeSyncError("x").kind == "other"
+
+
+def test_pure_half_never_touches_wire_state(tmp_path, monkeypatch):
+    """TLX-4: check_listing_trust / run_google_sync_plan stay pure."""
+    from pushframe.google import wire
+
+    def boom(*a, **k):
+        raise AssertionError("pure half touched the wire state")
+
+    monkeypatch.setattr(wire.WireWatch, "__init__", boom)
+    monkeypatch.setattr(wire, "state_root", boom)
+    check_listing_trust(_listing([_item(1)]), 1)
+    with pytest.raises(SafeSyncError):
+        check_listing_trust(_listing([]), None)
+    listing = _listing([_item(1), _item(2)])
+    plan, failures, videos = run_google_sync_plan(
+        listing, _manifest_for(1, 2),
+        CacheOutcome(), tmp_path / "cache",
+        [_asset(f"frame-{n}", get_md5(f"photo-{n}".encode())) for n in (1, 2)])
+    assert plan.unchanged == 2

@@ -280,3 +280,26 @@ def test_resolve_album_untitled_never_crashes_any_tier():
     cadre = _alb("Cadre", 2)
     assert resolve_album("Cadre", [untitled, cadre]).album is cadre
     assert resolve_album("zzz", [untitled, cadre]).status == "not_found"
+
+
+def test_google_album_enumerate_failure_prints_diagnostics(capsys):
+    """quick-261014-tlx: a snAcKc failure prints the unchanged failure line,
+    then the wire-shape diagnostics block (no last-good line: google-album
+    keeps no state)."""
+    from pushframe.google import wire
+    inner = _router()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "POST":
+            return httpx.Response(500, text="server exploded")
+        return inner(request)
+
+    session = GoogleSession([{"name": "SID", "value": "x",
+                              "domain": ".google.com", "path": "/"}],
+                            transport=httpx.MockTransport(handler))
+    rc = run_google_album("corse", session=session)
+    out = capsys.readouterr().out
+    assert rc == 1
+    assert out.index("google-album failed:") < out.index(wire.DIAGNOSTICS_HEADER)
+    assert "failed: http 500" in out
+    assert "last good run" not in out

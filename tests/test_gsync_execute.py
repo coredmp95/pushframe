@@ -741,3 +741,56 @@ def test_unsaveable_wire_state_never_changes_the_sync(tmp_path, capsys, monkeypa
     out = capsys.readouterr().out
     assert "note: could not save Google wire-format state" in out
     assert "Plan:" in out
+
+
+# --- listing-failure diagnostics (quick-261014-tlx, TLX-2) ---------------------
+
+def _diag_header():
+    from pushframe.google import wire
+    return wire.DIAGNOSTICS_HEADER
+
+
+def test_below_metadata_failure_prints_diagnostics(tmp_path, capsys):
+    assert _dry_run(tmp_path, _GoogleRouter(metadata_count=757)) == 1
+    out = capsys.readouterr().out
+    failed = out.index("google-sync failed: album metadata says 757")
+    assert failed < out.index(_diag_header())
+    assert "  page 1: 3 item(s), cursor legacy:none" in out
+    assert "  album metadata: 757 item(s), listed: 3" in out
+    assert "googleusercontent" not in out
+    assert ALBUM_ID not in out
+
+
+def test_tokenless_twice_failure_diagnostics_show_both_answers(
+        tmp_path, capsys, monkeypatch):
+    monkeypatch.setattr("pushframe.google.enumerate.PAGE_SIZE", 3)
+    assert _dry_run(tmp_path, _GoogleRouter(metadata_count=757)) == 1
+    out = capsys.readouterr().out
+    assert "  page 1: 3 item(s)" in out
+    p2 = next(ln for ln in out.splitlines() if ln.startswith("  page 2:"))
+    assert "tokenless retry" in p2
+
+
+class _Http500Router(_GoogleRouter):
+    def handler(self, request: httpx.Request) -> httpx.Response:
+        if request.method == "POST" and "batchexecute" in request.url.path:
+            return httpx.Response(500, text="server exploded")
+        return super().handler(request)
+
+
+def test_enumerate_failure_prints_diagnostics(tmp_path, capsys):
+    assert _dry_run(tmp_path, _Http500Router()) == 1
+    out = capsys.readouterr().out
+    assert out.index("google-sync failed:") < out.index(_diag_header())
+    assert "failed: http 500" in out
+
+
+def test_frame_side_failure_prints_no_wire_diagnostics(tmp_path, capsys):
+    rc = run_google_sync("Cadre", "Fabrice",
+                         session=_google_session(_GoogleRouter()),
+                         aura=_FakeAura([]), cache_dir=tmp_path / "cache",
+                         manifest_path=tmp_path / "manifest.json")
+    out = capsys.readouterr().out
+    assert rc == 1
+    assert "google-sync failed: frame asset listing is EMPTY" in out
+    assert _diag_header() not in out

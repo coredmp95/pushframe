@@ -519,3 +519,104 @@ def test_listing_fingerprint_comes_from_the_retry_answer():
     listing = enumerate_album(_session(router), ALBUM_ID, page_key=PAGE_KEY,
                               expected_count=757)
     assert listing.fingerprint["cursor"] == "structural:AKFE/len128-255"
+
+
+# --- failure kinds, page traces (quick-261014-tlx, TLX-2) ----------------------
+
+from pushframe.google.enumerate import list_shared_albums  # noqa: E402
+
+_OTHER_RPC_BODY = ")]}'\n\n" + json.dumps(
+    [["wrb.fr", "other", None, None, "generic"]], separators=(",", ":")) + "\n"
+_BAD_CURSOR = "AKFE" + "x" * 40 + "!bad"
+
+
+def _kind_cases():
+    return [
+        ("http", dict(pages=[300], rpc_status=400), {}),
+        ("parse", dict(pages=[300], rpc_body=")]}'\nnot json at all\n"), {}),
+        ("envelope", dict(pages=[300], rpc_body=_OTHER_RPC_BODY), {}),
+        ("null-payload", dict(pages=[300, 300, 157], wire="akfe",
+                              null_positions={1, 2}), {}),
+        ("parse", dict(pages=[300], rpc_body=_rpc_response_akfe(
+            _rpc_items_akfe(1, 300), _BAD_CURSOR)), {}),
+        ("page-cap", dict(pages=[300] * 5), {"max_pages": 2}),
+    ]
+
+
+@pytest.mark.parametrize("kind,router_kw,call_kw", _kind_cases())
+def test_enumerate_error_kinds(kind, router_kw, call_kw):
+    pages = router_kw.pop("pages")
+    router = _GoogleRouter(pages, **router_kw)
+    with pytest.raises(EnumerateError) as exc:
+        enumerate_album(_session(router), ALBUM_ID, page_key=PAGE_KEY, **call_kw)
+    assert exc.value.kind == kind
+
+
+def test_enumerate_error_kind_album_id():
+    with pytest.raises(EnumerateError) as exc:
+        enumerate_album(_session(_GoogleRouter([])), "")
+    assert exc.value.kind == "album-id"
+
+
+def test_enumerate_error_default_kind_and_message_unchanged():
+    err = EnumerateError("boom")
+    assert str(err) == "boom" and err.kind == "other"
+    assert err.pages == [] and err.fingerprint is None
+
+
+def test_list_shared_albums_http_kind():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(500, text="boom")
+    session = GoogleSession(COOKIES, transport=httpx.MockTransport(handler))
+    with pytest.raises(EnumerateError) as exc:
+        list_shared_albums(session)
+    assert exc.value.kind == "albums-http"
+
+
+def test_listing_pages_trace_akfe():
+    router = _GoogleRouter([300, 300, 157], wire="akfe")
+    listing = enumerate_album(_session(router), ALBUM_ID, page_key=PAGE_KEY)
+    assert [(p.post, p.items, p.cursor) for p in listing.pages] == [
+        (1, 300, "structural:AKFE/len128-255"),
+        (2, 300, "structural:AKFE/len128-255"),
+        (3, 157, "structural:end"),
+    ]
+    assert all(p.note == "" for p in listing.pages)
+
+
+def test_listing_pages_trace_null_retry():
+    router = _GoogleRouter([300, 300, 157], wire="akfe", null_positions={2})
+    listing = enumerate_album(_session(router), ALBUM_ID, page_key=PAGE_KEY)
+    assert len(listing.pages) == 4
+    assert listing.pages[1].items == 0 and listing.pages[1].cursor == "-"
+    assert "null payload" in listing.pages[1].note
+    assert listing.pages[2].items == 300
+
+
+def test_listing_pages_trace_tokenless_retry():
+    router = _GoogleRouter([300, 300, 157], wire="akfe", tokenless_positions={1})
+    listing = enumerate_album(_session(router), ALBUM_ID, page_key=PAGE_KEY,
+                              expected_count=757)
+    assert listing.pages[0].items == 300
+    assert listing.pages[0].cursor == "structural:end"
+    assert "tokenless" in listing.pages[1].note
+    assert listing.pages[1].cursor == "structural:AKFE/len128-255"
+
+
+def test_enumerate_error_carries_pages_and_fingerprint():
+    router = _GoogleRouter([300, 300, 157], wire="akfe", null_positions={2, 3})
+    with pytest.raises(EnumerateError) as exc:
+        enumerate_album(_session(router), ALBUM_ID, page_key=PAGE_KEY)
+    assert exc.value.kind == "null-payload"
+    assert exc.value.pages[0].items == 300
+    assert exc.value.pages[-1].note.startswith("failed:")
+    assert exc.value.fingerprint["inner"] == "[null,list,str,list[32-63],null,int]"
+
+
+def test_http_failure_trace_note_names_the_status():
+    router = _GoogleRouter([300], rpc_status=500)
+    with pytest.raises(EnumerateError) as exc:
+        enumerate_album(_session(router), ALBUM_ID, page_key=PAGE_KEY)
+    assert exc.value.pages[-1].note == "failed: http 500"
+    from pushframe.google.enumerate import PageTrace
+    assert isinstance(exc.value.pages[-1], PageTrace)

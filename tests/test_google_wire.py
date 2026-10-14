@@ -223,3 +223,60 @@ def test_watch_disabled():
 def test_report_marker_literal_matches_wire_constant():
     from pushframe import report
     assert wire.FORMAT_CHANGE_MARKER in report._PROBLEM_MARKERS
+
+
+# --- diagnostics (quick-261014-tlx, TLX-2) ------------------------------------
+
+def PageTrace(*args):  # noqa: N802 - lazy so a missing class fails per test
+    from pushframe.google.enumerate import PageTrace as _PageTrace
+    return _PageTrace(*args)
+
+
+FP_B = dict(FP_A, cursor="legacy:AH_/len32-63")
+
+
+def test_format_diagnostics_full():
+    pages = [PageTrace(1, 300, "structural:AKFE/len128-255"),
+             PageTrace(2, 300, "structural:end", "tokenless retry")]
+    lines = wire.format_diagnostics(
+        pages=pages, fingerprint=FP_A, last_good=FP_B,
+        metadata_count=757, listed=300)
+    assert lines[0] == wire.DIAGNOSTICS_HEADER
+    assert "  page 1: 300 item(s), cursor structural:AKFE/len128-255" in lines
+    p2 = next(ln for ln in lines if ln.startswith("  page 2:"))
+    assert p2.endswith("— tokenless retry")
+    assert any(ln.startswith("  fingerprint:") for ln in lines)
+    assert any(ln.startswith("  last good run:") for ln in lines)
+    assert any(ln.startswith("  changed since the last good run: cursor ")
+               for ln in lines)
+    assert ("  album metadata: 757 item(s), listed: 300 "
+            "(shortfall tolerance 16)") in lines
+
+
+def test_format_diagnostics_edges():
+    lines = wire.format_diagnostics(pages=[], fingerprint=None, last_good=None)
+    assert "  pages: none fetched" in lines
+    assert any("(none stored)" in ln for ln in lines)
+    same = wire.format_diagnostics(pages=[], fingerprint=FP_A, last_good=FP_A)
+    assert "  unchanged since the last good run" in same
+    hidden = wire.format_diagnostics(pages=[], fingerprint=FP_A, last_good=FP_B,
+                                     show_last_good=False)
+    assert not any("last good run" in ln for ln in hidden)
+    many = [PageTrace(i, 300, "structural:AKFE/len128-255") for i in range(1, 21)]
+    out = wire.format_diagnostics(pages=many, fingerprint=FP_A)
+    page_lines = [ln for ln in out if ln.startswith("  page ")]
+    assert [int(ln.split(":")[0].split()[1]) for ln in page_lines] == \
+        [1, 2, 3, 4, 5, 6, 16, 17, 18, 19, 20]
+    assert "  … 9 more page(s)" in out
+    assert out.index("  … 9 more page(s)") < out.index(page_lines[6])
+
+
+def test_format_diagnostics_redacts():
+    secret_id = "AF1QipSECRETIDBODY" + "0" * 40
+    cursor = "AKFE" + "CURSORBODYXYZ" * 17
+    lines = wire.format_diagnostics(
+        pages=[PageTrace(1, 0, "-", f"failed: {secret_id} {cursor}")],
+        fingerprint=FP_A)
+    text = "\n".join(lines)
+    assert "SECRETIDBODY" not in text
+    assert "CURSORBODYXYZ" not in text
