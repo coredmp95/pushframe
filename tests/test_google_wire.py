@@ -280,3 +280,83 @@ def test_format_diagnostics_redacts():
     text = "\n".join(lines)
     assert "SECRETIDBODY" not in text
     assert "CURSORBODYXYZ" not in text
+
+
+# --- failure streak (quick-261014-tlx, TLX-3) ---------------------------------
+
+def test_failure_class_mapping():
+    from pushframe.google.enumerate import EnumerateError
+    from pushframe.gsync import SafeSyncError
+    assert wire.failure_class(EnumerateError("x", kind="null-payload")) == \
+        "enumerate:null-payload"
+    assert wire.failure_class(SafeSyncError.truncated_listing()) == "listing:truncated"
+    assert wire.failure_class(SafeSyncError.empty_listing()) == "listing:empty"
+    assert wire.failure_class(SafeSyncError.listing_below_metadata(3, 757)) == \
+        "listing:below-metadata"
+    assert wire.failure_class(SafeSyncError.manifest_drift(())) is None
+    assert wire.failure_class(SafeSyncError.empty_frame_listing()) is None
+    assert wire.failure_class(ValueError()) is None
+
+
+def test_escalation_marker_literal():
+    assert wire.ESCALATION_MARKER == \
+        "probable Google protocol change — pushframe likely needs an update"
+
+
+def test_streak_first_then_escalates(tmp_path):
+    path = _watch_path(tmp_path)
+    first = wire.WireWatch(path).on_failure("listing:truncated", FP_A)
+    assert len(first) == 1
+    assert first[0].startswith('note: first "listing:truncated" failure in a row')
+    assert "may be a transient Google answer" in first[0]
+    second = wire.WireWatch(path).on_failure("listing:truncated", FP_A)
+    assert second[0].startswith(
+        "ATTENTION: probable Google protocol change — pushframe likely needs an update")
+    assert '"listing:truncated" failed 2 runs in a row' in second[0]
+    third = wire.WireWatch(path).on_failure("listing:truncated", FP_A)
+    assert "3 runs in a row" in third[0]
+
+
+def test_streak_class_change_restarts(tmp_path):
+    path = _watch_path(tmp_path)
+    wire.WireWatch(path).on_failure("listing:truncated", FP_A)
+    lines = wire.WireWatch(path).on_failure("listing:below-metadata", FP_A)
+    assert lines[0].startswith('note: first "listing:below-metadata" failure')
+
+
+def test_success_resets_streak(tmp_path):
+    path = _watch_path(tmp_path)
+    wire.WireWatch(path).on_failure("listing:truncated", FP_A)
+    wire.WireWatch(path).on_listing_ok(FP_A)
+    lines = wire.WireWatch(path).on_failure("listing:truncated", FP_A)
+    assert lines[0].startswith('note: first "listing:truncated" failure')
+
+
+def test_failures_never_touch_last_good(tmp_path):
+    path = _watch_path(tmp_path)
+    wire.WireWatch(path).on_listing_ok(FP_A)
+    wire.WireWatch(path).on_failure("listing:truncated", FP_B)
+    lines = wire.WireWatch(path).on_failure("listing:truncated", FP_B)
+    assert wire.WireWatch(path).last_good() == FP_A
+    diff_line = next(ln for ln in lines if ln.startswith(
+        "  wire fingerprint changed since the last good run: cursor "))
+    assert f"{FP_A['cursor']} → {FP_B['cursor']}" in diff_line
+    for same in (FP_A, None):
+        out = wire.WireWatch(path).on_failure("listing:truncated", same)
+        assert not any("wire fingerprint changed" in ln for ln in out)
+
+
+def test_uncounted_failure_is_a_noop(tmp_path):
+    path = _watch_path(tmp_path)
+    assert wire.WireWatch(path).on_failure(None, FP_A) == []
+    assert not path.exists()
+
+
+def test_streak_with_corrupt_state(tmp_path):
+    path = _watch_path(tmp_path)
+    path.parent.mkdir(parents=True)
+    path.write_bytes(b"\xff garbage")
+    lines = wire.WireWatch(path).on_failure("listing:truncated", FP_A)
+    assert lines[0].startswith("note: Google wire-format state")
+    assert any(ln.startswith('note: first "listing:truncated" failure')
+               for ln in lines)

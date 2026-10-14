@@ -898,3 +898,59 @@ def test_subject_format_change_is_attention_at_every_level():
         '[pushframe] nightly: OK — 111 uploaded, 2 hidden, 0 re-shown'
     assert build_subject('nightly', 'INFO', 1, FAIL_OUT + '\n' + WIRE_WARN) == \
         '[pushframe] nightly: FAILED — reading frame assets failed: 401'
+
+
+ESCALATION_OUT = ('ATTENTION: probable Google protocol change — pushframe '
+                  'likely needs an update: "listing:truncated" failed 2 runs '
+                  'in a row for this sync target')
+
+
+def test_error_marker_google_protocol_change():
+    """'ATTENTION: probable Google protocol change — …' — printed by
+    pushframe.google.wire.WireWatch.on_failure on the second consecutive
+    failure of one class."""
+    from pushframe.google import wire
+    from pushframe.report import should_send
+    assert should_send('ERROR', 0, ESCALATION_OUT) is True
+    assert 'probable Google protocol change' in wire.ESCALATION_MARKER
+
+
+def test_subject_escalation_wins_at_every_level():
+    from pushframe.report import build_subject
+    failed = ('google-sync failed: album listing is NOT exhausted cleanly …\n'
+              'Diagnostics (Google wire shape only — no ids, links or titles):\n'
+              + ESCALATION_OUT)
+    for extra in ('', '\n' + WIRE_WARN):
+        for level in ('DEBUG', 'INFO', 'ERROR'):
+            assert build_subject('nightly', level, 1, failed + extra) == (
+                '[pushframe] nightly: FAILED — probable Google protocol '
+                'change — pushframe likely needs an update'), level
+            assert build_subject('nightly', level, 0, failed + extra) == (
+                '[pushframe] nightly: ATTENTION — probable Google protocol '
+                'change — pushframe likely needs an update'), level
+
+
+def test_gsync_report_escalation_email_end_to_end(cfg_path, monkeypatch, capsys):
+    _clean_env(monkeypatch)
+    from pushframe import config_store, report as report_mod
+    config_store.update(report={'to': 'me@example.com',
+                                'smtp_host': 'smtp.example.com'})
+    sent = []
+
+    def fake_send(cfg, subject, body, *, smtp_factory=None):
+        sent.append((cfg['to'], subject, body))
+
+    monkeypatch.setattr(report_mod, 'send', fake_send)
+
+    def fake_run(album_target, frame_arg, **kw):
+        print('google-sync failed: album listing is NOT exhausted cleanly …')
+        print(ESCALATION_OUT)
+        return 1
+
+    monkeypatch.setattr('pushframe.gsync.run_google_sync', fake_run)
+    from pushframe.cli import main
+    rc = main(['google-sync', 'Cadre', '--frame', 'Fabrice',
+               '--report', 'ERROR'])
+    assert rc == 1
+    assert len(sent) == 1
+    assert 'probable Google protocol change' in sent[0][1]

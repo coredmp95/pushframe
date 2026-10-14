@@ -794,3 +794,52 @@ def test_frame_side_failure_prints_no_wire_diagnostics(tmp_path, capsys):
     assert rc == 1
     assert "google-sync failed: frame asset listing is EMPTY" in out
     assert _diag_header() not in out
+
+
+# --- consecutive-failure escalation (quick-261014-tlx, TLX-3) ------------------
+
+ESCALATION = "ATTENTION: probable Google protocol change — pushframe likely needs an update"
+
+
+@pytest.mark.parametrize("scheduled", [False, True])
+def test_two_consecutive_listing_failures_escalate(tmp_path, capsys, scheduled):
+    outs = []
+    for _ in range(2):
+        rc = _dry_run(tmp_path, _GoogleRouter(metadata_count=757),
+                      scheduled=scheduled)
+        assert rc == 1
+        outs.append(capsys.readouterr().out)
+    run1, run2 = outs
+    assert "may be a transient Google answer" in run1
+    assert "probable Google protocol change" not in run1
+    assert ESCALATION in run2
+    assert '"listing:below-metadata" failed 2 runs in a row' in run2
+    for out in outs:
+        failed = out.index("google-sync failed:")
+        assert failed < out.index(_diag_header())
+        tail = out.index("may be a transient") if "may be a transient" in out \
+            else out.index("ATTENTION: probable")
+        assert out.index(_diag_header()) < tail
+
+
+def test_success_between_failures_resets_the_streak(tmp_path, capsys):
+    assert _dry_run(tmp_path, _GoogleRouter(metadata_count=757)) == 1
+    capsys.readouterr()
+    assert _dry_run(tmp_path, _GoogleRouter(metadata_count=3)) == 0
+    capsys.readouterr()
+    assert _dry_run(tmp_path, _GoogleRouter(metadata_count=757)) == 1
+    out = capsys.readouterr().out
+    assert 'note: first "listing:below-metadata" failure in a row' in out
+    assert "probable Google protocol change" not in out
+
+
+def test_frame_side_failure_is_not_counted(tmp_path, capsys):
+    for _ in range(2):
+        rc = run_google_sync("Cadre", "Fabrice",
+                             session=_google_session(_GoogleRouter()),
+                             aura=_FakeAura([]), cache_dir=tmp_path / "cache",
+                             manifest_path=tmp_path / "manifest.json")
+        assert rc == 1
+        out = capsys.readouterr().out
+        assert "failure in a row" not in out
+        assert "probable Google protocol change" not in out
