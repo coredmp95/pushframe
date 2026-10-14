@@ -108,6 +108,16 @@ def test_should_send_contract():
     assert should_send('ERROR', 0, TRIP_OUT) is True   # potential problem
 
 
+def test_listing_below_metadata_failure_is_emailed_with_its_cause():
+    from pushframe.gsync import SafeSyncError
+    from pushframe.report import build_subject, should_send
+    out = "google-sync failed: " + str(SafeSyncError.listing_below_metadata(300, 757))
+    assert should_send('ERROR', 1, out) is True
+    subject = build_subject('Cadre', 'ERROR', 1, out)
+    assert 'FAILED' in subject
+    assert 'album metadata says 757 items' in subject
+
+
 # --- one test per ERROR-level marker (markers mirror gsync.py's prints) ------
 
 def test_error_marker_sync_failed_prefix():

@@ -559,3 +559,53 @@ def test_noop_non_interactive_apply_needs_no_yes(tmp_path, capsys):
     assert rc == 0
     assert "Nothing to do" in out
     assert "--apply requires --yes" not in out
+
+
+@pytest.mark.parametrize("apply,yes,scheduled",
+                         [(False, False, False), (True, True, False),
+                          (True, True, True)])
+def test_listing_below_metadata_fails_loud_in_every_mode(
+        tmp_path, capsys, apply, yes, scheduled):
+    """Incident shape (c): metadata 757 vs a cleanly-exhausted 3-item listing
+    -> exit 1 in EVERY mode, no plan, no videos line, no frame contact."""
+    router = _GoogleRouter(metadata_count=757)
+    aura = _FakeAura(_assets_for(3))
+    kwargs = dict(apply=apply, yes=yes, scheduled=scheduled)
+    if apply:
+        kwargs.update(s3_client=_FakeS3(), sqs_client=_FakeSQS())
+    rc = run_google_sync("Cadre", "Fabrice", session=_google_session(router),
+                         aura=aura, cache_dir=tmp_path / "cache",
+                         manifest_path=tmp_path / "manifest.json", **kwargs)
+    out = capsys.readouterr().out
+    assert rc == 1
+    assert ("google-sync failed: album metadata says 757 items, "
+            "listing returned 3") in out
+    assert "Videos skipped" not in out
+    assert "Plan:" not in out
+    assert "SKIPPED (--scheduled)" not in out
+    assert router.download_requests == []
+    assert aura.batch_calls == aura.select_calls == aura.exclude_calls == []
+
+
+def test_video_delta_within_tolerance_still_plans(tmp_path, capsys):
+    router = _GoogleRouter(metadata_count=5)
+    aura = _FakeAura(_assets_for(3))
+    rc = run_google_sync("Cadre", "Fabrice", session=_google_session(router),
+                         aura=aura, cache_dir=tmp_path / "cache",
+                         manifest_path=tmp_path / "manifest.json")
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "Videos skipped: 2" in out
+    assert "Plan:" in out
+
+
+def test_link_target_borrows_listed_album_metadata(tmp_path, capsys):
+    router = _GoogleRouter(metadata_count=757)
+    aura = _FakeAura(_assets_for(3))
+    rc = run_google_sync(f"https://photos.google.com/share/{ALBUM_ID}", "Fabrice",
+                         session=_google_session(router), aura=aura,
+                         cache_dir=tmp_path / "cache",
+                         manifest_path=tmp_path / "manifest.json")
+    out = capsys.readouterr().out
+    assert rc == 1
+    assert "album metadata says 757 items" in out

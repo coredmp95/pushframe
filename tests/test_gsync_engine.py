@@ -175,6 +175,52 @@ def test_safe01_truncated_listing_aborts():
                              [_asset("f", "m")])
 
 
+def test_safe01_listing_below_metadata_aborts(tmp_path):
+    """2026-10-13 incident shape (c): 300 listed of 757 metadata."""
+    listing = _listing([_item(n) for n in range(1, 301)])
+    with pytest.raises(SafeSyncError) as exc:
+        run_google_sync_plan(listing, GoogleManifest(), CacheOutcome(),
+                             tmp_path, [_asset("f", "m")],
+                             metadata_item_count=757)
+    assert "album metadata says 757 items" in str(exc.value)
+    assert "listing returned 300" in str(exc.value)
+
+
+def test_listing_below_metadata_tolerance_boundary(tmp_path):
+    def run(listed, metadata):
+        items = [_item(n) for n in range(1, listed + 1)]
+        return run_google_sync_plan(
+            _listing(items), _manifest_for(*range(1, listed + 1)),
+            CacheOutcome(), tmp_path / "cache",
+            [_asset("f", "m")], metadata_item_count=metadata)
+
+    run(741, 757)       # delta 16 == tolerance -> plans
+    with pytest.raises(SafeSyncError, match="album metadata says 757"):
+        run(740, 757)
+    run(5, 10)          # floor of 5
+    with pytest.raises(SafeSyncError, match="album metadata says 10"):
+        run(4, 10)
+
+
+def test_listing_below_metadata_ignored_when_unknown_or_listing_larger(tmp_path):
+    run_google_sync_plan(_listing([_item(1)]), _manifest_for(1), CacheOutcome(),
+                         tmp_path, [_asset("f", "m")], metadata_item_count=None)
+    run_google_sync_plan(_listing([_item(n) for n in range(1, 6)]),
+                         _manifest_for(*range(1, 6)), CacheOutcome(),
+                         tmp_path, [_asset("f", "m")], metadata_item_count=3)
+
+
+def test_safe01_gate_order_empty_then_truncated_then_below_metadata(tmp_path):
+    with pytest.raises(SafeSyncError, match="album listing is EMPTY"):
+        run_google_sync_plan(_listing([]), GoogleManifest(), CacheOutcome(),
+                             tmp_path, [_asset("f", "m")],
+                             metadata_item_count=757)
+    with pytest.raises(SafeSyncError, match="NOT exhausted cleanly"):
+        run_google_sync_plan(_listing([_item(1)], exhausted=False),
+                             GoogleManifest(), CacheOutcome(), tmp_path,
+                             [_asset("f", "m")], metadata_item_count=757)
+
+
 def test_safe01_empty_frame_listing_aborts():
     with pytest.raises(SafeSyncError, match="frame asset listing is EMPTY"):
         run_google_sync_plan(_listing([_item(1)]), GoogleManifest(),
