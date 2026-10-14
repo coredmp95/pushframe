@@ -18,7 +18,9 @@ the album LISTING plus the MANIFEST — never from a directory walk of the
 (pruned) cache. A manifest member whose cache file is gone still asserts its
 md5_hash (the manifest MEANS the upload was confirmed, so the frame already
 holds the bytes); its demand entry carries a sentinel path that must never
-enter `to_upload` — if the frame disagrees, that is drift and fails loud.
+enter `to_upload` — if the frame disagrees, that is drift and fails loud
+(this run uploads and hides nothing); an --apply run then forgets the drifted
+manifest entries so the next run re-downloads them.
 """
 from __future__ import annotations
 
@@ -55,13 +57,31 @@ def _threshold() -> float:
 def default_cache_dir(album_share_token: str) -> Path:
     """D-03: staging is per-album, keyed by the album's share token —
     `~/.config/pushframe/google-cache/<share_token>/<google_media_id>`."""
+    from pushframe.google.cache import is_safe_media_id
+    if not is_safe_media_id(album_share_token):
+        raise SafeSyncError(
+            "album share token is not a safe directory name — refusing to "
+            "build a cache path from it"
+        )
     # B1: expand at call time (HOME honoured like utils/settings.py) — a
     # literal `~` Path is relative and would create a `~` dir under the CWD.
     return Path("~/.config/pushframe/google-cache").expanduser() / album_share_token
 
 
+def _gid_label(gid: str) -> str:
+    """Log-safe label for a Google id: redact_link for a safe id, a fixed
+    literal otherwise (redact_link passes non-token strings through raw)."""
+    from pushframe.google.cache import is_safe_media_id
+    return redact_link(gid) if is_safe_media_id(gid) else "(unsafe media id)"
+
+
 class SafeSyncError(RuntimeError):
-    """Named mirror-safety abort (SAFE-01) — never a silent plan."""
+    """Named mirror-safety abort (SAFE-01) — never a silent plan.
+
+    `drifted_ids` is non-empty only for manifest drift: the listing ids whose
+    manifest entry the frame no longer holds (B4: --apply forgets them)."""
+
+    drifted_ids: tuple[str, ...] = ()
 
     @classmethod
     def empty_listing(cls) -> "SafeSyncError":
@@ -101,12 +121,20 @@ class SafeSyncError(RuntimeError):
         )
 
     @classmethod
-    def manifest_drift(cls) -> "SafeSyncError":
-        return cls(
+    def manifest_drift(cls, drifted_ids=()) -> "SafeSyncError":
+        ids = tuple(drifted_ids)
+        labels = ", ".join(_gid_label(g) for g in ids[:10])
+        if len(ids) > 10:
+            labels += f", +{len(ids) - 10} more"
+        plural = "item" if len(ids) == 1 else "items"
+        err = cls(
             "manifest claims an upload was confirmed but the frame reports "
-            "no matching md5_hash (state drift) — the cache was "
-            "pruned on that claim; investigate before re-running (safety gate)"
+            f"no matching md5_hash (state drift) for {len(ids)} {plural}: "
+            f"{labels} — usually the photo was deleted from the frame in the "
+            "Aura app; nothing was uploaded or hidden this run (safety gate)"
         )
+        err.drifted_ids = ids
+        return err
 
 
 def check_listing_trust(listing, metadata_item_count: int | None = None) -> None:
@@ -147,7 +175,8 @@ def build_demand(listing, manifest, staged, cache_dir: Path, *,
       collected in `failures` (SAFE-04: never planned from absent bytes).
 
     This function NEVER walks `cache_dir` — the cache is a staging area, not
-    a source of truth (CSE-03).
+    a source of truth (CSE-03). The sentinel path is fictional: it is never
+    opened, written or unlinked — only its `.name` suffix marks it.
     """
     from pushframe.google.cache import videos_skipped as _videos_skipped
 
@@ -203,8 +232,23 @@ def run_google_sync_plan(listing, manifest, staged, cache_dir: Path,
     # to_upload means the manifest claimed a confirmed upload the frame
     # disputes — the cache was pruned on that claim, so downloading again is
     # the ONLY honest recovery and that decision is not the plan's to make.
-    if any(p.name.endswith(SENTINEL_SUFFIX) for p in plan.to_upload):
-        raise SafeSyncError.manifest_drift()
+    sentinel_uploads = [p for p in plan.to_upload
+                        if p.name.endswith(SENTINEL_SUFFIX)]
+    if sentinel_uploads:
+        # Map back through the demand map (path -> md5), never by parsing
+        # ids out of file names; then every listing item whose manifest
+        # entry carries a drifted md5, in listing order, de-duplicated.
+        path_to_md5 = {p: md5 for md5, paths in demand.items() for p in paths}
+        drifted_md5s = {path_to_md5[p] for p in sentinel_uploads
+                        if p in path_to_md5}
+        drifted_ids: list[str] = []
+        for item in listing.items:
+            entry = manifest.entry_for(item["id"]) if manifest is not None \
+                else None
+            if (entry is not None and entry["md5_hash"] in drifted_md5s
+                    and item["id"] not in drifted_ids):
+                drifted_ids.append(item["id"])
+        raise SafeSyncError.manifest_drift(drifted_ids)
 
     return plan, failures, videos
 
@@ -250,7 +294,7 @@ def format_plan_report(plan, failures: list[tuple[str, str]],
     if failures:
         lines.append(f"Failed downloads ({len(failures)}):")
         for gid, err in failures:
-            lines.append(f"  {redact_link(gid)}: {err}")
+            lines.append(f"  {_gid_label(gid)}: {err}")
 
     staged_by_id = {s["google_media_id"]: s for s in staged.staged} if staged else {}
     if plan.to_upload:
@@ -259,8 +303,23 @@ def format_plan_report(plan, failures: list[tuple[str, str]],
             gid = p.name.removesuffix(SENTINEL_SUFFIX)
             size = staged_by_id.get(gid, {}).get("size_bytes")
             size_s = f"{size:,}" if size is not None else "?"
-            lines.append(f"  {i:4d} | {redact_link(gid)} | {size_s}")
+            lines.append(f"  {i:4d} | {_gid_label(gid)} | {size_s}")
     return "\n".join(lines)
+
+
+def format_drift_remedy(count: int, *, evicted: bool) -> str:
+    """The recovery line printed after a manifest-drift failure. Pure."""
+    entries = "entry" if count == 1 else "entries"
+    if evicted:
+        return (f"Recovery: forgot {count} manifest {entries} for those items "
+                f"\u2014 the next run re-downloads them and re-uploads only "
+                f"what the frame does not hold (additive: nothing is hidden "
+                f"or deleted); re-run google-sync or let the next scheduled "
+                f"run heal it")
+    return (f"Recovery: re-run with --apply to forget those {count} manifest "
+            f"{entries} (this dry-run changed nothing); the run after that "
+            f"re-downloads them and re-uploads only what the frame does not "
+            f"hold")
 
 
 def format_noop_message(plan) -> str:
@@ -531,7 +590,11 @@ def run_google_sync(album_target: str, frame_arg: str, *, apply: bool = False,
 
     # --- downloads (CSE-01: Google side only) + plan (pure half) ---
     manifest = GoogleManifest.load(manifest_path)
-    cdir = Path(cache_dir) if cache_dir else default_cache_dir(album.album_id)
+    try:
+        cdir = Path(cache_dir) if cache_dir else default_cache_dir(album.album_id)
+    except SafeSyncError as e:
+        print(f'google-sync failed: {e}')
+        return 1
     # The bar counts only what can actually download this run — manifest-
     # backed items are skipped entirely (steady state = zero downloads), so
     # a 0/757 bar over the full listing would read like a stalled transfer.
@@ -554,6 +617,17 @@ def run_google_sync(album_target: str, frame_arg: str, *, apply: bool = False,
         )
     except SafeSyncError as e:
         print(f'google-sync failed: {e}')
+        if e.drifted_ids:
+            # B4: local state only, so it runs before any confirmation gate
+            # on purpose — the NEXT run still passes every SAFE gate, the
+            # y/N gate and the write budget before writing anything, and an
+            # already-held md5 is re-recorded without an upload. A dry-run
+            # never mutates.
+            if apply:
+                for gid in e.drifted_ids:
+                    manifest.entries.pop(gid, None)
+                manifest.save(manifest_path)
+            print(format_drift_remedy(len(e.drifted_ids), evicted=apply))
         return 1
 
     print(format_plan_report(plan, failures, videos, staged=staged,

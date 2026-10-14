@@ -15,15 +15,31 @@ Concurrency is confined to this module (D-06 / CSE-01): a bounded worker pool
 over the GoogleSession's httpx client. It imports nothing from the sync/apply
 side of the project and never touches an Aura client, so concurrent code
 structurally cannot reach the frame-write seam.
+
+A Google media id becomes a cache FILE NAME only after `is_safe_media_id`
+passes: an unsafe id (path separators, `..`, control characters, anything
+outside `[A-Za-z0-9_-]{1,255}`) is a per-item failure — never a path to
+write, unlink or prune.
 """
 from __future__ import annotations
 
+import re
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from pushframe.aws.s3client import get_md5
 from pushframe.utils.io import ensure_private_dir, write_private_bytes
+
+
+# Real ids are `AF1Qip` + base64url; 255 is NAME_MAX, the file name's ceiling.
+_SAFE_MEDIA_ID = re.compile(r"[A-Za-z0-9_-]{1,255}")
+
+
+def is_safe_media_id(gid) -> bool:
+    """True when `gid` may be used as a cache file name (fullmatch: `$`
+    would accept a trailing newline)."""
+    return isinstance(gid, str) and _SAFE_MEDIA_ID.fullmatch(gid) is not None
 
 
 class CacheError(RuntimeError):
@@ -58,6 +74,11 @@ def _download_one(session, item: dict, cache_dir: Path,
     guarantees no file was left behind for the failed id.
     """
     google_media_id = item["id"]
+    if not is_safe_media_id(google_media_id):
+        raise ValueError(
+            "unsafe media id (characters outside [A-Za-z0-9_-] or longer than "
+            "255) — refusing to use it as a cache file name; nothing downloaded"
+        )
     resp = session.http.get(f"{item['base_url']}=d")
     if resp.status_code != 200:
         raise RuntimeError(f"=d download returned HTTP {resp.status_code}")
@@ -125,6 +146,8 @@ def download_to_cache(session, listing, cache_dir: Path, *,
         # a failed id must leave NOTHING staged-looking behind (SAFE-04).
         staged_ids = {s["google_media_id"] for s in outcome.staged}
         for google_media_id, _err in outcome.failed:
+            if not is_safe_media_id(google_media_id):
+                continue  # never build a path from an unsafe id
             orphan = cache_dir / google_media_id
             if google_media_id not in staged_ids and orphan.exists():
                 orphan.unlink()
@@ -151,6 +174,8 @@ def prune_cache(cache_dir: Path, manifest_ids: set[str]) -> int:
         return 0
     pruned = 0
     for google_media_id in manifest_ids:
+        if not is_safe_media_id(google_media_id):
+            continue  # never build a path from an unsafe id
         f = cache_dir / google_media_id
         if f.exists():
             f.unlink()
