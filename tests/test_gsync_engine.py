@@ -192,7 +192,9 @@ def test_listing_below_metadata_tolerance_boundary(tmp_path):
         return run_google_sync_plan(
             _listing(items), _manifest_for(*range(1, listed + 1)),
             CacheOutcome(), tmp_path / "cache",
-            [_asset("f", "m")], metadata_item_count=metadata)
+            [_asset(f"frame-{n}", get_md5(f"photo-{n}".encode()))
+             for n in range(1, listed + 1)],
+            metadata_item_count=metadata)
 
     run(741, 757)       # delta 16 == tolerance -> plans
     with pytest.raises(SafeSyncError, match="album metadata says 757"):
@@ -203,11 +205,15 @@ def test_listing_below_metadata_tolerance_boundary(tmp_path):
 
 
 def test_listing_below_metadata_ignored_when_unknown_or_listing_larger(tmp_path):
+    def assets(n):
+        return [_asset(f"frame-{i}", get_md5(f"photo-{i}".encode()))
+                for i in range(1, n + 1)]
+
     run_google_sync_plan(_listing([_item(1)]), _manifest_for(1), CacheOutcome(),
-                         tmp_path, [_asset("f", "m")], metadata_item_count=None)
+                         tmp_path, assets(1), metadata_item_count=None)
     run_google_sync_plan(_listing([_item(n) for n in range(1, 6)]),
                          _manifest_for(*range(1, 6)), CacheOutcome(),
-                         tmp_path, [_asset("f", "m")], metadata_item_count=3)
+                         tmp_path, assets(5), metadata_item_count=3)
 
 
 def test_safe01_gate_order_empty_then_truncated_then_below_metadata(tmp_path):

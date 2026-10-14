@@ -76,7 +76,20 @@ class SafeSyncError(RuntimeError):
         return cls(
             "album listing is NOT exhausted cleanly — a truncated "
             "listing would understate demand and mass-hide the difference; "
-            "refusing to plan (safety gate)"
+            "refusing to plan (safety gate) — usually a transient Google "
+            "answer: nothing was hidden; re-run later"
+        )
+
+    @classmethod
+    def listing_below_metadata(cls, listed: int, expected: int) -> "SafeSyncError":
+        from pushframe.google.enumerate import listing_shortfall_tolerance
+        tolerance = listing_shortfall_tolerance(expected)
+        return cls(
+            f"album metadata says {expected} items, listing returned {listed} "
+            f"\u2014 {expected - listed} missing exceeds the {tolerance}-item "
+            f"video tolerance: a truncated Google answer, NOT videos; "
+            f"refusing to plan (safety gate) \u2014 nothing was hidden; "
+            f"re-run later"
         )
 
     @classmethod
@@ -94,6 +107,26 @@ class SafeSyncError(RuntimeError):
             "no matching md5_hash (state drift) — the cache was "
             "pruned on that claim; investigate before re-running (safety gate)"
         )
+
+
+def check_listing_trust(listing, metadata_item_count: int | None = None) -> None:
+    """The SAFE-01 listing gates, shared by the pure plan and the CLI path.
+
+    Order: empty -> truncated -> below the album metadata count (beyond the
+    video tolerance). Raises a named SafeSyncError; returns None when the
+    listing may be planned from.
+    """
+    from pushframe.google.enumerate import listing_shortfall_tolerance
+
+    if not listing.items:
+        raise SafeSyncError.empty_listing()
+    if getattr(listing, "exhausted_cleanly", None) is not True:
+        raise SafeSyncError.truncated_listing()
+    if (metadata_item_count is not None
+            and metadata_item_count - len(listing.items)
+            > listing_shortfall_tolerance(metadata_item_count)):
+        raise SafeSyncError.listing_below_metadata(
+            len(listing.items), metadata_item_count)
 
 
 def build_demand(listing, manifest, staged, cache_dir: Path, *,
@@ -153,12 +186,10 @@ def run_google_sync_plan(listing, manifest, staged, cache_dir: Path,
 
     Returns (SyncPlan, failures, videos_skipped). Raises a named
     SafeSyncError — never returns a plan — when the listing or the frame
-    asset listing cannot be trusted.
+    asset listing cannot be trusted (empty / truncated / below-metadata
+    listing via check_listing_trust, or an empty frame listing).
     """
-    if not listing.items:
-        raise SafeSyncError.empty_listing()
-    if getattr(listing, "exhausted_cleanly", None) is not True:
-        raise SafeSyncError.truncated_listing()
+    check_listing_trust(listing, metadata_item_count)
     if not frame_assets:
         raise SafeSyncError.empty_frame_listing()
 
@@ -415,6 +446,14 @@ def run_google_sync(album_target: str, frame_arg: str, *, apply: bool = False,
         return 2
     album = resolved.album
     metadata_count = getattr(album, 'item_count', None)
+    if metadata_count is None:
+        # A share-link/id target resolves to an AlbumSummary without metadata;
+        # borrow the count from the listed album with the same id so the
+        # SAFE-01 below-metadata gate cannot be bypassed.
+        metadata_count = next(
+            (a.item_count for a in albums
+             if getattr(a, 'album_id', None) == album.album_id
+             and getattr(a, 'item_count', None) is not None), None)
 
     page_key = None
     if album.share_url and 'key=' in album.share_url:
@@ -428,11 +467,10 @@ def run_google_sync(album_target: str, frame_arg: str, *, apply: bool = False,
         return 1
 
     # SAFE-01 prechecks happen BEFORE any frame contact.
-    if not listing.items:
-        print(f'google-sync failed: {SafeSyncError.empty_listing()}')
-        return 1
-    if listing.exhausted_cleanly is not True:
-        print(f'google-sync failed: {SafeSyncError.truncated_listing()}')
+    try:
+        check_listing_trust(listing, metadata_count)
+    except SafeSyncError as e:
+        print(f'google-sync failed: {e}')
         return 1
 
     # --- frame resolution + asset listing (v2.0 conventions) ---
@@ -505,7 +543,7 @@ def run_google_sync(album_target: str, frame_arg: str, *, apply: bool = False,
     try:
         plan, failures, videos = run_google_sync_plan(
             listing, manifest, staged, cdir, frame_assets,
-            metadata_item_count=album.item_count,
+            metadata_item_count=metadata_count,
         )
     except SafeSyncError as e:
         print(f'google-sync failed: {e}')
