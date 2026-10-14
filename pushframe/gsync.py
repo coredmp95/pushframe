@@ -414,13 +414,15 @@ def run_google_sync(album_target: str, frame_arg: str, *, apply: bool = False,
         _print_album_candidates(albums, numbered=True, show_count=True)
         return 2
     album = resolved.album
+    metadata_count = getattr(album, 'item_count', None)
 
     page_key = None
     if album.share_url and 'key=' in album.share_url:
         page_key = album.share_url.split('key=', 1)[1].split('&', 1)[0] or None
 
     try:
-        listing = enumerate_album(session, album.album_id, page_key=page_key)
+        listing = enumerate_album(session, album.album_id, page_key=page_key,
+                                  expected_count=metadata_count)
     except EnumerateError as e:
         print(f'google-sync failed: {redact_tokens(str(e))}')
         return 1

@@ -16,7 +16,17 @@ phase-16 share-page bootstrap for the linked flow):
 - The album's item-count METADATA (the /albums ds:5 value) can exceed the
   photo count the walker returns (live: 1096 metadata vs 1094 photos — the
   delta matches the album's videos, which the §1b photo walker skips).
-  The authoritative photo count is the enumeration's.- scalars (SNlM0e at-token, FdrFJe f.sid, cfb2h bl) come from the logged-in
+  The authoritative photo count is the enumeration's.
+- TOKENLESS FULL PAGE (live incident 2026-10-13): page 1 of the 757-item
+  'Cadre' album answered a FULL 300-item page with NO AH_ token; the old
+  loop read that as exhaustion and the plan planned from 300 of 757. A
+  re-run minutes later returned 300+300+157 with tokens — the missing token
+  is a transient Google answer. When the caller passes `expected_count`
+  (the album metadata count) a tokenless FULL page short of it is re-issued
+  ONCE (same cursor, one retry per enumeration); if it persists beyond the
+  video tolerance the listing is returned exhausted_cleanly=False so the
+  caller's safety gate refuses it.
+- scalars (SNlM0e at-token, FdrFJe f.sid, cfb2h bl) come from the logged-in
 photos home page; the f.req envelope is TRIPLE-nested (double nesting
 answers HTTP 400 — the phase-16 finding that started this all).
 - ONE bounded retry (post-phase-17 hardening, live smoke 2026-09-28):
@@ -58,6 +68,19 @@ PAGE_SIZE = 300  # live-proven page size
 # page, so the retry re-issues the exact same call (same cursor).
 _retry_budget = {"snAcKc_null_payload": 1}
 
+
+def listing_shortfall_tolerance(expected_count: int) -> int:
+    """How many items a listing may legitimately fall short of the album's
+    metadata count: max(5, ceil(2%)).
+
+    Videos are the only legitimate metadata-vs-listing delta (live album
+    'Nous': 1096 metadata vs 1094 photos); the floor of 5 absorbs small
+    albums. Integer ceil, deliberately no float math. This is the ONE
+    tolerance definition, shared by the enumerator's not-clean decision and
+    gsync's SAFE-01 listing_below_metadata gate.
+    """
+    return max(5, (2 * expected_count + 99) // 100)
+
 # WIZ_global_data scalars on the home page.
 _FSID_RE = _FSID_RE = None  # replaced below (kept name stable for tests)
 _FSID_RE = __import__("re").compile(r'"FdrFJe"\s*:\s*"([^"]+)"')
@@ -72,7 +95,10 @@ class EnumerateError(RuntimeError):
 @dataclass
 class AlbumListing:
     """The complete, exhausted album listing (D-06: every item, disk weight
-    via measure_disk_weight, photo count cross-checkable against the UI)."""
+    via measure_disk_weight, photo count cross-checkable against the UI).
+
+    exhausted_cleanly False also means: the walk stopped on a tokenless FULL
+    page that is short of the caller's expected_count (transient truncation)."""
 
     items: list[dict] = field(default_factory=list)
     page_count: int = 0
@@ -185,7 +211,8 @@ def _snackc_page(session, scalars: _SessionScalars, album_id: str,
 
 
 def enumerate_album(session, album_id: str, *, page_key: str | None = None,
-                    max_pages: int = MAX_PAGES) -> AlbumListing:
+                    max_pages: int = MAX_PAGES,
+                    expected_count: int | None = None) -> AlbumListing:
     """Enumerate EVERY photo of an album (D-06) via the RPC-first protocol:
 
     batch-1 = snAcKc(album_id, None, None, page_key) → 300 items; swap the
@@ -200,6 +227,14 @@ def enumerate_album(session, album_id: str, *, page_key: str | None = None,
 
     A null-payload snAcKc answer on HTTP 200 (live-observed transient) is
     retried once per run with the same cursor — see _snackc_page.
+
+    `expected_count` (opt-in; omitted = legacy semantics) is the album's
+    metadata item count. When given, a FULL page that arrives with no
+    continuation token while the listing is still short of it is re-issued
+    once (same cursor, local one-per-enumeration budget); if it is still
+    tokenless and the shortfall exceeds listing_shortfall_tolerance, the
+    partial listing is returned with exhausted_cleanly=False (no raise —
+    the caller's safety gate names it).
     """
     if not album_id or not isinstance(album_id, str):
         raise EnumerateError("album_id is required — refusing to guess")
@@ -208,6 +243,7 @@ def enumerate_album(session, album_id: str, *, page_key: str | None = None,
 
     listing = AlbumListing(album_id=album_id)
     token: str | None = None
+    tokenless_retries_left = 1  # local: one same-cursor retry per enumeration
     while listing.page_count < max_pages:
         page_items, next_token = _snackc_page(session, scalars, album_id,
                                               page_key, token)
@@ -215,6 +251,25 @@ def enumerate_album(session, album_id: str, *, page_key: str | None = None,
         known = {i["id"] for i in listing.items}
         fresh = [i for i in page_items if i["id"] not in known]
         listing.items.extend(fresh)
+
+        def _tokenless_full_short() -> bool:
+            # PAGE_SIZE is read at call time (tests monkeypatch it).
+            return (next_token is None and bool(page_items)
+                    and len(page_items) >= PAGE_SIZE
+                    and expected_count is not None
+                    and len(listing.items) < expected_count)
+
+        if _tokenless_full_short() and tokenless_retries_left > 0:
+            tokenless_retries_left -= 1
+            page_items, next_token = _snackc_page(session, scalars, album_id,
+                                                  page_key, token)
+            known = {i["id"] for i in listing.items}
+            listing.items.extend(i for i in page_items if i["id"] not in known)
+        if (_tokenless_full_short()
+                and expected_count - len(listing.items)
+                > listing_shortfall_tolerance(expected_count)):
+            listing.exhausted_cleanly = False
+            return listing
         # A SHORT page (< PAGE_SIZE) is the end of the listing — even when
         # Google still mints a continuation token on it. Live drift,
         # 2026-10-01 (the 757-item "Cadre" album: 300+300+157, page 3 short
