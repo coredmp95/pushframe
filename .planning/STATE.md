@@ -6,10 +6,10 @@ current_phase: 25
 current_phase_name: passed
 current_plan: 25-01 complete
 status: Verified — v5.1 phases 23-25 complete
-last_updated: "2026-10-14T19:01:13.598Z"
+last_updated: "2026-10-14T19:53:54.234Z"
 last_activity: 2026-10-14
 last_activity_desc: "Completed quick task 261012-qwv: review quick fixes (B1, B2, S4, S5)"
-state_head: 22062076dc3c4866c1e9e485b7b1e267aa9a1605
+state_head: 7b234a0339616da821f96d58f47d9d7ac6e3a662
 progress:
   total_phases: 3
   completed_phases: 3
@@ -48,5 +48,6 @@ Status: Verified — v5.1 phases 23-25 complete
 | 261014-e77 | Fail loud on truncated Google album listing: tokenless full page retry and metadata count gate | 2026-10-14 | 5445a3d | [261014-e77-fail-loud-on-truncated-google-album-list](./quick/261014-e77-fail-loud-on-truncated-google-album-list/) |
 | 261014-nim | Review hardening batch 2: systemd unit quoting, pair-name and media-id path safety, manifest drift recovery, exact album match | 2026-10-14 | 2c2979a | [261014-nim-review-hardening-batch-2-systemd-unit-qu](./quick/261014-nim-review-hardening-batch-2-systemd-unit-qu/) |
 | 261014-swa | Read the snAcKc continuation cursor structurally (inner[2]) - Google switched from AH_ to AKFE cursors | 2026-10-14 | 2206207 | [261014-swa-read-the-snackc-continuation-cursor-stru](./quick/261014-swa-read-the-snackc-continuation-cursor-stru/) |
+| 261014-tlx | Detect Google wire-format drift: response fingerprint, failure diagnostics in reports, consecutive-failure escalation | 2026-10-14 | 7b234a0 | [261014-tlx-detect-google-wire-format-drift-response](./quick/261014-tlx-detect-google-wire-format-drift-response/) |
 
-Last activity: 2026-10-14 - Completed quick task 261014-swa: Read the snAcKc continuation cursor structurally (inner[2]) - Google switched from AH_ to AKFE cursors
+Last activity: 2026-10-14 - Completed quick task 261014-tlx: Detect Google wire-format drift: response fingerprint, failure diagnostics in reports, consecutive-failure escalation
