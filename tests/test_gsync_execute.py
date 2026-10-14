@@ -56,6 +56,17 @@ def _snackc_response(next_token: str | None, ns: tuple[int, ...] = (1, 2, 3)) ->
     return ")]}'\n\n" + line + "\n"
 
 
+def _snackc_response_akfe(ns: tuple[int, ...] = (1, 2, 3)) -> str:
+    """Live 2026-10-14 inner: [None, items, "" (end), META, None, n]."""
+    items = [_rpc_item(n) for n in ns]
+    meta = ["FAKE album"] + [None] * 41
+    inner = json.dumps([None, items, "", meta, None, len(items)],
+                       separators=(",", ":"))
+    line = json.dumps([["wrb.fr", "snAcKc", inner, None, None, None, "generic"]],
+                      separators=(",", ":"))
+    return ")]}'\n\n" + line + "\n"
+
+
 class _GoogleRouter:
     """Album listing (ds:5, one 'Cadre'-like album) + batch-1 snAcKc + =d.
 
@@ -66,7 +77,8 @@ class _GoogleRouter:
     def __init__(self, *, item_bodies: dict[int, bytes] | None = None,
                  fail_downloads: set[int] | None = None,
                  listing_ns: tuple[int, ...] = (1, 2, 3),
-                 metadata_count: int = 3):
+                 metadata_count: int = 3, wire: str = "legacy"):
+        self.wire = wire  # "legacy" ([[items]]) | "akfe" (inner[2] cursor)
         self.metadata_count = metadata_count
         self.rpc_posts = 0
         self.item_bodies = item_bodies or {}
@@ -92,6 +104,8 @@ class _GoogleRouter:
             return httpx.Response(200, text=html)
         if request.method == "POST" and "batchexecute" in path:
             self.rpc_posts += 1
+            if self.wire == "akfe":
+                return httpx.Response(200, text=_snackc_response_akfe(self.listing_ns))
             return httpx.Response(200, text=_snackc_response(None, self.listing_ns))
         if request.method == "GET" and path.endswith("=d"):
             import re as _re
@@ -676,3 +690,54 @@ def test_manifest_drift_self_heals_over_two_apply_runs(tmp_path, capsys):
     assert "FAKE000002" in router.download_requests[0]
     assert "Applied: 1 uploaded" in out
     assert _gid(2) in _entries(mpath)
+
+
+# --- wire fingerprint (quick-261014-tlx, TLX-1) -------------------------------
+
+WIRE_WARNING = "WARNING: Google response format changed"
+
+
+def _dry_run(tmp_path, router, **kw):
+    return run_google_sync("Cadre", "Fabrice", session=_google_session(router),
+                           aura=_FakeAura(_assets_for(1)),
+                           cache_dir=tmp_path / "cache",
+                           manifest_path=tmp_path / "manifest.json", **kw)
+
+
+def test_wire_fingerprint_silent_first_then_warns_once(tmp_path, capsys):
+    from pushframe.google import wire
+    assert _dry_run(tmp_path, _GoogleRouter()) == 0
+    out = capsys.readouterr().out
+    assert WIRE_WARNING not in out
+    files = list((wire.state_root() / "google-wire").glob("album-*.json"))
+    assert len(files) == 1
+    assert (files[0].stat().st_mode & 0o777) == 0o600
+
+    assert _dry_run(tmp_path, _GoogleRouter(wire="akfe")) == 0
+    out = capsys.readouterr().out
+    warn_lines = [ln for ln in out.splitlines() if ln.startswith(WIRE_WARNING)]
+    assert len(warn_lines) == 1 and "inner" in warn_lines[0]
+    assert "Plan:" in out and out.index(WIRE_WARNING) < out.index("Plan:")
+
+    assert _dry_run(tmp_path, _GoogleRouter(wire="akfe")) == 0
+    assert WIRE_WARNING not in capsys.readouterr().out
+
+
+def test_failing_listing_stores_no_fingerprint(tmp_path, capsys):
+    from pushframe.google import wire
+    assert _dry_run(tmp_path, _GoogleRouter(metadata_count=757)) == 1
+    files = list((wire.state_root() / "google-wire").glob("album-*.json")) \
+        if (wire.state_root() / "google-wire").exists() else []
+    for f in files:
+        assert not json.loads(f.read_text()).get("fingerprint")
+
+
+def test_unsaveable_wire_state_never_changes_the_sync(tmp_path, capsys, monkeypatch):
+    from pushframe.google import wire
+    blocker = tmp_path / "blocker"
+    blocker.write_text("a file, not a dir")
+    monkeypatch.setattr(wire, "STATE_ROOT_OVERRIDE", blocker / "sub")
+    assert _dry_run(tmp_path, _GoogleRouter()) == 0
+    out = capsys.readouterr().out
+    assert "note: could not save Google wire-format state" in out
+    assert "Plan:" in out

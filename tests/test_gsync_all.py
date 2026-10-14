@@ -303,3 +303,18 @@ def test_live_all_refuses_same_frame_pairs_before_any_network(
     assert calls == [], (
         "the same-frame guard fired AFTER real network calls — it must "
         "refuse before any pair touches the network:\n" + "\n".join(calls))
+
+
+def test_pair_run_keeps_wire_state_in_the_pair_dir(tmp_path, cfg_path):
+    from pushframe.google import wire
+    from pushframe.gsync import run_google_sync
+    _pair("cadre-venus", "Cadre", "Cadre de Fabrice")
+    rc = run_google_sync("Cadre", "Cadre de Fabrice",
+                         session=_google_session(_GoogleRouter()),
+                         aura=_FakeAura(_assets_for(1)),
+                         pair="cadre-venus")
+    assert rc == 0
+    root = wire.state_root()
+    assert (root / "pairs" / "cadre-venus" / "google-wire.json").exists()
+    assert not list((root / "google-wire").glob("album-*.json")) \
+        if (root / "google-wire").exists() else True

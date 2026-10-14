@@ -486,3 +486,36 @@ def test_enumerate_malformed_cursor_is_a_named_enumerate_error():
     with pytest.raises(EnumerateError, match=r"inner\[2\]") as exc:
         enumerate_album(_session(router), ALBUM_ID, page_key=PAGE_KEY)
     assert bad not in str(exc.value)
+
+
+# --- wire fingerprint (quick-261014-tlx, TLX-1) -------------------------------
+
+def test_listing_fingerprint_akfe():
+    router = _GoogleRouter([300, 300, 157], wire="akfe")
+    listing = enumerate_album(_session(router), ALBUM_ID, page_key=PAGE_KEY)
+    assert listing.fingerprint == {
+        "inner": "[null,list,str,list[32-63],null,int]",
+        "item": "[str,[str,int,int],int]",
+        "cursor": "structural:AKFE/len128-255",
+    }
+
+
+def test_listing_fingerprint_legacy():
+    router = _GoogleRouter([300, 300, 194])
+    listing = enumerate_album(_session(router), ALBUM_ID, page_key=PAGE_KEY)
+    assert listing.fingerprint["inner"] == "[list,list[1]]"
+    assert listing.fingerprint["cursor"] == "legacy:AH_/len32-63"
+
+
+def test_listing_fingerprint_short_single_page_has_no_cursor():
+    router = _GoogleRouter([157], wire="akfe")
+    listing = enumerate_album(_session(router), ALBUM_ID, page_key=PAGE_KEY)
+    assert listing.fingerprint["cursor"] is None
+    assert listing.fingerprint["inner"] == "[null,list,str,list[32-63],null,int]"
+
+
+def test_listing_fingerprint_comes_from_the_retry_answer():
+    router = _GoogleRouter([300, 300, 157], wire="akfe", tokenless_positions={1})
+    listing = enumerate_album(_session(router), ALBUM_ID, page_key=PAGE_KEY,
+                              expected_count=757)
+    assert listing.fingerprint["cursor"] == "structural:AKFE/len128-255"

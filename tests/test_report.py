@@ -871,3 +871,30 @@ def test_send_port_465_passes_a_verified_context_to_smtp_ssl():
     assert not [c for c in calls if c[0] == 'starttls']
     assert [c for c in calls if c[0] == 'login']
     assert [c for c in calls if c[0] == 'send']
+
+
+# --- Google wire-format watch (quick-261014-tlx) -----------------------------
+
+WIRE_WARN = ('WARNING: Google response format changed: inner a → b — the '
+             'listing still passed every safety gate; check for a pushframe '
+             'update: https://example.invalid')
+
+
+def test_error_marker_google_format_change():
+    """'WARNING: Google response format changed: …' — printed by
+    pushframe.google.wire.WireWatch.on_listing_ok even when the run succeeds."""
+    from pushframe.google import wire
+    from pushframe.report import should_send
+    assert should_send('ERROR', 0, WIRE_WARN + '\n' + HIDE_OUT) is True
+    assert wire.FORMAT_CHANGE_MARKER in WIRE_WARN
+
+
+def test_subject_format_change_is_attention_at_every_level():
+    from pushframe.report import build_subject
+    for level in ('DEBUG', 'INFO', 'ERROR'):
+        subject = build_subject('nightly', level, 0, WIRE_WARN + '\n' + HIDE_OUT)
+        assert 'ATTENTION — Google response format changed' in subject, level
+    assert build_subject('nightly', 'INFO', 0, HIDE_OUT) == \
+        '[pushframe] nightly: OK — 111 uploaded, 2 hidden, 0 re-shown'
+    assert build_subject('nightly', 'INFO', 1, FAIL_OUT + '\n' + WIRE_WARN) == \
+        '[pushframe] nightly: FAILED — reading frame assets failed: 401'
