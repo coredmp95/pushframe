@@ -156,7 +156,9 @@ def test_run_reconcile_ambiguous_name_lists_candidates_and_returns_1(monkeypatch
 
     aura = offline_aura(overrides={'/v5/frames.json': _frames_response(kitchen, kitchen_upstairs)})
 
-    rc = run_reconcile('kitchen', aura=aura)
+    # an exact name ("kitchen") now resolves; "kitch" keeps this test on
+    # the ambiguous branch (substring-only, two candidates).
+    rc = run_reconcile('kitch', aura=aura)
 
     assert rc == 1
     out = capsys.readouterr().out

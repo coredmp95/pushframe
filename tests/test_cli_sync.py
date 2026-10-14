@@ -165,7 +165,9 @@ def test_sync_ambiguous_name_returns_1(tmp_path, monkeypatch, capsys):
         '/v5/frames.json': httpx.Response(200, json={'frames': [kitchen, kitchen_upstairs]}),
     })
 
-    rc = run_sync(str(tmp_path), 'kitchen', aura=aura)
+    # an exact name ("kitchen") now resolves; "kitch" keeps this test on
+    # the ambiguous branch (substring-only, two candidates).
+    rc = run_sync(str(tmp_path), 'kitch', aura=aura)
 
     assert rc == 1
     out = capsys.readouterr().out

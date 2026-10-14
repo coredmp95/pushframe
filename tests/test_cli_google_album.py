@@ -244,3 +244,39 @@ def test_google_album_without_vault_fails_cleanly(monkeypatch, capsys):
     rc = run_google_album("anything")  # no session injected; vault absent
     assert rc == 1
     assert "google-album failed" in capsys.readouterr().out
+
+
+# --- quick-261014-nim (NIM-B5): exact name beats substring --------------------
+
+def _alb(title, n=1):
+    return AlbumSummary(album_id=f"AF1QipFAKEexact{n:02d}" + "0" * 30,
+                        title=title, item_count=1)
+
+
+def test_resolve_album_exact_name_beats_longer_substring():
+    cadre, longer = _alb("Cadre", 1), _alb("Cadre 2025", 2)
+    r = resolve_album("Cadre", [cadre, longer])
+    assert r.status == "resolved" and r.album is cadre
+    r = resolve_album("cadre", [cadre, longer])
+    assert r.status == "resolved" and r.album is cadre
+
+
+def test_resolve_album_case_sensitive_exact_tier_first():
+    upper, lower, longer = _alb("Cadre", 1), _alb("cadre", 2), _alb("Cadre 2025", 3)
+    r = resolve_album("Cadre", [upper, lower, longer])
+    assert r.status == "resolved" and r.album is upper
+    r = resolve_album("CADRE", [upper, lower, longer])
+    assert r.status == "ambiguous" and r.candidates == [upper, lower]
+
+
+def test_resolve_album_tie_inside_a_tier_is_ambiguous():
+    a, b = _alb("Cadre", 1), _alb("Cadre", 2)
+    r = resolve_album("Cadre", [a, b, _alb("Cadre 2025", 3)])
+    assert r.status == "ambiguous" and r.candidates == [a, b]
+
+
+def test_resolve_album_untitled_never_crashes_any_tier():
+    untitled = AlbumSummary(album_id=ALBUM_ID_1, title=None, item_count=1)
+    cadre = _alb("Cadre", 2)
+    assert resolve_album("Cadre", [untitled, cadre]).album is cadre
+    assert resolve_album("zzz", [untitled, cadre]).status == "not_found"

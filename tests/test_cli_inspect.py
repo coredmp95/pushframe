@@ -104,7 +104,9 @@ def test_inspect_ambiguous_name_lists_names_and_ids(monkeypatch, capsys):
         '/v5/frames.json': _frames_response(kitchen, kitchen_upstairs),
     })
 
-    rc = run_inspect('kitchen', aura=aura)
+    # an exact name ("kitchen") now resolves; "kitch" keeps this test on
+    # the ambiguous branch (substring-only, two candidates).
+    rc = run_inspect('kitch', aura=aura)
 
     assert rc == 1
     out = capsys.readouterr().out
@@ -193,3 +195,45 @@ def test_inspect_quiet_by_default_suppresses_verbose_stderr(monkeypatch, capsys)
     # not reach stderr by default (this is the RED assertion pre-fix).
     assert 'request to' not in captured.err
     assert 'Response (' not in captured.err
+
+
+# --- quick-261014-nim (NIM-B5): exact frame name beats substring --------------
+
+def _fr(name, id_):
+    from types import SimpleNamespace
+    return SimpleNamespace(name=name, id=id_)
+
+
+def test_resolve_frame_exact_name_beats_substring():
+    from pushframe.cli import resolve_frame
+    kitchen, upstairs = _fr('Kitchen', 'f1'), _fr('Kitchen 2 Upstairs', 'f2')
+    r = resolve_frame('Kitchen', [kitchen, upstairs])
+    assert r.status == 'resolved' and r.frame is kitchen
+    r = resolve_frame('kitchen', [kitchen, upstairs])
+    assert r.status == 'resolved' and r.frame is kitchen
+
+
+def test_resolve_frame_substring_ambiguous_never_falls_back_to_id():
+    from pushframe.cli import resolve_frame
+    kitchen, upstairs = _fr('Kitchen', 'f1'), _fr('Kitchen 2 Upstairs', 'f2')
+    r = resolve_frame('kitch', [kitchen, upstairs])
+    assert r.status == 'ambiguous' and r.candidates == [kitchen, upstairs]
+    # the target is also an exact id of a third frame: still no id fallback
+    third = _fr('Other', 'kitch')
+    r = resolve_frame('kitch', [kitchen, upstairs, third])
+    assert r.status == 'ambiguous'
+
+
+def test_resolve_frame_id_fallback_and_ties():
+    from pushframe.cli import resolve_frame
+    a, b = _fr('Salon', 'id-a'), _fr('Cuisine', 'id-b')
+    assert resolve_frame('id-b', [a, b]).frame is b
+    assert resolve_frame('nothing', [a, b]).status == 'not_found'
+    upper, lower = _fr('Cadre', '1'), _fr('cadre', '2')
+    longer = _fr('Cadre 2025', '3')
+    assert resolve_frame('Cadre', [upper, lower, longer]).frame is upper
+    r = resolve_frame('CADRE', [upper, lower, longer])
+    assert r.status == 'ambiguous' and r.candidates == [upper, lower]
+    twin1, twin2 = _fr('Cadre', '1'), _fr('Cadre', '2')
+    r = resolve_frame('Cadre', [twin1, twin2])
+    assert r.status == 'ambiguous' and r.candidates == [twin1, twin2]
