@@ -67,6 +67,12 @@ _PROBLEM_MARKERS = (
     # (period, no colon) is a deliberate operator decline at a
     # confirmation: NOT a problem — and it does not contain this marker.
     'Aborted:',
+    # 'WARNING: Google response format changed: …' — printed by
+    # pushframe.google.wire.WireWatch.on_listing_ok when the privacy-safe
+    # wire fingerprint differs from the last good run. The run may well have
+    # succeeded (exit 0): the operator must still hear about a silent Google
+    # protocol change.
+    'WARNING: Google response format changed',
 )
 
 _USAGE = (
@@ -140,6 +146,9 @@ def _first_line(output: str, prefixes: tuple[str, ...]) -> str:
 
 def build_subject(tag: str | None, level: str, rc: int, output: str) -> str:
     prefix = f'[pushframe] {tag}: ' if tag else '[pushframe] '
+    if rc == 0 and 'WARNING: Google response format changed' in output:
+        return (f'{prefix}ATTENTION — Google response format changed '
+                f'(check for a pushframe update)')
     if rc != 0 or level == 'ERROR':
         status = 'FAILED' if rc != 0 else 'ATTENTION'
         detail = (_first_line(output, ('google-sync failed:', 'failed:',

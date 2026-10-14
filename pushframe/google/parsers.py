@@ -164,6 +164,86 @@ def _is_media_item(node) -> bool:
             and node[1][0].startswith("http"))
 
 
+# --- wire fingerprint (quick-261014-tlx) --------------------------------------
+# Privacy-safe STRUCTURAL description of a Google answer: value kinds, a
+# collapsed `item+` run and power-of-two length buckets only. Never an id, URL,
+# title or cursor body (a cursor contributes at most its first 4 characters).
+# Google's jspb arrays trim trailing nulls, so exact lengths would churn;
+# lists holding media items carry no length at all (page sizes vary).
+
+def _len_bucket(n: int) -> str:
+    """Power-of-two length bucket: 0 -> "0", 1 -> "1", 42 -> "32-63"."""
+    if n <= 0:
+        return "0"
+    if n == 1:
+        return "1"
+    lo = 1 << (n.bit_length() - 1)
+    return f"{lo}-{2 * lo - 1}"
+
+
+def _kind(node) -> str:
+    if node is None:
+        return "null"
+    if isinstance(node, bool):
+        return "bool"
+    if isinstance(node, int):
+        return "int"
+    if isinstance(node, float):
+        return "float"
+    if isinstance(node, str):
+        return "str"
+    if isinstance(node, dict):
+        return "dict"
+    if isinstance(node, list):
+        if _is_media_item(node):
+            return "item"
+        if any(_is_media_item(child) for child in node):
+            return "list"
+        return f"list[{_len_bucket(len(node))}]"
+    return "other"
+
+
+def wire_shape(node) -> str:
+    """Top-level shape of `node`: a list renders its children's kinds with a
+    run of media items collapsed to `item+`; anything else renders its kind."""
+    if not isinstance(node, list) or _is_media_item(node):
+        return _kind(node)
+    tokens: list[str] = []
+    for child in node:
+        kind = _kind(child)
+        if kind == "item":
+            if tokens and tokens[-1] == "item+":
+                continue
+            tokens.append("item+")
+        else:
+            tokens.append(kind)
+    return "[" + ",".join(tokens) + "]"
+
+
+def media_item_shape(node) -> str | None:
+    """Slot kinds of the FIRST media item (depth-first, the `_walk_items`
+    order): `[k0,[b0,b1,b2],k2]`; None when the payload holds no item."""
+    if not isinstance(node, list):
+        return None
+    if _is_media_item(node):
+        base = node[1]
+        slots = ",".join(_kind(base[i]) if i < len(base) else "-"
+                         for i in range(3))
+        return f"[{_kind(node[0])},[{slots}],{_kind(node[2])}]"
+    for child in node:
+        found = media_item_shape(child)
+        if found is not None:
+            return found
+    return None
+
+
+def cursor_signature(raw: str) -> str:
+    """`<prefix>/len<bucket>` of an already-validated cursor: `AH_` for a
+    legacy cursor, else its first 4 characters (e.g. `AKFE`)."""
+    prefix = "AH_" if raw.startswith("AH_") else raw[:4]
+    return f"{prefix}/len{_len_bucket(len(raw))}"
+
+
 def _legacy_cursor(node) -> str | None:
     """LAST whole-string AH_ cursor in the parsed payload, never descending
     into a media-item node (item data may carry AH_-looking strings)."""
@@ -239,6 +319,11 @@ class SnackcPage:
 
     items: list[dict]
     continuation_token: str | None
+    # Wire fingerprint (quick-261014-tlx): defaulted so positional
+    # construction `SnackcPage(items, token)` keeps working.
+    inner_shape: str | None = None
+    item_shape: str | None = None
+    cursor_shape: str = "legacy:none"
 
 
 def parse_snackc_payload(payload_str: str | None) -> SnackcPage:
@@ -270,8 +355,10 @@ def parse_snackc_payload(payload_str: str | None) -> SnackcPage:
         raw = inner[2]
         if not raw:
             cursor = None  # "" / None = end of the album
+            cursor_shape = "structural:end"
         elif _CURSOR_RE.fullmatch(raw):
             cursor = raw
+            cursor_shape = f"structural:{cursor_signature(raw)}"
         else:
             raise ProbeParseError(
                 f"snAcKc continuation cursor at inner[2] has an unexpected "
@@ -281,7 +368,12 @@ def parse_snackc_payload(payload_str: str | None) -> SnackcPage:
             )
     else:
         cursor = _legacy_cursor(inner)
-    return SnackcPage(items=_dedupe(items), continuation_token=cursor)
+        cursor_shape = (f"legacy:{cursor_signature(cursor)}" if cursor
+                        else "legacy:none")
+    return SnackcPage(items=_dedupe(items), continuation_token=cursor,
+                      inner_shape=wire_shape(inner),
+                      item_shape=media_item_shape(inner),
+                      cursor_shape=cursor_shape)
 
 
 @dataclass
@@ -342,6 +434,7 @@ class AlbumSummary:
     title: str | None
     share_url: str | None = None
     item_count: int | None = None
+    row_shape: str | None = None  # wire fingerprint: `row[<len bucket>]`
 
 
 def _walk_album_summaries(node, out):
@@ -376,6 +469,7 @@ def _walk_album_summaries(node, out):
                         item_count=entry[3],
                         share_url=(f"https://photos.google.com/share/{entry[8]}"
                                    f"?key={_decode_page_key(entry[5])}"),
+                        row_shape=f"row[{_len_bucket(len(entry))}]",
                     ))
         return
     for child in node:

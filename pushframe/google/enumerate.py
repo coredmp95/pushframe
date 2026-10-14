@@ -41,6 +41,12 @@ entry whose inner payload is null. The exact call is re-issued once
 (same cursor — a null answer consumed no page); a null again fails
 loud. The budget is one retry per enumeration, not per page.
 
+- Wire fingerprint (quick-261014-tlx): the FINAL page-1 answer (after any null
+  or tokenless retry) is reduced to a privacy-safe structural fingerprint on
+  `AlbumListing.fingerprint` (inner shape, cursor path/prefix/length bucket —
+  only for a FULL page 1 —, first item's slot kinds). pushframe.google.wire
+  stores it per sync target and warns when it changes.
+
 Fail-loud discipline (T-17-02): HTTP != 200, a malformed envelope, a
 persisting null payload or a page-cap overrun raises — never a silent
 partial listing.
@@ -55,6 +61,7 @@ import httpx
 
 from pushframe.google.parsers import (
     ProbeParseError,
+    SnackcPage,
     parse_batchexecute,
     parse_snackc_payload,
 )
@@ -110,6 +117,9 @@ class AlbumListing:
     page_count: int = 0
     exhausted_cleanly: bool = False
     album_id: str | None = None
+    # Privacy-safe wire fingerprint of the final page-1 answer (see wire.py);
+    # keys inner / cursor / item, None values when not observable.
+    fingerprint: dict | None = None
 
     @property
     def total_bytes(self) -> int:
@@ -162,8 +172,9 @@ def _rpc_headers(session) -> dict[str, str]:
 
 def _snackc_page(session, scalars: _SessionScalars, album_id: str,
                  page_key: str | None,
-                 continuation_token: str | None) -> tuple[list[dict], str | None]:
-    """Issue ONE snAcKc batchexecute call; return (items, next_token_or_None).
+                 continuation_token: str | None) -> SnackcPage:
+    """Issue ONE snAcKc batchexecute call; return the parsed SnackcPage
+    (`.items`, `.continuation_token` — None = exhausted — and wire shapes).
 
     continuation_token=None is the live-proven batch-1 form. A null inner
     payload on HTTP 200 (live-observed transient) is retried exactly once
@@ -222,7 +233,7 @@ def _snackc_page(session, scalars: _SessionScalars, album_id: str,
             f"snAcKc page could not be parsed: {exc} — failing loud, never "
             f"a partial listing"
         ) from exc
-    return page.items, page.continuation_token
+    return page
 
 
 def enumerate_album(session, album_id: str, *, page_key: str | None = None,
@@ -260,8 +271,8 @@ def enumerate_album(session, album_id: str, *, page_key: str | None = None,
     token: str | None = None
     tokenless_retries_left = 1  # local: one same-cursor retry per enumeration
     while listing.page_count < max_pages:
-        page_items, next_token = _snackc_page(session, scalars, album_id,
-                                              page_key, token)
+        page = _snackc_page(session, scalars, album_id, page_key, token)
+        page_items, next_token = page.items, page.continuation_token
         listing.page_count += 1
         known = {i["id"] for i in listing.items}
         fresh = [i for i in page_items if i["id"] not in known]
@@ -276,10 +287,20 @@ def enumerate_album(session, album_id: str, *, page_key: str | None = None,
 
         if _tokenless_full_short() and tokenless_retries_left > 0:
             tokenless_retries_left -= 1
-            page_items, next_token = _snackc_page(session, scalars, album_id,
-                                                  page_key, token)
+            page = _snackc_page(session, scalars, album_id, page_key, token)
+            page_items, next_token = page.items, page.continuation_token
             known = {i["id"] for i in listing.items}
             listing.items.extend(i for i in page_items if i["id"] not in known)
+        if listing.page_count == 1:
+            # The FINAL page-1 answer (after any null / tokenless retry). A
+            # cursor is only expected on a FULL page: a short single page
+            # legitimately has none, so it is not part of the fingerprint.
+            listing.fingerprint = {
+                "inner": page.inner_shape,
+                "item": page.item_shape,
+                "cursor": (page.cursor_shape
+                           if len(page_items) >= PAGE_SIZE else None),
+            }
         if (_tokenless_full_short()
                 and expected_count - len(listing.items)
                 > listing_shortfall_tolerance(expected_count)):

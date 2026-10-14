@@ -340,6 +340,21 @@ def format_noop_message(plan) -> str:
             f'managed by the mirror, so the frame is not an exact copy of the album.')
 
 
+def _run_fingerprint(listing, album, albums) -> dict:
+    """The run's wire fingerprint: the listing's (inner / cursor / item) plus
+    the resolved /albums ds:5 row length bucket, borrowed from the listed
+    album with the same id when the resolved one (a share link) lacks it."""
+    fp = dict(getattr(listing, 'fingerprint', None) or {})
+    row_shape = getattr(album, 'row_shape', None)
+    if row_shape is None:
+        row_shape = next(
+            (a.row_shape for a in albums or ()
+             if getattr(a, 'album_id', None) == getattr(album, 'album_id', None)
+             and getattr(a, 'row_shape', None) is not None), None)
+    fp['albums'] = row_shape
+    return fp
+
+
 def run_google_sync(album_target: str, frame_arg: str, *, apply: bool = False,
                     yes: bool = False, debug: bool = False, session=None,
                     aura=None, s3_client=None, sqs_client=None, budget=None,
@@ -348,7 +363,7 @@ def run_google_sync(album_target: str, frame_arg: str, *, apply: bool = False,
                     list_shared=None, cache_dir=None, vault_path=None,
                     manifest_path=None, batch_size: int | None = None,
                     pair: str | None = None, run_all: bool = False,
-                    scheduled: bool = False) -> int:
+                    scheduled: bool = False, wire_state_path=None) -> int:
     """`pair=` selects a named pair (album+frame from the config store, state
     sharded under the pair name); `run_all=True` runs every configured pair
     with ONE shared budget (MTF-03), recording per-pair outcomes and NEVER
@@ -382,6 +397,7 @@ def run_google_sync(album_target: str, frame_arg: str, *, apply: bool = False,
         enumerate_album,
         list_shared_albums,
     )
+    from pushframe.google import wire
     from pushframe.google.redaction import redact_tokens
     from pushframe.google.vault import CookieVaultError
     from pushframe.cli import _print_album_candidates, resolve_album, resolve_frame
@@ -460,7 +476,8 @@ def run_google_sync(album_target: str, frame_arg: str, *, apply: bool = False,
                                  cache_dir=str(c_path),
                                  manifest_path=m_path,
                                  batch_size=batch_size,
-                                 scheduled=scheduled)
+                                 scheduled=scheduled,
+                                 wire_state_path=wire.state_path_for(pair=name))
             results.append((name, rc))
         failed = [n for n, rc in results if rc != 0]
         print('--- --all report ---')
@@ -471,6 +488,12 @@ def run_google_sync(album_target: str, frame_arg: str, *, apply: bool = False,
         # handled above only when run_all=True; a literal '--all' frame name
         # without the flag is a user mistake — keep it explicit:
         pass
+
+    # Wire-format watch (quick-261014-tlx): per-pair state file in pair mode
+    # (forwarded by the loop above), else keyed by the album target.
+    if wire_state_path is None:
+        wire_state_path = wire.state_path_for(album_target=album_target)
+    watch = wire.WireWatch(wire_state_path)
 
     if session is None:
         # PRF-01 (phase 24): the vault preflight BEFORE any work — named,
@@ -538,6 +561,12 @@ def run_google_sync(album_target: str, frame_arg: str, *, apply: bool = False,
     except SafeSyncError as e:
         print(f'google-sync failed: {e}')
         return 1
+
+    # The listing passed every SAFE-01 gate: fingerprint the Google wire and
+    # warn once if it changed since the last good run (advisory — it never
+    # changes the exit code).
+    for line in watch.on_listing_ok(_run_fingerprint(listing, album, albums)):
+        print(line)
 
     # --- frame resolution + asset listing (v2.0 conventions) ---
     if aura is None:

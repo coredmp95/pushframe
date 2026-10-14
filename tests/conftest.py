@@ -110,3 +110,15 @@ def _restore_umask():
         yield
     finally:
         os.umask(old)
+
+
+# ---------------------------------------------------------------------------
+# Google wire-format watch (quick-261014-tlx): no test may read or write the
+# real ~/.local/state/pushframe, and no wire state may leak between tests.
+# ---------------------------------------------------------------------------
+@pytest.fixture(autouse=True)
+def _isolate_google_wire_state(monkeypatch, tmp_path_factory):
+    from pushframe.google import wire
+
+    monkeypatch.setattr(wire, 'STATE_ROOT_OVERRIDE',
+                        tmp_path_factory.mktemp('wire-state'))
