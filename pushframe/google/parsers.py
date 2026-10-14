@@ -154,16 +154,39 @@ def _parse_array_literal(literal: str, *, key: str = "ds:1") -> list:
     return parsed
 
 
+def _is_media_item(node) -> bool:
+    """The §1b media-item shape: [mediaItemId, [baseUrl, width, height, ...],
+    uploadTimestampMs, ...] with an AF1Qip id and an http base URL."""
+    return (isinstance(node, list) and len(node) >= 3
+            and isinstance(node[0], str) and node[0].startswith("AF1Qip")
+            and isinstance(node[1], list) and bool(node[1])
+            and isinstance(node[1][0], str)
+            and node[1][0].startswith("http"))
+
+
+def _legacy_cursor(node) -> str | None:
+    """LAST whole-string AH_ cursor in the parsed payload, never descending
+    into a media-item node (item data may carry AH_-looking strings)."""
+    found: list[str] = []
+
+    def _walk(n) -> None:
+        if isinstance(n, str):
+            if AH_TOKEN_RE.fullmatch(n) and _CURSOR_RE.fullmatch(n):
+                found.append(n)
+        elif isinstance(n, list) and not _is_media_item(n):
+            for child in n:
+                _walk(child)
+
+    _walk(node)
+    return found[-1] if found else None
+
+
 def _walk_items(node, items):
     """Depth-first walk collecting media items with the §1b structure:
     [mediaItemId, [baseUrl, width, height, ...], uploadTimestampMs, ...]."""
     if not isinstance(node, list):
         return
-    if (len(node) >= 3 and isinstance(node[0], str)
-            and node[0].startswith("AF1Qip")
-            and isinstance(node[1], list) and node[1]
-            and isinstance(node[1][0], str)
-            and node[1][0].startswith("http")):
+    if _is_media_item(node):
         base = node[1]
         items.append({
             "id": node[0],
@@ -257,8 +280,7 @@ def parse_snackc_payload(payload_str: str | None) -> SnackcPage:
                 f"to guess"
             )
     else:
-        tokens = AH_TOKEN_RE.findall(payload_str)
-        cursor = tokens[-1] if tokens else None
+        cursor = _legacy_cursor(inner)
     return SnackcPage(items=_dedupe(items), continuation_token=cursor)
 
 

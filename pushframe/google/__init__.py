@@ -8,8 +8,9 @@ production shape:
   boundary carried over verbatim), with the harvesting browser's UA;
 - parsers (`parsers`) — share-page ds:1 and snAcKc RPC payloads (shared §1b
   item shape), batchexecute envelope splitting, fail-loud everywhere;
-- enumeration (`enumerate`) — the snAcKc continuation loop (300/page, AH_
-  token swap, clean exhaustion) and the disk-weight measurer (1-byte Range
+- enumeration (`enumerate`) — the snAcKc continuation loop (300/page,
+  structural inner[2] cursor — AKFE... live since 2026-10-14, legacy AH_...
+  fallback — clean exhaustion) and the disk-weight measurer (1-byte Range
   GETs → Content-Range totals);
 - redaction (`redaction`) — every printable URL goes through the helpers.
 
