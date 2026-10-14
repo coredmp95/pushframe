@@ -214,3 +214,50 @@ def test_cache_module_has_no_aura_side_imports():
             imported.add(node.module)
     for banned in ("pushframe.sync", "pushframe.cli", "pushframe.aura"):
         assert not any(m == banned or m.startswith(banned + ".") for m in imported), banned
+
+
+# --- quick-261014-nim (NIM-S3): media ids never become unsafe paths ----------
+
+_UNSAFE_IDS = ["../victim", "a/b", "..", "", "x" * 256, "idé"]
+
+
+def test_unsafe_media_id_is_a_per_item_failure_never_a_path(tmp_path):
+    victim = tmp_path / "victim"
+    victim.write_bytes(b"keep")
+    router = _Router()
+    items = [_item(1)] + [{**_item(10 + k), "id": bad}
+                          for k, bad in enumerate(_UNSAFE_IDS)]
+    outcome = download_to_cache(_Session(router.handler), _listing(items),
+                                tmp_path / "cache")
+    assert [s["google_media_id"] for s in outcome.staged] == [_item(1)["id"]]
+    assert sorted(g for g, _ in outcome.failed) == sorted(_UNSAFE_IDS)
+    for gid, err in outcome.failed:
+        assert "unsafe media id" in err
+        if gid:
+            assert gid not in err
+    assert len(router.requests) == 1 and router.requests[0].endswith("=d")
+    assert victim.read_bytes() == b"keep"
+    assert {p.name for p in tmp_path.iterdir()} == {"cache", "victim"}
+    assert [p.name for p in (tmp_path / "cache").iterdir()] == [_item(1)["id"]]
+
+
+def test_prune_skips_unsafe_ids(tmp_path):
+    victim = tmp_path / "victim"
+    victim.write_bytes(b"keep")
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    gid = _item(1)["id"]
+    (cache / gid).write_bytes(b"x")
+    assert prune_cache(cache, {"../victim", gid}) == 1
+    assert victim.read_bytes() == b"keep"
+    assert not (cache / gid).exists()
+
+
+def test_real_shape_ids_are_safe():
+    from pushframe.google.cache import is_safe_media_id
+    assert is_safe_media_id(_item(1)["id"])
+    assert is_safe_media_id("AF1Qip" + "A" * 38)
+    assert is_safe_media_id("AF1Qip" + "-_" * 20)
+    assert not is_safe_media_id(None)
+    assert not is_safe_media_id(123)
+    assert not is_safe_media_id("a\nb")

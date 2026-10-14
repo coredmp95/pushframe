@@ -609,3 +609,70 @@ def test_link_target_borrows_listed_album_metadata(tmp_path, capsys):
     out = capsys.readouterr().out
     assert rc == 1
     assert "album metadata says 757 items" in out
+
+
+def _entries(mpath):
+    from pushframe.google.manifest import GoogleManifest
+    return GoogleManifest.load(mpath).entries
+
+
+def test_manifest_drift_self_heals_over_two_apply_runs(tmp_path, capsys):
+    """NIM-B4: photo deleted on the frame -> drift fails loud (dry-run says
+    what --apply would do and changes nothing; --apply forgets exactly the
+    drifted entry); the NEXT --apply run re-downloads and re-uploads it."""
+    mpath = tmp_path / "manifest.json"
+    common = dict(s3_client=_FakeS3(), sqs_client=_FakeSQS(),
+                  cache_dir=tmp_path / "cache", manifest_path=mpath)
+    bodies = {1: _jpeg(1), 2: _jpeg(2), 3: _jpeg(3)}
+    # run 1: frame holds all three -> manifest records them, rc 0
+    rc = run_google_sync("Cadre", "Fabrice", apply=True, yes=True,
+                         session=_google_session(
+                             _GoogleRouter(item_bodies=bodies)),
+                         aura=_FakeAura(_assets_for(3)), **common)
+    assert rc == 0
+    assert set(_entries(mpath)) == {
+        _gid(1), _gid(2), _gid(3)}
+    capsys.readouterr()
+
+    # the user deletes photo 2 in the Aura app
+    def _frame_without_2():
+        return _FakeAura([a for a in _assets_for(3) if a.id != "frame-2"])
+
+    # run 2: dry-run -> rc 1, named, manifest byte-identical
+    snapshot = mpath.read_bytes()
+    aura = _frame_without_2()
+    rc = run_google_sync("Cadre", "Fabrice", apply=False,
+                         session=_google_session(
+                             _GoogleRouter(item_bodies=bodies)),
+                         aura=aura, **common)
+    out = capsys.readouterr().out
+    assert rc == 1
+    assert "state drift" in out and "1 item" in out and "--apply" in out
+    assert mpath.read_bytes() == snapshot
+    assert aura.batch_calls == []
+
+    # run 3: --apply forgets exactly that entry (0600), no frame write
+    aura = _frame_without_2()
+    rc = run_google_sync("Cadre", "Fabrice", apply=True, yes=True,
+                         session=_google_session(
+                             _GoogleRouter(item_bodies=bodies)),
+                         aura=aura, **common)
+    out = capsys.readouterr().out
+    assert rc == 1
+    assert "forgot 1" in out
+    assert set(_entries(mpath)) == {_gid(1), _gid(3)}
+    assert (mpath.stat().st_mode & 0o777) == 0o600
+    assert aura.batch_calls == aura.select_calls == aura.exclude_calls == []
+
+    # run 4: the next --apply run re-downloads item 2 only and re-uploads it
+    router = _GoogleRouter(item_bodies=bodies)
+    aura = _frame_without_2()
+    rc = run_google_sync("Cadre", "Fabrice", apply=True, yes=True,
+                         session=_google_session(router), aura=aura,
+                         **common)
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert len(router.download_requests) == 1
+    assert "FAKE000002" in router.download_requests[0]
+    assert "Applied: 1 uploaded" in out
+    assert _gid(2) in _entries(mpath)

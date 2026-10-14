@@ -345,3 +345,60 @@ def test_noop_message_does_not_claim_a_perfect_mirror_when_unmanaged():
     assert msg.startswith("Nothing to do")
     assert "already mirrors" not in msg
     assert "2" in msg and "NOT managed by the mirror" in msg
+
+
+# --- quick-261014-nim (NIM-S3 / NIM-B4) --------------------------------------
+
+def test_manifest_drift_names_items_and_carries_ids(tmp_path):
+    from pushframe.google.redaction import redact_link
+    listing = _listing([_item(1), _item(2), _item(3)])
+    manifest = _manifest_for(1, 2, 3)
+    before = dict(manifest.entries)
+    frame_assets = [_asset(f"frame-{n}", get_md5(f"photo-{n}".encode()))
+                    for n in (1, 3)]
+    with pytest.raises(SafeSyncError) as exc:
+        run_google_sync_plan(listing, manifest, CacheOutcome(), tmp_path,
+                             frame_assets)
+    e = exc.value
+    assert e.drifted_ids == (_gid(2),)
+    assert str(e).startswith("manifest claims an upload")
+    assert "1 item" in str(e) and redact_link(_gid(2)) in str(e)
+    assert _gid(2) not in str(e)
+    assert manifest.entries == before          # the pure half never mutates
+    # two drifted items -> both, in listing order
+    with pytest.raises(SafeSyncError) as exc:
+        run_google_sync_plan(listing, manifest, CacheOutcome(), tmp_path,
+                             [frame_assets[0]])
+    assert exc.value.drifted_ids == (_gid(2), _gid(3))
+
+
+def test_other_safe_sync_errors_have_no_drift_ids():
+    with pytest.raises(SafeSyncError) as exc:
+        run_google_sync_plan(_listing([]), GoogleManifest(), CacheOutcome(),
+                             Path("/tmp"), [_asset("f", "m")])
+    assert exc.value.drifted_ids == ()
+
+
+def test_format_drift_remedy_wording():
+    from pushframe.gsync import format_drift_remedy
+    text = format_drift_remedy(2, evicted=True)
+    assert "forgot 2" in text and "re-download" in text
+    assert "re-upload" in text and "nothing is hidden or deleted" in text
+    text = format_drift_remedy(1, evicted=False)
+    assert "--apply" in text and "this dry-run changed nothing" in text
+
+
+def test_default_cache_dir_refuses_unsafe_token():
+    for bad in ("../x", "a/b"):
+        with pytest.raises(SafeSyncError):
+            default_cache_dir(bad)
+
+
+def test_failure_lines_never_print_unsafe_ids():
+    from pushframe.google.redaction import redact_link
+    plan = compute_plan({}, [_asset("f", "m")])
+    text = format_plan_report(plan, [("a\nb", "boom"), (_gid(1), "bang")],
+                              None)
+    assert "(unsafe media id)" in text
+    assert "a\nb" not in text
+    assert redact_link(_gid(1)) in text
