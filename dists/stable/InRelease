@@ -1,0 +1,25 @@
+-----BEGIN PGP SIGNED MESSAGE-----
+Hash: SHA512
+
+Origin: pushframe
+Label: pushframe
+Suite: stable
+Codename: stable
+Architectures: amd64
+Components: main
+Description: unofficial pushframe CLI repository (not affiliated with Aura Frames Inc.)
+Date: Wed, 14 Oct 2026 19:56:44 UTC
+SHA256:
+ ae1a519cc472a4372e08b5527746dc15cc614699e2a9cae47e81397406cd76fc 1122 main/binary-amd64/Packages
+ 3ba769b830edff30a190f7b75a509ee88466a9a9f54cf747366c26dcebde1b0a 729 main/binary-amd64/Packages.gz
+-----BEGIN PGP SIGNATURE-----
+
+iQEzBAEBCgAdFiEEDuLbLbE2DFjEsuC/LsBoKPci85EFAmrP3n0ACgkQLsBoKPci
+85HPxgf7BWR8MrgiNlspCWycC1i82CYbTOBChUMWAbOHNYHVT5wA7N881priN7rH
+cMeEE3uG7Ij2qyAZXWGj8+Vv5nnZPm5FGNwqBArxDePcd7N39Ic2knmBg6CTDpEX
+efxjFEjqQydnLOJoHQpQIB+nmJWlg4xso4Ql4BnJ/JkihZGsxNmWa1MbOEgadvcC
++HOM9x1JpCiatzcQkXos1vYaXq1xzTY3lmO9QxDfQrIL98FsImcTziUc8tVqe4qG
+YWqCQs1gDFoxbgA3rmjERYzAQ46AhpjkXSPgB+Fej2q824fxOMQx2TwXD6Jr0k15
+Isgk7G0CcE91YgPXZ8iJ2wae9q7pKA==
+=iUvU
+-----END PGP SIGNATURE-----

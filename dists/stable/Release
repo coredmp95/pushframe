@@ -1,0 +1,11 @@
+Origin: pushframe
+Label: pushframe
+Suite: stable
+Codename: stable
+Architectures: amd64
+Components: main
+Description: unofficial pushframe CLI repository (not affiliated with Aura Frames Inc.)
+Date: Wed, 14 Oct 2026 19:56:44 UTC
+SHA256:
+ ae1a519cc472a4372e08b5527746dc15cc614699e2a9cae47e81397406cd76fc 1122 main/binary-amd64/Packages
+ 3ba769b830edff30a190f7b75a509ee88466a9a9f54cf747366c26dcebde1b0a 729 main/binary-amd64/Packages.gz
