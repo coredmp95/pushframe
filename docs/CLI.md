@@ -305,12 +305,17 @@ The levels, everywhere the same contract:
 |---|---|
 | `--report DEBUG` | **every run**, full run output **plus the last 100 lines of the run's log file** — for when something is not quite right and you need precise traces |
 | `--report INFO` | **every run**, the summary: plan counts, `Applied: …`, per-pair sections — knowing what happened (frames synced, photos, actions) |
-| `--report ERROR` | **only when a run failed or carries a potential problem** — precisely: any non-zero exit, `upload(s) FAILED` (partial uploads, retried next run), a `[FAILED]` pair in an `--all` report, `download(s) failed` (SAFE-04), the scheduled mass-hide `SKIPPED (--scheduled)`, the anti-abuse `google-sync stopped:`, an over-threshold plan actually applied (`⚠ …`), or `Aborted: <error>` (a rate-limit abort — NOT the plain `Aborted.` of an operator declining a confirmation, which emails nothing) |
+| `--report ERROR` | **only when a run failed or carries a potential problem** — precisely: any non-zero exit, `upload(s) FAILED` (partial uploads, retried next run), a `[FAILED]` pair in an `--all` report, `download(s) failed` (SAFE-04), the scheduled mass-hide `SKIPPED (--scheduled)`, the anti-abuse `google-sync stopped:`, an over-threshold plan actually applied (`⚠ …`), `Aborted: <error>` (a rate-limit abort — NOT the plain `Aborted.` of an operator declining a confirmation, which emails nothing), `WARNING: Google response format changed` (the wire-format watch saw Google change its answers), or `probable Google protocol change` (the same Google listing failure twice in a row) |
 
 The subject names the outcome at a glance: `[pushframe] nightly: OK — Applied:
 111 uploaded, 2 hidden, 0 re-shown`, `[pushframe] nightly: FAILED — …reason…`,
 `[pushframe] nightly: ATTENTION — …skip reason…` on an ERROR-level problem
-with exit 0. The SMTP settings live in the config file (`0600`; the password
+with exit 0. Two Google wire-format subjects apply at **every** level:
+`ATTENTION — Google response format changed (check for a pushframe update)`
+(exit 0, the listing still passed every safety gate) and
+`FAILED — probable Google protocol change — pushframe likely needs an update`
+(the same Google listing failure twice in a row; `ATTENTION` instead of
+`FAILED` on exit 0). The SMTP settings live in the config file (`0600`; the password
 is prompted hidden, or `PUSHFRAME_SMTP_PASSWORD`). A delivery problem is
 printed as a warning and never changes the run's exit code — and a run with
 nothing to do simply emails `OK — nothing to do` at DEBUG/INFO.
@@ -984,6 +989,16 @@ album (…)` — no confirmation, no write calls, and no `--yes` needed even
 non-interactively. Downloads follow the same rule: every album item the
 manifest already covers is skipped entirely, so a steady-state run
 transfers zero photos.
+
+**Wire-format watch.** Every run fingerprints the structure of Google's
+answers (value kinds and length buckets only — never ids, links or titles),
+keeps the last good fingerprint per pair/album, and prints one
+`WARNING: Google response format changed: …` line when it changes. A Google
+listing failure prints a `Diagnostics (Google wire shape only …)` block, and
+the same failure twice in a row prints `ATTENTION: probable Google protocol
+change — pushframe likely needs an update`. All of it is advisory (exit codes,
+safety gates and retries are unchanged) and is reported by `--report`; see
+[ERRORS.md](ERRORS.md) for every line.
 
 ## Choosing between `sync` and `push`
 
