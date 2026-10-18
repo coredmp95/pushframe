@@ -1493,11 +1493,22 @@ def run_google_album(target: str, *, debug: bool = False, session=None,
         if listed:
             page_key = listed.share_url.split('key=', 1)[1].split('&', 1)[0] or None
 
+    seen_photos = [0]
+
+    def _page_progress(page_number: int, count: int) -> None:
+        # One line per listing page (venus silence fix, 261018-eh2): a
+        # 1094-item album otherwise hides minutes of healthy paging behind
+        # one silent wait after the Album: header.
+        seen_photos[0] += count
+        print(f'listing page {page_number}: '
+              f'{count} photos ({seen_photos[0]} total)', flush=True)
+
     print(f'Album: {album.title or "(untitled)"} '
           f'(id shape: {redact_link(album.album_id)})')
 
     try:
-        listing = enumerate_album(session, album.album_id, page_key=page_key)
+        listing = enumerate_album(session, album.album_id, page_key=page_key,
+                                  progress=_page_progress)
     except EnumerateError as e:
         print(f'google-album failed: {redact_tokens(str(e))}')
         # Wire-shape diagnostics (no ids/links/titles). google-album keeps no
@@ -1511,7 +1522,7 @@ def run_google_album(target: str, *, debug: bool = False, session=None,
         return 1
 
     base_urls = [i['base_url'] for i in listing.items]
-    sizes = measure_disk_weight(session, base_urls)
+    sizes = measure_disk_weight(session, base_urls, show_progress=True)
     for item, size in zip(listing.items, sizes):
         item['bytes'] = size
     total = sum(sizes)

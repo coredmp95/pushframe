@@ -294,6 +294,35 @@ def test_measure_disk_weight_zero_when_no_size_headers():
     assert measure_disk_weight(session, ["https://lh3.example/pw/FAKEnoheader"]) == [0]
 
 
+def test_enumerate_album_progress_callback_fires_per_page():
+    """The venus silence fix (261018-eh2): progress receives ONE record per
+    completed page, in POST order, carrying (post#, item count). Retries
+    (null/tokenless) are part of the PageTrace the callback already sees.
+    Default (no callback) changes nothing — the other tests prove that."""
+    router = _GoogleRouter([300, 300, 194])
+    seen: list[tuple[int, int]] = []
+    listing = enumerate_album(_session(router), ALBUM_ID, page_key=PAGE_KEY,
+                              progress=lambda n, count: seen.append((n, count)))
+    assert len(listing.items) == 794
+    assert seen == [(1, 300), (2, 300), (3, 194)]
+
+
+def test_measure_disk_weight_show_progress_writes_tqdm_bar(capsys):
+    """show_progress=True wraps the per-item loop in tqdm (dep already in
+    pyproject, unused on this path until the venus silence). The bar must
+    appear on stderr and the exact sizes must be unchanged. (The final
+    100% frame only renders on a real tty — non-tty capture keeps the
+    first frame, so the assertion is on the bar itself.)"""
+    router = _GoogleRouter([])
+    session = _session(router)
+    base_urls = [f"https://lh3.googleusercontent.com/pw/FAKEi{i:06d}"
+                 for i in (1, 2, 3)]
+    sizes = measure_disk_weight(session, base_urls, show_progress=True)
+    assert sizes == [1007, 2007, 3007]
+    err = capsys.readouterr().err
+    assert 'Disk weight' in err
+
+
 def test_null_payload_retried_once_same_cursor_then_recovers():
     """The live-observed transient (2026-09-28 smoke): HTTP 200 carrying a
     well-formed wrb.fr/snAcKc entry whose payload is null. The client re-issues

@@ -189,6 +189,19 @@ def test_google_album_verbose_prints_per_item_table(capsys, monkeypatch):
     assert out.count("AF1Qip…") >= 10  # one line per item, all 10 present
 
 
+def test_google_album_prints_per_page_progress_lines(capsys, monkeypatch):
+    """The venus silence fix (261018-eh2): the operator must SEE the listing
+    advancing — one line per snAcKc page with the running item count —
+    before the long silent disk-weight phase (whose bar goes to stderr)."""
+    monkeypatch.setattr(_enum, "PAGE_SIZE", 5)
+    rc = run_google_album("corse", session=_session())
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "page 1:" in out and "page 2:" in out
+    assert "5 photos (5 total)" in out      # per-page line: fresh + running total
+    assert "5 photos (10 total)" in out     # page 2: 5 fresh, 10 total so far
+
+
 def test_google_album_ambiguous_prints_numbered_and_exits_2(capsys):
     rc = run_google_album("vacances", session=_session())
     assert rc == 2

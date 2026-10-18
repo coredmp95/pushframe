@@ -54,6 +54,7 @@ partial listing.
 from __future__ import annotations
 
 import json
+import sys
 from dataclasses import dataclass, field
 from urllib.parse import quote
 
@@ -286,7 +287,8 @@ def _snackc_page(session, scalars: _SessionScalars, album_id: str,
 
 def enumerate_album(session, album_id: str, *, page_key: str | None = None,
                     max_pages: int = MAX_PAGES,
-                    expected_count: int | None = None) -> AlbumListing:
+                    expected_count: int | None = None,
+                    progress=None) -> AlbumListing:
     """Enumerate EVERY photo of an album (D-06) via the RPC-first protocol:
 
     batch-1 = snAcKc(album_id, None, None, page_key) → 300 items; follow each
@@ -309,6 +311,11 @@ def enumerate_album(session, album_id: str, *, page_key: str | None = None,
     tokenless and the shortfall exceeds listing_shortfall_tolerance, the
     partial listing is returned with exhausted_cleanly=False (no raise —
     the caller's safety gate names it).
+
+    `progress` (opt-in, venus silence fix 261018-eh2) receives ONE call per
+    completed page with `(page_number, item_count)`, in POST order, including
+    pages served through the bounded retries — callers print it (the CLI) or
+    ignore it (scheduled runs pass nothing and behave byte-identically).
     """
     if not album_id or not isinstance(album_id, str):
         raise EnumerateError("album_id is required — refusing to guess",
@@ -317,7 +324,8 @@ def enumerate_album(session, album_id: str, *, page_key: str | None = None,
     try:
         return _enumerate_pages(session, album_id, listing, page_key=page_key,
                                 max_pages=max_pages,
-                                expected_count=expected_count)
+                                expected_count=expected_count,
+                                progress=progress)
     except EnumerateError as exc:
         # Hand the wire trace gathered so far to the caller's diagnostics.
         exc.pages = list(listing.pages)
@@ -327,7 +335,7 @@ def enumerate_album(session, album_id: str, *, page_key: str | None = None,
 
 def _enumerate_pages(session, album_id: str, listing: AlbumListing, *,
                      page_key: str | None, max_pages: int,
-                     expected_count: int | None) -> AlbumListing:
+                     expected_count: int | None, progress=None) -> AlbumListing:
     _retry_budget["snAcKc_null_payload"] = 1  # one bounded retry per run
     scalars = _session_scalars(session)
 
@@ -341,6 +349,8 @@ def _enumerate_pages(session, album_id: str, listing: AlbumListing, *,
         known = {i["id"] for i in listing.items}
         fresh = [i for i in page_items if i["id"] not in known]
         listing.items.extend(fresh)
+        if progress is not None:
+            progress(listing.page_count, len(fresh))
 
         def _tokenless_full_short() -> bool:
             # PAGE_SIZE is read at call time (tests monkeypatch it).
@@ -421,16 +431,27 @@ def list_shared_albums(session) -> list:
     return parse_album_summaries(ds5)
 
 
-def measure_disk_weight(session, base_urls: list[str]) -> list[int]:
+def measure_disk_weight(session, base_urls: list[str], *,
+                        show_progress: bool = False) -> list[int]:
     """Exact per-item byte sizes via 1-octet Range GETs on `{baseUrl}=d`.
 
     Google answers `Content-Range: bytes 0-0/TOTAL` — the album's total disk
     weight is measurable without downloading any photo (live-proven: album C,
     24 items → 86.6 MiB exact). Items whose answer carries neither
     Content-Range nor Content-Length report 0 (defensive; live never seen).
+
+    `show_progress` draws a tqdm unit-item bar on stderr — the venus silence
+    fix (261018-eh2): a 1094-item album otherwise hides minutes of healthy,
+    sequential probing behind one silent wait. Off by default so scheduled
+    tests/logs stay byte-identical.
     """
     sizes: list[int] = []
-    for base in base_urls:
+    items = base_urls
+    if show_progress:
+        from tqdm import tqdm
+        items = tqdm(base_urls, desc='Disk weight', unit='photo',
+                     leave=False, file=sys.stderr)
+    for base in items:
         r = session.http.get(f"{base}=d", headers={"Range": "bytes=0-0"})
         cr = r.headers.get("content-range", "")
         size = int(cr.rsplit("/", 1)[-1]) if "/" in cr else None
