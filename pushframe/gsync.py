@@ -663,8 +663,10 @@ def run_google_sync(album_target: str, frame_arg: str, *, apply: bool = False,
         return 2
     frame = frame_res.frame
 
+    from pushframe.cli import _frame_assets_page_printer
     try:
-        frame_assets = aura.get_all_assets(frame.id)
+        frame_assets = aura.get_all_assets(frame.id,
+                                           progress=_frame_assets_page_printer())
     except Exception as e:
         print(f'google-sync failed: reading frame assets failed: {e}')
         return 1

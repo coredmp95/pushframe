@@ -181,7 +181,7 @@ class _FakeAura:
     def login(self):
         self.login_called = True
 
-    def get_all_assets(self, frame_id):
+    def get_all_assets(self, frame_id, **kwargs):  # progress kwarg (261018-evx)
         return self._assets
 
 

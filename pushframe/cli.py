@@ -1604,7 +1604,8 @@ def run_inspect(frame_arg: str, aura=None, debug: bool = False) -> int:
             print(f'  - {contributor.name} <{contributor.email}>')
         print(f'Assets: {total_asset_count}')
 
-        assets = aura.get_all_assets(resolved.frame.id)
+        assets = aura.get_all_assets(resolved.frame.id,
+                                     progress=_frame_assets_page_printer())
         shown = assets[:INSPECT_PHOTO_LIMIT]
         print(f'Photos (showing {len(shown)} of {len(assets)}, API order):')
         for asset in shown:
@@ -1672,7 +1673,7 @@ def run_reconcile(frame_arg: str, *, remove: bool = False, yes: bool = False, me
             return 1
 
         frame = resolved.frame
-        assets = aura.get_all_assets(frame.id)
+        assets = aura.get_all_assets(frame.id, progress=_frame_assets_page_printer())
 
         if not assets:
             # T-11-11: an empty listing cannot be distinguished from a
@@ -1770,6 +1771,20 @@ def run_reconcile(frame_arg: str, *, remove: bool = False, yes: bool = False, me
 # "delete" on a run that hid, or vice versa (D-07).
 _REMOVAL_VERB_PRESENT = {'hide': 'hide', 'delete': 'delete', 'hard_delete': 'hard-delete'}
 _REMOVAL_VERB_PAST = {'hide': 'Hidden', 'delete': 'Removed', 'hard_delete': 'Hard-deleted'}
+
+
+def _frame_assets_page_printer():
+    """A `progress` callback for `Aura.get_all_assets`: one stdout line per
+    drained page (display sweep 261018-evx, review A1) — the cursor loop
+    feeding inspect/sync/push/reconcile used to go fully silent, minutes on
+    500+ asset frames. Opt-in at the call sites; nothing else changes."""
+    with_progress = [0]
+
+    def _cb(page_number: int, total: int) -> None:
+        with_progress[0] = total
+        print(f'frame assets page {page_number} ({total} total)', flush=True)
+
+    return _cb
 
 
 def _build_write_budget(email: str, ignore_budget: bool) -> 'WriteBudget | None':
@@ -1898,7 +1913,7 @@ def run_sync(dir_arg: str, frame_arg: str, apply: bool = False, yes: bool = Fals
             return 1
 
         frame = resolved.frame
-        assets = aura.get_all_assets(frame.id)
+        assets = aura.get_all_assets(frame.id, progress=_frame_assets_page_printer())
 
         # WR-02: scanned separately from the surrounding API calls so a
         # local filesystem error (missing/invalid `dir_arg`, permission
