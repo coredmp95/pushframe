@@ -1738,7 +1738,8 @@ def run_reconcile(frame_arg: str, *, remove: bool = False, yes: bool = False, me
         from pushframe.session import account_email
         write_budget = _build_write_budget(account_email(), False)
 
-        apply_reconciliation(result, aura, frame.id, mechanism=mechanism, budget=write_budget)
+        apply_reconciliation(result, aura, frame.id, mechanism=mechanism,
+                             budget=write_budget, progress=_reconcile_progress_printer())
 
         print(f'Removed: {len(result.removed)} succeeded, {len(result.failed)} failed')
         for asset_id, err in result.failed:
@@ -1783,6 +1784,22 @@ def _frame_assets_page_printer():
     def _cb(page_number: int, total: int) -> None:
         with_progress[0] = total
         print(f'frame assets page {page_number} ({total} total)', flush=True)
+
+    return _cb
+
+
+def _reconcile_progress_printer():
+    """A `progress` callback for `apply_reconciliation`: one stdout line per
+    reconciled row (display sweep 261018-evx) — the apply loop used to go
+    fully silent between the probe prompt and the final summary line.
+    Opt-in at the call site; nothing report-only changes."""
+
+    def _cb(kind, asset_id, ok):
+        # kind is always the reconcile namespace; the noun tracks what
+        # actually happened to the row, mirroring run_reconcile's summary.
+        mark = '✓' if ok else '✗'
+        noun = 'removed' if ok else 'failed'
+        print(f'  {mark} {noun} {asset_id}', flush=True)
 
     return _cb
 

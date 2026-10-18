@@ -92,11 +92,26 @@ def run_doctor(frame_arg: str | None = None, *, aura=None, s3_client=None,
                   if email else None)  # no email in env → run unguarded (probe = 6 calls)
     md5 = get_md5(probe.read_bytes())
 
+    # Display sweep 261018-evx: name the honest pauses the probe may take
+    # BEFORE it takes them. A write-budget refill can wait minutes by
+    # design; a bare silence there reads as a hang while it is pacing.
+    if budget is not None:
+        print('· write probe: write-budget pacing possible — a pause is normal, not a hang')
+
+    # Same stdout-tick contract as the non-tty google-sync path: name the
+    # SQS frame-ack poll and the pacing waits while they happen.
+    def _poll_tick(wait: float) -> None:
+        print(f'· SQS poll (frame ack, ≤{wait:.0f}s)…', flush=True)
+
+    def _pacing_tick(remaining: float) -> None:
+        print(f'· pacing {remaining:.0f}s — budget refill/cooldown, normal', flush=True)
+
     try:
         result = execute_plan(
             SyncPlan(to_upload=[probe], to_delete=[]), aura, frame.id,
             s3_client=s3, sqs_client=sqs, budget=budget,
-            batch_size=1, chunk_delay_seconds=0.0)
+            batch_size=1, chunk_delay_seconds=0.0,
+            on_poll=_poll_tick, on_wait=_pacing_tick)
         if result.upload_succeeded == 1:
             record('write probe (S3 + select_asset + batch_update)', True)
         else:
@@ -129,7 +144,8 @@ def run_doctor(frame_arg: str | None = None, *, aura=None, s3_client=None,
                 SyncPlan(to_upload=[], to_delete=[
                     Asset.model_construct(id=new_asset_id, md5_hash=md5)]),
                 aura, frame.id, s3_client=s3, sqs_client=sqs, budget=budget,
-                batch_size=1, chunk_delay_seconds=0.0)
+                batch_size=1, chunk_delay_seconds=0.0,
+                on_poll=_poll_tick, on_wait=_pacing_tick)
             record('cleanup (probe hidden)', True)
         except Exception as e:
             record('cleanup', False,
