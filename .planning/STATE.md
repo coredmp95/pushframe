@@ -6,10 +6,10 @@ current_phase: 25
 current_phase_name: passed
 current_plan: 25-01 complete
 status: Verified — v5.1 phases 23-25 complete
-last_updated: "2026-10-18T08:35:39.198Z"
+last_updated: "2026-10-18T09:14:12.465Z"
 last_activity: 2026-10-18
 last_activity_desc: "Completed quick task 261012-qwv: review quick fixes (B1, B2, S4, S5)"
-state_head: 1d2cf9e455a9a1e68bd62fe1d808e2364cd1b372
+state_head: 06a7775090ac6ecc4d96140ebfd8c37cce86d10c
 progress:
   total_phases: 3
   completed_phases: 3
@@ -51,5 +51,6 @@ Status: Verified — v5.1 phases 23-25 complete
 | 261014-tlx | Detect Google wire-format drift: response fingerprint, failure diagnostics in reports, consecutive-failure escalation | 2026-10-14 | 7b234a0 | [261014-tlx-detect-google-wire-format-drift-response](./quick/261014-tlx-detect-google-wire-format-drift-response/) |
 | 261018-dny | Fix crash: Frame.last_impression_at nullable in v5 .status traceback | 2026-10-18 | d3a7bc2 | [261018-dny-fix-crash-frame-last-impression-at-nulla](./quick/261018-dny-fix-crash-frame-last-impression-at-nulla/) |
 | 261018-eh2 | google-album progress: per-page listing lines + tqdm on disk-weight measure | 2026-10-18 | 1d2cf9e | [261018-eh2-google-album-progress-per-page-listing-l](./quick/261018-eh2-google-album-progress-per-page-listing-l/) |
+| 261018-evx | progress visibility sweep: frame/Google listing pages + SQS long-poll ticks (review A1-A3) | 2026-10-18 | 06a7775 | [261018-evx-progress-visibility-sweep-frame-google-l](./quick/261018-evx-progress-visibility-sweep-frame-google-l/) |
 
-Last activity: 2026-10-18 - Completed quick task 261018-eh2: google-album progress: per-page listing lines + tqdm on disk-weight measure
+Last activity: 2026-10-18 - Completed quick task 261018-evx: progress visibility sweep (frame/Google listing pages + SQS poll tick)
