@@ -12,6 +12,19 @@ every channel.
 `pushframe` is an unofficial community CLI for Aura Frames digital photo
 frames; it is not affiliated with Aura Frames Inc.
 
+## [Unreleased]
+
+### Fixed
+
+- Every frames read (`pushframe status` first of all) no longer crashes
+  with a pydantic `ValidationError — last_impression_at: Input should be
+  a valid string, input_value=None` before it lists anything. The live
+  API returns `last_impression_at: null` for a frame that has never
+  displayed an asset (a never-impressed frame); `Frame` required the
+  field as a string. It is now optional — `None` for a never-impressed
+  frame — and the read path lists every frame. Encoded from the venus
+  production traceback (quick 261018-dny).
+
 ## [5.1.36] - 2026-10-14
 
 ### Added
