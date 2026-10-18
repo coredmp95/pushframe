@@ -52,6 +52,24 @@ def test_offline_get_all_assets_drains_pagination():
     assert len(ids) == 2, "expected two distinct asset ids across pages"
 
 
+def test_offline_get_all_assets_progress_callback_per_page():
+    """The display-sweep fix (261018-evx, review A1): the cursor pagination
+    loop that feeds inspect/sync/push/reconcile/google-sync used to be
+    fully silent — minutes of nothing on 500+ asset frames. The opt-in
+    `progress` callback now receives one (page_number, cumulative_total)
+    call per drained page, in order; no callback = byte-identical silence
+    (the scheduled runs' contract)."""
+    aura = offline_aura()
+    frame = aura.frame_api.get_frames()[0]
+
+    seen = []
+    assets = aura.get_all_assets(frame.id, limit=1,
+                                 progress=lambda page, total: seen.append((page, total)))
+
+    assert len(assets) == 2
+    assert seen == [(1, 1), (2, 2)]
+
+
 def test_offline_get_assets_raises_on_error_envelope():
     """Exercises the soft '200 + {error: ...} body' business-rule raise in
     FrameApi.get_assets (RESEARCH.md Pattern 3, mechanism 1)."""

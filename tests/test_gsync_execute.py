@@ -287,6 +287,28 @@ def test_dry_run_prints_plan_and_executes_nothing(tmp_path, capsys):
     assert "0 to hide" in out  # dry run printed a plan, executed nothing
 
 
+def test_google_sync_listing_page_lines_and_sqs_poll_tick(tmp_path, capsys):
+    """The display sweep (261018-evx, review A2+A3): the gsync album listing
+    prints the same `listing page N:` lines google-album does (the 500+
+    albums spend seconds paging before the Downloading bar starts), and the
+    per-chunk best-effort SQS poll is named in the Applying bar instead of
+    freezing the last postfix for the poll's wait."""
+    bodies = {2: _jpeg(2), 3: _jpeg(3)}
+    router = _GoogleRouter(item_bodies=bodies)
+    aura = _FakeAura(_assets_for(1))
+    rc = run_google_sync("Cadre", "Fabrice", apply=True, yes=True,
+                         session=_google_session(router), aura=aura,
+                         s3_client=_FakeS3(), sqs_client=_FakeSQS(),
+                         cache_dir=tmp_path / "cache",
+                         manifest_path=tmp_path / "manifest.json")
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "listing page 1: 3 photos (3 total)" in out
+    # Barre tqdm désactivée hors tty : le tick SQS sort en stdout (fallback
+    # print, runs planifiés compris)
+    assert "SQS poll" in out
+
+
 def test_apply_uploads_hides_persists_manifest_and_prunes(tmp_path, capsys):
     bodies = {2: _jpeg(2), 3: _jpeg(3)}
     router = _GoogleRouter(item_bodies=bodies)

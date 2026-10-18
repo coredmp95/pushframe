@@ -169,6 +169,34 @@ def test_execute_plan_happy_path_uploads_and_deletes(tmp_path):
     assert len(batch_calls[0]) == 2
 
 
+def test_execute_plan_on_poll_fires_once_per_chunk(tmp_path):
+    """Display sweep (261018-evx, review A3): the per-chunk best-effort SQS
+    poll (wait_time_seconds=5) used to freeze the Applying bar's last
+    postfix with no event. The `on_poll` seam fires once per upload chunk,
+    BEFORE the poll, carrying the wait so the caller can label it."""
+    import tempfile
+    from pathlib import Path
+    tmp = Path(tempfile.mkdtemp())
+    p1 = tmp / 'a.jpg'
+    _write_jpeg(p1)
+    plan = SyncPlan(to_upload=[p1], to_delete=[])
+    aura = offline_aura(overrides=_default_overrides())
+    _install_select_asset_recorder(aura)
+    _install_ack_all_batch_update(aura)
+    s3 = _FakeS3Client()
+    sqs = _FakeSQSClient()
+    polls = []
+    result = execute_plan(plan, aura, FRAME_ID, s3_client=s3, sqs_client=sqs,
+                          sleep=lambda *_: None, on_poll=polls.append)
+    assert result.upload_succeeded == 1
+    assert polls == [5]
+    # The default seam is a no-op that must not break the call.
+    result2 = execute_plan(SyncPlan(to_upload=[], to_delete=[_asset('x')]),
+                           aura, FRAME_ID, s3_client=s3, sqs_client=sqs,
+                           sleep=lambda *_: None)
+    assert result2.delete_succeeded == 1
+
+
 def test_execute_plan_partial_batch_update_splits_upload_succeeded_and_failures(tmp_path):
     # A PARTIAL batch_update successes response (some local_identifiers
     # acknowledged, some absent) must yield a correct mixed

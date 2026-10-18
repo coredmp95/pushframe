@@ -598,6 +598,7 @@ def execute_plan(plan: SyncPlan, aura, frame_id: str, *, s3_client, sqs_client,
                  batch_size: int = WRITE_BATCH_SIZE,
                  chunk_delay_seconds: float = WRITE_CHUNK_DELAY_SECONDS,
                  on_wait=lambda *args: None,
+                 on_poll=lambda *args: None,
                  budget=None, geo_check=None, wait_on_budget: bool = True,
                  max_wait_seconds: float = 3600.0, clock=get_utc_now,
                  removal_mode: str = 'hide',
@@ -877,6 +878,8 @@ def execute_plan(plan: SyncPlan, aura, frame_id: str, *, s3_client, sqs_client,
                 )
                 # Best-effort/observational poll only -- never gates success or
                 # failure (Pitfall 3); at most once per chunk, not per file.
+                if on_poll:
+                    on_poll(5)  # the poll's wait_time, named for the bar
                 message = sqs_client.receive_message(queue_url, wait_time_seconds=5)
                 logger.debug(f'Best-effort SQS poll after chunk select_asset: {message}')
 

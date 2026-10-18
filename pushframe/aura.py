@@ -92,14 +92,24 @@ class Aura:
     def main(self):
         pass
 
-    def get_all_assets(self, frame_id: str, limit: int = 1000, page_delay: float = 0.0):
+    def get_all_assets(self, frame_id: str, limit: int = 1000, page_delay: float = 0.0,
+                       progress=None):
         paginated_assets, cursor = self.frame_api.get_assets(frame_id, limit=limit)
         assets = paginated_assets
+        page_number = 1
+        if progress is not None:
+            progress(page_number, len(assets))
         while cursor:
             paginated_assets, cursor = self.frame_api.get_assets(frame_id, limit=limit, cursor=cursor)
             if page_delay:
                 time.sleep(page_delay)
             assets.extend(paginated_assets)
+            page_number += 1
+            if progress is not None and paginated_assets:
+                # Page numbers count the drained pages (1-based); the total
+                # is cumulative, matching the enumerate_album(progress=…)
+                # contract the CLI prints (`page N: M photos (T total)`).
+                progress(page_number, len(assets))
 
         return assets
 

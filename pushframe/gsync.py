@@ -570,9 +570,21 @@ def run_google_sync(album_target: str, frame_arg: str, *, apply: bool = False,
     if album.share_url and 'key=' in album.share_url:
         page_key = album.share_url.split('key=', 1)[1].split('&', 1)[0] or None
 
+    seen_photos = [0]
+
+    def _listing_progress(page_number: int, count: int) -> None:
+        # Same page lines google-album prints (261018-eh2): a 500+ album
+        # spends seconds paging between the Album: header and the first
+        # Downloading tick — the operator must see the listing advance
+        # (display sweep 261018-evx, review A2).
+        seen_photos[0] += count
+        print(f'listing page {page_number}: '
+              f'{count} photos ({seen_photos[0]} total)', flush=True)
+
     try:
         listing = enumerate_album(session, album.album_id, page_key=page_key,
-                                  expected_count=metadata_count)
+                                  expected_count=metadata_count,
+                                  progress=_listing_progress)
     except EnumerateError as e:
         print(f'google-sync failed: {redact_tokens(str(e))}')
         for line in wire.format_diagnostics(
@@ -848,6 +860,16 @@ def run_google_sync(album_target: str, frame_arg: str, *, apply: bool = False,
             # live bar, not just the summary lines at the end.
             _progress(kind, identifier, ok, error=reason)
 
+        def _poll(wait_seconds):
+            # Display sweep (261018-evx, review A3): the per-chunk best-effort
+            # SQS poll freezes the bar's last postfix for the poll's wait —
+            # name it instead of a silent hang. With the bar disabled
+            # (non-tty scheduled/log runs) tick as a plain stdout line.
+            if bar.disable:
+                print(f'SQS poll (frame ack, ≤{wait_seconds:.0f}s)…', flush=True)
+            else:
+                bar.set_postfix_str(f'SQS poll (frame ack, ≤{wait_seconds:.0f}s)…')
+
         exec_kwargs: dict = {}
         if budget is not None:
             exec_kwargs['budget'] = budget
@@ -862,7 +884,8 @@ def run_google_sync(album_target: str, frame_arg: str, *, apply: bool = False,
             result = execute_plan(plan, aura, frame.id, s3_client=s3,
                                   sqs_client=sqs, removal_mode='hide',
                                   progress=_progress_factory(_progress),
-                                  on_wait=_wait, on_error=_on_error, **exec_kwargs)
+                                  on_wait=_wait, on_error=_on_error,
+                                  on_poll=_poll, **exec_kwargs)
         except TripDetectedError as e:
             # Phase 23.5: the trip's proven signature — stopped on the FIRST
             # refusal (no 5-failure iteration). Clean resume next run.
