@@ -12,6 +12,28 @@ every channel.
 `pushframe` is an unofficial community CLI for Aura Frames digital photo
 frames; it is not affiliated with Aura Frames Inc.
 
+## [Unreleased]
+
+### Added
+
+- Visible progress on every long step of the large-album paths (the whole
+  500+-photo family that could previously sit silent for minutes, the
+  venus `google-album` silence being the obvious case):
+  - `google-album` prints one `listing page N:` line per snAcKc page while
+    the album is enumerated, then draws a `Disk weight` tqdm bar (one tick
+    per photo probed for its exact bytes).
+  - `google-sync` prints the same `listing page N:` lines while the album
+    listing runs, and `frame assets page N (T total)` while the frame's
+    asset listing is paginated — the same lines for `inspect`, `sync`,
+    `push` and `reconcile`.
+  - The per-chunk best-effort SQS poll inside apply runs (`sync --apply`,
+    `google-sync --apply`, `push`, `doctor`) is named in the Applying bar
+    instead of freezing it for the poll's wait — stdout tick on the
+    scheduled/log runs whose bar is disabled.
+  - All of it is opt-in internally: a caller that asks for no progress
+    behaves byte-identically to before, so nightly logs keep their shape
+    while gaining honest human-readable lines.
+
 ## [5.1.37] - 2026-10-18
 
 ### Fixed
