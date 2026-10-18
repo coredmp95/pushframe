@@ -86,7 +86,12 @@ class Frame(BaseModel):
     delivered_frame_gift: Optional[dict] = None  # TODO
     last_feed_item: dict
     last_impression: Optional[dict] = None
-    last_impression_at: str
+    # Optional with a None default, not required: the live API returns
+    # `last_impression_at: null` for a frame that has never displayed an asset
+    # (never-impressed frame), and requiring the string face-planted the whole
+    # read path with a ValidationError (`pushframe status` crashed before it
+    # could list anything). Same drift treatment as `smart_adds` above.
+    last_impression_at: Optional[str] = None
     child_albums: list
     # The live API stopped returning `smart_adds` on /frames.json and
     # /frames/{id}.json (live drift, Phase 10). Optional-with-default so an
