@@ -47,6 +47,7 @@ import pillow_heif
 from PIL import Image
 from loguru import logger
 
+from pushframe.aws.awsclient import is_expired_credentials_error
 from pushframe.aws.s3client import get_md5
 from pushframe.client import AuraError, AuthenticationError, RateLimitError
 from pushframe.models.asset import AssetPartial, AssetPartialId
@@ -180,17 +181,28 @@ MAX_CONSECUTIVE_WRITE_FAILURES = 5
 #   FAILURE_PER_ITEM  the item's own bytes could not be prepared; nothing was
 #                     sent for it. Recorded in `ExecutionResult.upload_skipped`,
 #                     reported by name, NEVER increments or resets the run.
+#   FAILURE_CREDENTIALS_EXPIRED
+#                     the temporary AWS (Cognito) credentials behind S3/SQS
+#                     expired (botocore ClientError ExpiredToken & co., see
+#                     `pushframe.aws.awsclient.EXPIRED_CREDENTIAL_ERROR_CODES`).
+#                     Debug session s3-expiredtoken-long-run (venus
+#                     2026-10-21): a budget-paced apply outlived the 1 h
+#                     credentials and five expired PutObjects aborted it with
+#                     the lockout advice. Remedy is a refresh, never a
+#                     back-off: the item is retried ONCE on fresh credentials
+#                     and NEVER feeds the breaker; an expiry that survives the
+#                     refresh aborts with `AwsCredentialsError` (honest cause).
 #   FAILURE_SYSTEMIC  the default for everything else -- anything that touched
 #                     the write surface. Feeds the breaker exactly as before.
 #
-# To add a class (e.g. expired AWS credentials, sibling session
-# s3-expiredtoken-long-run): define a FAILURE_<NAME> constant, append a
+# To add a class: define a FAILURE_<NAME> constant, append a
 # `(predicate, FAILURE_<NAME>)` row to `_FAILURE_RULES` (first match wins;
 # no match = systemic), and handle the new class at the call site(s) in
-# `execute_plan` that consult `classify_write_failure` -- today the per-file
-# prep loop of the upload chunk, the only place an exception is attributable
-# to ONE item.
+# `execute_plan` that consult `classify_write_failure` -- the per-file prep
+# loop of the upload chunk (the only place an exception is attributable to
+# ONE item) and the chunk's best-effort SQS poll.
 FAILURE_PER_ITEM = 'per-item'
+FAILURE_CREDENTIALS_EXPIRED = 'credentials-expired'
 FAILURE_SYSTEMIC = 'systemic'
 
 
@@ -207,6 +219,7 @@ class ItemContentError(ValueError):
 
 _FAILURE_RULES: tuple = (
     (lambda exc: isinstance(exc, ItemContentError), FAILURE_PER_ITEM),
+    (is_expired_credentials_error, FAILURE_CREDENTIALS_EXPIRED),
 )
 
 
@@ -342,6 +355,40 @@ def _classify_auth_failure(last_error: str) -> str | None:
     return ('the 401 body carries no auth complaint (empty/generic envelope) '
             '— consistent with the silent anti-abuse trip: wait 60+ min from '
             'the abort and retry once')
+
+
+class AwsCredentialsError(AuraError):
+    """Raised by `execute_plan` when the temporary AWS (Cognito) credentials
+    behind the S3 upload expired and could NOT be renewed: the refresh itself
+    failed, the injected client cannot refresh, or the retry on fresh
+    credentials was still refused (clock skew is then the usual suspect).
+
+    Debug session s3-expiredtoken-long-run: deliberately NOT a
+    `ConsecutiveWriteFailureError` -- an expired AWS key says nothing about
+    the Pushd account, so it never feeds the lockout breaker, never
+    force-reconciles the write budget, and its message carries the real
+    cause instead of the "wait 60+ min" advice. Carries the partial `result`
+    (like `TripDetectedError`) so callers report what was confirmed first.
+    """
+
+    def __init__(self, last_error: str, result: "ExecutionResult", *,
+                 refreshed: bool, refresh_error: str | None = None):
+        self.last_error = last_error
+        self.result = result
+        self.refreshed = refreshed
+        if refresh_error is not None:
+            why = f'renewing them failed: {refresh_error}'
+        elif refreshed:
+            why = ('they WERE renewed and the retry was still refused -- check '
+                   'this machine\'s clock (`timedatectl`): fresh credentials '
+                   'refused as expired means clock skew')
+        else:
+            why = 'this AWS client cannot renew them'
+        super().__init__(
+            f'AWS upload credentials (Cognito temporary keys) expired and could '
+            f'not be renewed -- {why}. The Pushd account is fine: no write was '
+            f'refused and there is nothing to wait out -- fix the cause and '
+            f're-run (items already confirmed are kept). Last error: {last_error}')
 
 
 class ConsecutiveWriteFailureError(AuraError):
@@ -572,6 +619,11 @@ class ExecutionResult:
     # path -- both default to 0 so every existing caller/test is unaffected.
     chunks_retried: int = 0
     items_already_landed: int = 0
+    # Reactive AWS credential renewals this run performed after an S3/SQS
+    # call came back FAILURE_CREDENTIALS_EXPIRED (s3-expiredtoken-long-run).
+    # The clients also refresh PROACTIVELY before expiry; those are not
+    # counted here. Defaults to 0 so every existing caller is unaffected.
+    credential_refreshes: int = 0
     # For confirmed uploads: source path -> the md5 of the bytes ACTUALLY
     # sent to S3. Equal to the file's own md5 for passthrough uploads, but
     # NOT for reduced containers (an MPO uploads its first frame re-encoded
@@ -735,8 +787,14 @@ def execute_plan(plan: SyncPlan, aura, frame_id: str, *, s3_client, sqs_client,
     :param plan: The `SyncPlan` (from `compute_plan`) to execute.
     :param aura: An authenticated `Aura` instance.
     :param frame_id: The frame to upload to / delete from.
-    :param s3_client: An object providing `upload_file(data, extension) -> (filename, md5)`.
-    :param sqs_client: An object providing `get_queue_url(frame_id)` and `receive_message(...)`.
+    :param s3_client: An object providing `upload_file(data, extension) -> (filename, md5)`,
+        optionally `refresh_credentials()` (the real `S3Client` has it): an
+        upload failing with expired AWS credentials (`FAILURE_CREDENTIALS_EXPIRED`)
+        triggers ONE refresh and ONE retry of that item -- never the breaker.
+    :param sqs_client: An object providing `get_queue_url(frame_id)` and `receive_message(...)`
+        (optionally `refresh_credentials()`). The per-chunk poll is best-effort:
+        any error there is logged and ignored -- it never gates the chunk --
+        and an expiry there refreshes the SQS credentials for the next poll.
     :param throttle_seconds: Seconds to pause before each write network call
         so a bulk apply is paced rather than fired as a burst -- a second,
         independent layer of defense on top of batching itself (root-cause
@@ -841,6 +899,12 @@ def execute_plan(plan: SyncPlan, aura, frame_id: str, *, s3_client, sqs_client,
     attempted-and-resolved item count); items after the abort are never
     attempted.
 
+    Raises `AwsCredentialsError` when an upload's AWS credentials expired and
+    one refresh + retry could not fix it (the refresh failed, the client has
+    no `refresh_credentials`, or the retry was refused as expired again).
+    Never fed to the breaker, never a budget reconcile: the run stops with the
+    real cause. The aborting item never resolves (no `progress` call).
+
     Raises `AuthenticationError` (REL-04, D-02) when a write chunk's first
     attempt returns HTTP 401 and the resulting re-login itself fails --
     a hard stop, never retried and never re-labelled transient. Nothing in
@@ -914,6 +978,62 @@ def execute_plan(plan: SyncPlan, aura, frame_id: str, *, s3_client, sqs_client,
                 budget.save()
             raise ConsecutiveWriteFailureError(consecutive_failures, last_error, result)
 
+    def refresh_aws_credentials(client, last_error: str) -> None:
+        # Reactive renewal for FAILURE_CREDENTIALS_EXPIRED (debug session
+        # s3-expiredtoken-long-run). S3/SQS are AWS, not the Pushd anti-abuse
+        # surface: neither the breaker nor the budget is touched here.
+        refresh = getattr(client, 'refresh_credentials', None)
+        if refresh is None:
+            raise AwsCredentialsError(last_error, result, refreshed=False)
+        try:
+            refresh()
+        except Exception as refresh_exc:
+            raise AwsCredentialsError(
+                last_error, result, refreshed=False,
+                refresh_error=f'{type(refresh_exc).__name__}: {refresh_exc}') from refresh_exc
+        result.credential_refreshes += 1
+
+    def prep_with_credential_retry(path: Path):
+        # `_prep_upload`, plus ONE refresh-and-retry when the S3 put came back
+        # with expired AWS credentials (venus 2026-10-21: the 1 h Cognito
+        # keys died ~60 min into a budget-paced apply). Every other failure
+        # propagates unchanged to the caller's classification.
+        try:
+            return _prep_upload(path, s3_client)
+        except Exception as e:
+            if classify_write_failure(e) != FAILURE_CREDENTIALS_EXPIRED:
+                raise
+            logger.warning(f'AWS credentials expired mid-run ({e}) -- refreshing '
+                           f'and retrying {path.name} once')
+            refresh_aws_credentials(s3_client, str(e))
+            try:
+                return _prep_upload(path, s3_client)
+            except Exception as retry_exc:
+                if classify_write_failure(retry_exc) == FAILURE_CREDENTIALS_EXPIRED:
+                    raise AwsCredentialsError(str(retry_exc), result,
+                                              refreshed=True) from retry_exc
+                raise
+
+    def poll_frame_ack() -> None:
+        # Best-effort/observational poll only -- never gates success or
+        # failure (Pitfall 3); at most once per chunk, not per file. It runs
+        # AFTER select_asset, so letting its error fall through to the
+        # chunk's generic branch (as it used to) attributed every prepped
+        # item as failed -- batch_update never sent -- and fed the breaker
+        # once per item: one expired SQS key tripped a 50-item chunk.
+        try:
+            message = sqs_client.receive_message(queue_url, wait_time_seconds=5)
+            logger.debug(f'Best-effort SQS poll after chunk select_asset: {message}')
+        except Exception as e:
+            if classify_write_failure(e) == FAILURE_CREDENTIALS_EXPIRED:
+                try:
+                    refresh_aws_credentials(sqs_client, str(e))
+                except AwsCredentialsError as refresh_exc:
+                    logger.warning(f'SQS credential refresh failed (the poll stays '
+                                   f'best-effort): {refresh_exc}')
+            logger.warning(f'Best-effort SQS poll failed -- ignored, it never '
+                           f'gates the chunk: {e}')
+
     first_write_chunk = True
 
     def interchunk_pause() -> None:
@@ -948,13 +1068,17 @@ def execute_plan(plan: SyncPlan, aura, frame_id: str, *, s3_client, sqs_client,
         prepped: list = []  # list[tuple[Path, local_identifier, AssetPartial]]
         for path in chunk:
             try:
-                local_identifier, partial = _prep_upload(path, s3_client)
+                local_identifier, partial = prep_with_credential_retry(path)
                 prepped.append((path, local_identifier, partial))
                 # The md5 of the bytes ACTUALLY uploaded (differs from the
                 # source file's for reduced containers, e.g. MPO→first
                 # frame); execute_plan's result exposes it so callers can
                 # persist "these bytes live on the frame" state honestly.
                 result.uploaded_md5_by_path[str(path)] = partial.md5_hash
+            except AwsCredentialsError:
+                # Expired credentials that one refresh could not fix: stop the
+                # run with the real cause -- never a breaker count.
+                raise
             except Exception as e:
                 if classify_write_failure(e) == FAILURE_PER_ITEM:
                     # The item's own content (venus 2026-10-20, GIF): nothing
@@ -979,12 +1103,10 @@ def execute_plan(plan: SyncPlan, aura, frame_id: str, *, s3_client, sqs_client,
                 aura.frame_api.select_asset(
                     frame_id, [AssetPartialId(local_identifier=lid) for (_, lid, _) in prepped]
                 )
-                # Best-effort/observational poll only -- never gates success or
-                # failure (Pitfall 3); at most once per chunk, not per file.
+                # Best-effort/observational poll (see poll_frame_ack).
                 if on_poll:
                     on_poll(5)  # the poll's wait_time, named for the bar
-                message = sqs_client.receive_message(queue_url, wait_time_seconds=5)
-                logger.debug(f'Best-effort SQS poll after chunk select_asset: {message}')
+                poll_frame_ack()
 
                 throttle()
                 batch_result = aura.asset_api.batch_update([partial for (_, _, partial) in prepped])

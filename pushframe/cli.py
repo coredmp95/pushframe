@@ -29,7 +29,8 @@ from pushframe.google.vault import CookieVaultError
 from pushframe.models.frame import Frame
 from pushframe.ratelimit import WriteBudget, check_geo, _default_resolver, GeoMismatchError, BudgetExhausted
 from pushframe.reconcile import apply_reconciliation, find_placeholders
-from pushframe.sync import scan_directory, compute_plan, execute_plan, ConsecutiveWriteFailureError
+from pushframe.sync import (scan_directory, compute_plan, execute_plan, AwsCredentialsError,
+                            ConsecutiveWriteFailureError)
 from pushframe.utils.settings import (
     AURA_WRITE_BUDGET_CAPACITY,
     AURA_WRITE_BUDGET_REFILL_PER_MIN,
@@ -2133,6 +2134,9 @@ def run_sync(dir_arg: str, frame_arg: str, apply: bool = False, yes: bool = Fals
         # actually fixed, including the (common, reassuring) all-zero case.
         print(f'Retries: {result.chunks_retried} chunk(s) retried after a 401, '
               f'{result.items_already_landed} item(s) already landed (duplicate uploads prevented)')
+        if result.credential_refreshes:
+            print(f'AWS credentials renewed {result.credential_refreshes} time(s) mid-run '
+                  f'after an expiry (items retried once, nothing lost)')
         print(f'{verb_past}: {result.delete_succeeded} succeeded, {len(result.delete_failures)} failed')
         for asset_id, err in result.delete_failures:
             print(f'  ! {asset_id}: {err}')
@@ -2158,6 +2162,14 @@ def run_sync(dir_arg: str, frame_arg: str, apply: bool = False, yes: bool = Fals
         print(f'{e.result.upload_succeeded} uploads and {e.result.delete_succeeded} '
               f'deletes succeeded before the run of failures.')
         print(str(e))
+        return 1
+    except AwsCredentialsError as e:
+        # s3-expiredtoken-long-run: the AWS (Cognito) keys behind S3 expired
+        # and one refresh + retry could not fix it -- the cause, not the
+        # lockout back-off advice above (the Pushd account was never refused).
+        print(f'{e.result.upload_succeeded} uploads and {e.result.delete_succeeded} '
+              f'deletes succeeded before the stop.')
+        print(f'Failed to sync frame: {e}')
         return 1
     except GeoMismatchError as e:
         # Root-cause mitigation for the VPN-geo-mismatch write-lockout

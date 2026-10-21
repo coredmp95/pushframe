@@ -25,8 +25,8 @@ def get_md5(data):
 class S3Client(AWSClient):
     s3_client = None
 
-    def __init__(self, pool_id=None, region_name='us-east-1'):
-        super().__init__(pool_id if pool_id else upload_identity_pool_id(), region_name)
+    def __init__(self, pool_id=None, region_name='us-east-1', clock=None):
+        super().__init__(pool_id if pool_id else upload_identity_pool_id(), region_name, clock=clock)
 
     def auth(self, pool_id):
         super().auth(pool_id)
@@ -35,10 +35,12 @@ class S3Client(AWSClient):
                                       aws_session_token=self.credentials['SessionToken'])
 
     def upload_file(self, data, extension):
+        self.ensure_fresh_credentials()
         filename = f'{str(uuid.uuid4())}{extension}'
         self.s3_client.put_object(Body=data, Bucket=bucket_key(), Key=filename)
 
         return filename, get_md5(data)
 
     def get_file(self, filename):
+        self.ensure_fresh_credentials()
         return self.s3_client.head_object(Bucket=bucket_key(), Key=filename)

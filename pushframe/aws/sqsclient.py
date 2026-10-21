@@ -13,8 +13,8 @@ def sqs_identity_pool_id() -> str:
 class SQSClient(AWSClient):
     sqs_client: None
 
-    def __init__(self, pool_id=None, region_name='us-east-1'):
-        super().__init__(pool_id if pool_id else sqs_identity_pool_id(), region_name)
+    def __init__(self, pool_id=None, region_name='us-east-1', clock=None):
+        super().__init__(pool_id if pool_id else sqs_identity_pool_id(), region_name, clock=clock)
 
     def auth(self, pool_id):
         super().auth(pool_id)
@@ -24,9 +24,11 @@ class SQSClient(AWSClient):
                                        region_name=self.region_name)
 
     def get_queue_url(self, frame_id: str):
+        self.ensure_fresh_credentials()
         return self.sqs_client.get_queue_url(QueueName=f'frame-{frame_id}-client').get('QueueUrl')
 
     def receive_message(self, queue_url: str, max_num_messages: int = 10, wait_time_seconds: int = 20):
+        self.ensure_fresh_credentials()
         response = self.sqs_client.receive_message(QueueUrl=queue_url, MaxNumberOfMessages=max_num_messages,
                                                    WaitTimeSeconds=wait_time_seconds, AttributeNames=['All'])
 

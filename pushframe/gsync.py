@@ -785,7 +785,7 @@ def run_google_sync(album_target: str, frame_arg: str, *, apply: bool = False,
 
     from pushframe.aws.s3client import S3Client
     from pushframe.aws.sqsclient import SQSClient
-    from pushframe.sync import execute_plan, TripDetectedError
+    from pushframe.sync import AwsCredentialsError, execute_plan, TripDetectedError
 
     s3 = s3_client if s3_client is not None else S3Client()
     sqs = sqs_client if sqs_client is not None else SQSClient()
@@ -900,6 +900,17 @@ def run_google_sync(album_target: str, frame_arg: str, *, apply: bool = False,
             print('This is the anti-abuse trip (proven body signature). Wait '
                   '60+ min, then `pushframe doctor` before the next attempt.')
             return 1
+        except AwsCredentialsError as e:
+            # Debug session s3-expiredtoken-long-run: the AWS (Cognito) keys
+            # behind S3 expired and one refresh + retry could not fix it.
+            # NOT the anti-abuse trip -- none of its wait advice applies.
+            bar.close()
+            print(f'google-sync failed: {e}')
+            print(f'{len(confirmed_paths)} item(s) were confirmed written before '
+                  f'the stop and ARE on the frame — the next run recognizes them '
+                  f'and will NOT upload them twice. No wait is needed: re-run '
+                  f'once the cause above is fixed.')
+            return 1
         except Exception as e:
             from pushframe.sync import _classify_auth_failure
             bar.close()
@@ -967,6 +978,9 @@ def run_google_sync(album_target: str, frame_arg: str, *, apply: bool = False,
 
     print(f'Applied: {result.upload_succeeded} uploaded, '
           f'{result.delete_succeeded} hidden, {result.reshow_succeeded} re-shown')
+    if result.credential_refreshes:
+        print(f'AWS credentials renewed {result.credential_refreshes} time(s) '
+              f'mid-run after an expiry (items retried once, nothing lost)')
     if result.upload_failures:
         print(f'{len(result.upload_failures)} upload(s) FAILED — no manifest '
               f'entry written; they will retry next run')
