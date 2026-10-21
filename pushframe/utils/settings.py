@@ -36,6 +36,9 @@ DEFAULTS: dict[str, dict] = {
     'AURA_WRITE_BUDGET_REFILL_PER_MIN': {'env': ('PUSHFRAME_WRITE_BUDGET_REFILL_PER_MIN', 'AURA_WRITE_BUDGET_REFILL_PER_MIN'), 'default': '0.75', 'cast': float},
     'AURA_WRITE_BUDGET_WAIT':          {'env': ('PUSHFRAME_WRITE_BUDGET_WAIT', 'AURA_WRITE_BUDGET_WAIT'), 'default': True, 'cast': 'bool'},
     'AURA_WRITE_BUDGET_MAX_WAIT':      {'env': ('PUSHFRAME_WRITE_BUDGET_MAX_WAIT', 'AURA_WRITE_BUDGET_MAX_WAIT'), 'default': '3600', 'cast': float},
+    # Max seconds a write run waits for another write run on the SAME account
+    # (per-account run lock, pushframe/runlock.py). 0 or less means never wait.
+    'ACCOUNT_LOCK_MAX_WAIT':           {'env': ('PUSHFRAME_ACCOUNT_LOCK_MAX_WAIT',), 'default': '43200', 'cast': float},
     'AURA_COUNTRY':                    {'env': ('PUSHFRAME_COUNTRY', 'AURA_COUNTRY'), 'default': None},
     'AURA_GEO_FAIL_OPEN':              {'env': ('PUSHFRAME_GEO_FAIL_OPEN', 'AURA_GEO_FAIL_OPEN'), 'default': True, 'cast': 'bool'},
     'AURA_STATE_DIR':                  {'env': ('PUSHFRAME_STATE_DIR', 'AURA_STATE_DIR'), 'default': '~/.config/pushframe', 'cast': Path},

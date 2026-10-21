@@ -122,3 +122,15 @@ def _isolate_google_wire_state(monkeypatch, tmp_path_factory):
 
     monkeypatch.setattr(wire, 'STATE_ROOT_OVERRIDE',
                         tmp_path_factory.mktemp('wire-state'))
+
+
+# ---------------------------------------------------------------------------
+# Per-account run lock (quick-261021-c1k): no test may create lock files under
+# the real ~/.local/state/pushframe, and no lock may leak between tests.
+# ---------------------------------------------------------------------------
+@pytest.fixture(autouse=True)
+def _isolate_run_lock_dir(monkeypatch, tmp_path_factory):
+    from pushframe import runlock
+
+    monkeypatch.setattr(runlock, 'LOCK_DIR_OVERRIDE',
+                        tmp_path_factory.mktemp('run-locks'))

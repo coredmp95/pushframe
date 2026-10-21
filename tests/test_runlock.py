@@ -259,7 +259,7 @@ def test_holder_strings_are_sanitized_before_display(tmp_path):
     assert '\n' not in lines[0]
     job_shown = lines[0].split('held by job ')[1].split(' (pid')[0]
     assert len(job_shown) <= 64
-    assert ';' not in lines[0]
+    assert 'sync;rm' not in lines[0] and 'syncrm' in lines[0]
 
 
 def test_holder_without_job_names_the_command_and_pid(tmp_path):

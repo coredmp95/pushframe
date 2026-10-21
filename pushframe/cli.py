@@ -1,5 +1,4 @@
 import argparse
-import hashlib
 import os
 import sys
 from dataclasses import dataclass, field
@@ -28,6 +27,8 @@ from pushframe.google.redaction import redact_link, redact_tokens
 from pushframe.google.vault import CookieVaultError
 from pushframe.models.frame import Frame
 from pushframe.ratelimit import WriteBudget, check_geo, _default_resolver, GeoMismatchError, BudgetExhausted
+from pushframe import runlock
+from pushframe.runlock import account_key
 from pushframe.reconcile import apply_reconciliation, find_placeholders
 from pushframe.sync import (scan_directory, compute_plan, execute_plan, AwsCredentialsError,
                             ConsecutiveWriteFailureError)
@@ -1812,9 +1813,10 @@ def _build_write_budget(email: str, ignore_budget: bool) -> 'WriteBudget | None'
     `ignore_budget` is set (the `--ignore-budget` escape hatch) -- omitting
     `budget` entirely from `exec_kwargs` bypasses the guard.
 
-    Only `sha1(email)[:12]` (a non-cryptographic filename-uniqueness hash,
-    not a security boundary) is used for the state-file name -- the email
-    itself is never persisted in the file body (T-09-02).
+    Only `account_key(email)` (= sha1(email)[:12], a non-cryptographic
+    filename-uniqueness hash shared with the run lock, not a security
+    boundary) is used for the state-file name -- the email itself is never
+    persisted in the file body (T-09-02).
     """
     if ignore_budget:
         return None
@@ -1829,7 +1831,7 @@ def _build_write_budget(email: str, ignore_budget: bool) -> 'WriteBudget | None'
         print('write-budget: no account identity (env or stored session) '
               '— pacing skipped for this run', file=_sys.stderr)
         return None
-    state_path = AURA_STATE_DIR / f'budget-{hashlib.sha1(email.encode()).hexdigest()[:12]}.json'
+    state_path = AURA_STATE_DIR / f'budget-{account_key(email)}.json'
     return WriteBudget.load(
         state_path, capacity=AURA_WRITE_BUDGET_CAPACITY, refill_per_min=AURA_WRITE_BUDGET_REFILL_PER_MIN,
     )
@@ -2373,6 +2375,40 @@ def _parse_pair_add(sub: list[str]) -> tuple[int, str | None, str | None,
     return 0, name, opts['--album'], opts['--frame']
 
 
+_DEFAULT_ACCOUNT_LOCK_MAX_WAIT = 43200.0
+
+
+def _under_account_lock(write: bool, verb: str, job: str | None, run) -> int:
+    """Run `run()` (a write verb's handler call) under the per-account run
+    lock, for the WHOLE run: session, listing, plan and apply (U-02). Read-only
+    paths (`write` False: dry-runs) return `run()` untouched and never touch
+    the lock (U-05). A contended run waits and says who holds the lock; past
+    the PUSHFRAME_ACCOUNT_LOCK_MAX_WAIT cap it fails named (rc 1), changing
+    nothing, never a traceback."""
+    if not write:
+        return run()
+    try:
+        max_wait = float(settings.ACCOUNT_LOCK_MAX_WAIT)
+    except (ValueError, TypeError):
+        print('note: PUSHFRAME_ACCOUNT_LOCK_MAX_WAIT is not a number of '
+              'seconds — using the default 43200 (12h)')
+        max_wait = _DEFAULT_ACCOUNT_LOCK_MAX_WAIT
+    try:
+        from pushframe.session import account_email
+        email = account_email()
+    except Exception:
+        # A corrupt config is named by the run's own session gate; this
+        # helper must not turn it into a traceback.
+        email = None
+    try:
+        with runlock.account_run_lock(email, job=job, command=verb,
+                                      max_wait=max_wait):
+            return run()
+    except runlock.AccountLockError as exc:
+        print(f'{verb} failed: {exc}')
+        return 1
+
+
 def _scheduled_run_header(report_tag: str | None) -> None:
     """First line a scheduled run writes to its job log — the run's identity
     (which night did what must never require journalctl). Only the scheduled
@@ -2627,8 +2663,11 @@ def _main(argv=None) -> int:
         if args.scheduled:
             _scheduled_run_header(args.report_tag)
         _t0 = _time.monotonic()
-        rc = run_sync(args.dir, args.frame, apply=args.apply, yes=args.yes, debug=args.debug,
-                      removal_mode=removal_mode)
+        rc = _under_account_lock(
+            args.apply, 'sync', args.report_tag,
+            lambda: run_sync(args.dir, args.frame, apply=args.apply,
+                             yes=args.yes, debug=args.debug,
+                             removal_mode=removal_mode))
         if args.scheduled:
             # Same bookkeeping contract as scheduled google-sync: the job
             # log carries the run's identity (header above), end (rc +
