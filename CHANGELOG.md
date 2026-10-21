@@ -12,6 +12,18 @@ every channel.
 `pushframe` is an unofficial community CLI for Aura Frames digital photo
 frames; it is not affiliated with Aura Frames Inc.
 
+## [Unreleased]
+
+### Security
+
+- Pillow raised to **13.0.0** (floor `Pillow>=13.0.0`), fixing 8 CVEs
+  reported against 12.3.0 (CVE-2026-112395, -112397, -112400, -112404,
+  -112895, -112896, -112897, -112899); pillow-heif follows to 1.8.1.
+  The HEIC passthrough (D-09) and the MPO/GIF first-frame JPEG reductions
+  are unchanged and re-verified on real encoded files.
+- certifi locked to **2026.10.19** (PYSEC-2026-4320). `pip-audit --strict`
+  on the locked tree is clean again.
+
 ## [5.1.39] - 2026-10-21
 
 ### Added

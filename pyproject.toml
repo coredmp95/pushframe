@@ -12,7 +12,7 @@ dependencies = [
     "requests>=2.31",
     "boto3>=1.34",
     "botocore>=1.34",
-    "Pillow>=10.4",
+    "Pillow>=13.0.0",
     # D-09: HEIC uploads go to S3 as-is, with data_uti set to 'public.heic'
     # and the original bytes untouched. Transcoding to JPEG was rejected --
     # it would make the uploaded bytes differ from the source file, so the
