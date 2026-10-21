@@ -191,8 +191,12 @@ def test_mixed_chunk_bad_file_attributed_alone_good_file_still_uploads(tmp_path)
     )
 
     assert result.upload_succeeded == 1
-    assert len(result.upload_failures) == 1
-    failed_path, _reason = result.upload_failures[0]
+    # An undecodable file is the item's OWN content (nothing was sent for
+    # it): a per-item SKIP, never a write failure that could feed the
+    # lockout breaker (debug session breaker-counts-per-item-errors).
+    assert result.upload_failures == []
+    assert len(result.upload_skipped) == 1
+    failed_path, _reason = result.upload_skipped[0]
     assert failed_path == bad_path
     assert len(s3.upload_calls) == 1
 

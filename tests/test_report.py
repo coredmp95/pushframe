@@ -139,6 +139,18 @@ def test_error_marker_uploads_failed():
     assert should_send('ERROR', 0, out) is True
 
 
+def test_error_marker_items_skipped():
+    """'{n} item(s) SKIPPED — content pushframe cannot upload (…)' — per-item
+    content skips (debug breaker-counts-per-item-errors): the run exits 0,
+    the items never fed the lockout breaker, but they are NOT on the frame
+    and a retry cannot fix them — the operator must hear about it."""
+    from pushframe.report import should_send
+    out = ('1 item(s) SKIPPED — content pushframe cannot upload (nothing was '
+           'sent; NOT on the frame; re-checked and re-reported every run '
+           'until removed from the album):')
+    assert should_send('ERROR', 0, out) is True
+
+
 def test_error_marker_all_report_pair_failed():
     """'  [FAILED] pair-name' — the --all per-pair report line."""
     from pushframe.report import should_send

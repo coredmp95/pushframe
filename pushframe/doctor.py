@@ -115,7 +115,8 @@ def run_doctor(frame_arg: str | None = None, *, aura=None, s3_client=None,
         if result.upload_succeeded == 1:
             record('write probe (S3 + select_asset + batch_update)', True)
         else:
-            raise RuntimeError(result.upload_failures[0][1] if result.upload_failures
+            not_written = result.upload_failures or result.upload_skipped
+            raise RuntimeError(not_written[0][1] if not_written
                                else 'upload silently not acknowledged')
     except Exception as e:
         record('write probe', False, str(e)[:200])

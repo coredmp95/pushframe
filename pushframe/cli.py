@@ -2119,6 +2119,13 @@ def run_sync(dir_arg: str, frame_arg: str, apply: bool = False, yes: bool = Fals
         print(f'Uploads: {result.upload_succeeded} succeeded, {len(result.upload_failures)} failed')
         for path, err in result.upload_failures:
             print(f'  ! {path}: {err}')
+        if result.upload_skipped:
+            # Per-item content skips (sync.classify_write_failure): nothing
+            # was sent for them and they never fed the lockout breaker.
+            print(f'Skipped: {len(result.upload_skipped)} file(s) whose content '
+                  f'cannot be uploaded (nothing was sent for them)')
+            for path, err in result.upload_skipped:
+                print(f'  ! {path}: {err}')
         # REL-01/REL-03, D-08: printed unconditionally on every --apply run
         # (never behind --debug) -- how many chunks the 401 verify-then-retry
         # path recovered and how many duplicate uploads it prevented is the
@@ -2133,8 +2140,8 @@ def run_sync(dir_arg: str, frame_arg: str, apply: bool = False, yes: bool = Fals
         for asset_id, err in result.reshow_failures:
             print(f'  ! {asset_id}: {err}')
 
-        return 1 if (result.upload_failures or result.delete_failures
-                     or result.reshow_failures) else 0
+        return 1 if (result.upload_failures or result.upload_skipped
+                     or result.delete_failures or result.reshow_failures) else 0
     except RateLimitError as e:
         # The API is throttling/locking out this account mid-apply (HTTP
         # 429/475). execute_plan aborted the batch rather than emitting N

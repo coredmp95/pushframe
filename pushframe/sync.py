@@ -89,6 +89,19 @@ _DATA_UTI_BY_IMAGE_FORMAT = {
     'HEIF': 'public.heic',
 }
 
+# Decoded formats the frame cannot take as-is but whose FIRST frame is a
+# faithful still: `_prep_upload` reduces them to that frame re-encoded as
+# plain JPEG (`public.jpeg`) -- honest JPEG bytes, so no new write surface and
+# no fallback UTI (D-12 intact). The frame is a 2D still display:
+#   MPO  stereo/3D JPEG containers (live-proven 2026-10-01, 5.1.10)
+#   GIF  Google Photos "animations" and other GIFs (venus 2026-10-20: five of
+#        them in one chunk tripped the lockout breaker -- debug session
+#        breaker-counts-per-item-errors)
+# D-09 is untouched: JPEG/PNG/HEIF pass through byte-exact. A reduced upload's
+# md5 differs from the source file's; `ExecutionResult.uploaded_md5_by_path`
+# carries the md5 actually sent (gsync persists THAT in its manifest).
+_FIRST_FRAME_AS_JPEG_FORMATS = frozenset({'MPO', 'GIF'})
+
 # Seconds to pause before each write network call (select_asset /
 # batch_update / remove_asset) so a bulk apply is paced rather than fired as
 # a rapid burst. Root cause of the select-asset-401-unauthorized session:
@@ -140,14 +153,72 @@ WRITE_CHUNK_DELAY_SECONDS = 5.0
 # is the reliable, STATUS-CODE-AGNOSTIC signature of a systemic cut-off, while a
 # genuine isolated failure (one bad/expired asset ref, one permissions edge) is
 # a single failure surrounded by successes and never reaches the threshold.
-# Deliberately counts ANY caught per-item write failure (plain 401, 5xx,
-# network error, ValueError) rather than sniffing the status -- the whole
-# lesson of this session is that the trip cannot be recognised from the HTTP
-# status alone. This is a BACKSTOP below the RateLimitError fast-path: a 429/475
-# still aborts on its FIRST occurrence via its own branch; this catches trips
-# the status code hides. N=5 balances catching the lockout early (5 wasted calls
-# vs 103) against tolerating a small unlucky cluster of independent failures.
+# Deliberately counts ANY caught failure of an item that REACHED the write
+# surface (plain 401, 5xx, network error, S3 error) rather than sniffing the
+# status -- the whole lesson of this session is that the trip cannot be
+# recognised from the HTTP status alone. The one exemption is decided by
+# `classify_write_failure` below: a failure of the item's OWN content, raised
+# before any network call, carries no information about the account and never
+# counts (debug session breaker-counts-per-item-errors). This is a BACKSTOP
+# below the RateLimitError fast-path: a 429/475 still aborts on its FIRST
+# occurrence via its own branch; this catches trips the status code hides. N=5
+# balances catching the lockout early (5 wasted calls vs 103) against
+# tolerating a small unlucky cluster of independent failures.
 MAX_CONSECUTIVE_WRITE_FAILURES = 5
+
+
+# --- Error-classification seam: per-item vs systemic -----------------------
+#
+# ONE predicate decides whether a caught item failure feeds the lockout
+# breaker above. Root cause of debug session breaker-counts-per-item-errors
+# (venus 2026-10-20): `_prep_upload` rejecting GIF bytes locally -- before any
+# S3 or Pushd call -- was fed to the status-agnostic run counter, and five
+# such items inside one chunk (successes are only credited after the chunk's
+# batch_update, so they need not even be adjacent) aborted a 2231-item apply
+# with 0 written and the account-lockout advice.
+#
+#   FAILURE_PER_ITEM  the item's own bytes could not be prepared; nothing was
+#                     sent for it. Recorded in `ExecutionResult.upload_skipped`,
+#                     reported by name, NEVER increments or resets the run.
+#   FAILURE_SYSTEMIC  the default for everything else -- anything that touched
+#                     the write surface. Feeds the breaker exactly as before.
+#
+# To add a class (e.g. expired AWS credentials, sibling session
+# s3-expiredtoken-long-run): define a FAILURE_<NAME> constant, append a
+# `(predicate, FAILURE_<NAME>)` row to `_FAILURE_RULES` (first match wins;
+# no match = systemic), and handle the new class at the call site(s) in
+# `execute_plan` that consult `classify_write_failure` -- today the per-file
+# prep loop of the upload chunk, the only place an exception is attributable
+# to ONE item.
+FAILURE_PER_ITEM = 'per-item'
+FAILURE_SYSTEMIC = 'systemic'
+
+
+class ItemContentError(ValueError):
+    """The item's OWN bytes cannot be uploaded: an unsupported decoded
+    format, or bytes Pillow cannot decode/re-encode (zero-byte, truncated,
+    not an image, decompression bomb). Raised by `_prep_upload` strictly
+    BEFORE any network call, so it says nothing about the account or the
+    write surface -- `classify_write_failure` makes it `FAILURE_PER_ITEM`.
+
+    A `ValueError` subclass so callers that matched the pre-existing
+    `ValueError('Unsupported image format: ...')` keep working."""
+
+
+_FAILURE_RULES: tuple = (
+    (lambda exc: isinstance(exc, ItemContentError), FAILURE_PER_ITEM),
+)
+
+
+def classify_write_failure(exc: BaseException) -> str:
+    """Classify a caught item failure for the lockout breaker: returns the
+    class of the first matching `_FAILURE_RULES` row, `FAILURE_SYSTEMIC`
+    when none matches (the conservative default -- an unknown failure keeps
+    feeding the breaker)."""
+    for matches, failure_class in _FAILURE_RULES:
+        if matches(exc):
+            return failure_class
+    return FAILURE_SYSTEMIC
 
 
 # Cost (in write-budget tokens) of the ONE re-login `execute_plan`'s 401
@@ -492,6 +563,11 @@ class ExecutionResult:
     upload_failures: list = field(default_factory=list)  # list[tuple[Path, str]]
     delete_failures: list = field(default_factory=list)  # list[tuple[str, str]]
     reshow_failures: list = field(default_factory=list)  # list[tuple[str, str]]
+    # FAILURE_PER_ITEM uploads (see `classify_write_failure`): the item's own
+    # content could not be prepared, nothing was sent for it, and it never
+    # fed the lockout breaker. Disjoint from `upload_failures` (which keeps
+    # meaning "a write was attempted and failed"); list[tuple[Path, str]].
+    upload_skipped: list = field(default_factory=list)
     # REL-01/REL-03/D-08 visibility counters for the 401 verify-then-retry
     # path -- both default to 0 so every existing caller/test is unaffected.
     chunks_retried: int = 0
@@ -556,24 +632,38 @@ def _prep_upload(path: Path, s3_client) -> AssetPartial:
 
     MPO files (Multi-Picture Object -- the stereo/3D JPEG containers some
     cameras and phones produce, live-proven 2026-10-01 on two Google Photos
-    items) are reduced to their FIRST frame re-encoded as plain JPEG: the
-    frame is a 2D display, and the first view is the primary one. The upload
-    then carries honest JPEG bytes and the `public.jpeg` UTI.
+    items) and GIFs (venus 2026-10-20) are reduced to their FIRST frame
+    re-encoded as plain JPEG (`_FIRST_FRAME_AS_JPEG_FORMATS`): the frame is a
+    2D display, and the first view is the primary one. The upload then
+    carries honest JPEG bytes and the `public.jpeg` UTI.
+
+    Every failure of the LOCAL phase (decode, format check, reduction, file
+    read) is raised as `ItemContentError` -- nothing has touched the network
+    yet, so it must never feed the lockout breaker (`classify_write_failure`).
+    The S3 upload's own errors propagate unwrapped: they are write-surface
+    failures and stay systemic.
     """
     local_identifier = str(uuid.uuid4())
-    with Image.open(path) as image:
-        width, height = image.size
-        data_uti = _DATA_UTI_BY_IMAGE_FORMAT.get(image.format)
-        if image.format == 'MPO':
-            image.seek(0)
-            buf = io.BytesIO()
-            image.convert('RGB').save(buf, 'JPEG', quality=95)
-            payload = buf.getvalue()
-            data_uti = 'public.jpeg'
-        elif data_uti is None:
-            raise ValueError(f'Unsupported image format: {image.format} ({path.name})')
-        else:
-            payload = path.read_bytes()
+    try:
+        with Image.open(path) as image:
+            width, height = image.size
+            data_uti = _DATA_UTI_BY_IMAGE_FORMAT.get(image.format)
+            if image.format in _FIRST_FRAME_AS_JPEG_FORMATS:
+                image.seek(0)
+                buf = io.BytesIO()
+                image.convert('RGB').save(buf, 'JPEG', quality=95)
+                payload = buf.getvalue()
+                data_uti = 'public.jpeg'
+            elif data_uti is None:
+                raise ItemContentError(
+                    f'Unsupported image format: {image.format} ({path.name})')
+            else:
+                payload = path.read_bytes()
+    except ItemContentError:
+        raise
+    except Exception as e:
+        raise ItemContentError(
+            f'Unreadable image ({path.name}): {type(e).__name__}: {e}') from e
 
     filename, md5 = s3_client.upload_file(payload, path.suffix)
 
@@ -658,7 +748,10 @@ def execute_plan(plan: SyncPlan, aura, frame_id: str, *, s3_client, sqs_client,
         backstop for an anti-abuse trip that surfaces as plain HTTP 401s
         rather than the 429/475 `RateLimitError` catches (see
         `MAX_CONSECUTIVE_WRITE_FAILURES`). Status-code agnostic: any caught
-        per-item write failure counts. 0 disables the backstop entirely
+        failure of an item that reached the write surface counts; a
+        `FAILURE_PER_ITEM` content failure (`classify_write_failure`) never
+        does -- it lands in `result.upload_skipped` and neither increments
+        nor resets the run. 0 disables the backstop entirely
         (restoring the pure unbounded per-item D-08 behaviour).
     :param progress: Optional reporter called exactly once per RESOLVED
         item -- an upload from `plan.to_upload` or a delete from
@@ -741,10 +834,12 @@ def execute_plan(plan: SyncPlan, aura, frame_id: str, *, s3_client, sqs_client,
     trip that surfaces as plain HTTP 401s (indistinguishable at the status
     level from an isolated per-item auth failure) rather than the 429/475
     `RateLimitError` catches. The counter spans BOTH loops and resets on any
-    success, so an isolated failure never trips it. The final failing item is
-    still recorded in `result` and reported via `progress` before the abort
-    (so the reporter-call count still equals the attempted-and-resolved item
-    count); items after the abort are never attempted.
+    success, so an isolated failure never trips it; per-item content skips
+    (unsupported/undecodable bytes, nothing sent) are invisible to it. The
+    final failing item is still recorded in `result` and reported via
+    `progress` before the abort (so the reporter-call count still equals the
+    attempted-and-resolved item count); items after the abort are never
+    attempted.
 
     Raises `AuthenticationError` (REL-04, D-02) when a write chunk's first
     attempt returns HTTP 401 and the resulting re-login itself fails --
@@ -861,6 +956,14 @@ def execute_plan(plan: SyncPlan, aura, frame_id: str, *, s3_client, sqs_client,
                 # persist "these bytes live on the frame" state honestly.
                 result.uploaded_md5_by_path[str(path)] = partial.md5_hash
             except Exception as e:
+                if classify_write_failure(e) == FAILURE_PER_ITEM:
+                    # The item's own content (venus 2026-10-20, GIF): nothing
+                    # was sent, so it neither counts toward nor resets the
+                    # lockout run -- skip it, name it, carry on.
+                    result.upload_skipped.append((path, str(e)))
+                    progress('upload', path, False)
+                    on_error('upload', path, False, str(e))
+                    continue
                 result.upload_failures.append((path, str(e)))
                 progress('upload', path, False)
                 on_error('upload', path, False, str(e))

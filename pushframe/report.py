@@ -47,6 +47,10 @@ _PROBLEM_MARKERS = (
     'failed:',
     # '{n} upload(s) FAILED — no manifest entry written; they will retry next run'
     'upload(s) FAILED',
+    # '{n} item(s) SKIPPED — content pushframe cannot upload (…)' — per-item
+    # content skips (unsupported/undecodable bytes): exit 0, but those
+    # photos are NOT on the frame and a retry will not fix them
+    'item(s) SKIPPED',
     # '--- --all report ---' then '  [FAILED] pair-name' (--all exits 1;
     # the marker keeps the email working even if that contract drifts)
     '[FAILED]',

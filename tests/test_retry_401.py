@@ -328,7 +328,10 @@ def test_chunk_where_every_file_fails_prep_issues_no_select_asset_call(tmp_path)
         sleep=lambda *_: None, throttle_seconds=0, chunk_delay_seconds=0,
     )
 
-    assert len(result.upload_failures) == 1
+    # A prep failure is local (nothing sent): a per-item skip, not a write
+    # failure (debug session breaker-counts-per-item-errors).
+    assert result.upload_failures == []
+    assert len(result.upload_skipped) == 1
     assert select_calls == []
     assert result.chunks_retried == 0
 

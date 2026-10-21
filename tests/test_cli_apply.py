@@ -227,6 +227,30 @@ def test_apply_execution_failures_return_1_and_name_failed_items(tmp_path, monke
     assert 'boom' in out
 
 
+def test_apply_content_skips_are_named_separately_and_return_1(tmp_path, monkeypatch, capsys):
+    # breaker-counts-per-item-errors: a per-item content skip is not an
+    # upload FAILURE (nothing was sent) -- it is listed on its own line, by
+    # name, and still makes the run exit 1 (the file did not land).
+    _env(monkeypatch)
+    _patch_aws_clients(monkeypatch)
+    result = ExecutionResult(
+        upload_succeeded=1,
+        upload_skipped=[(tmp_path / 'anim.jpg', 'Unsupported image format: WEBP (anim.jpg)')],
+    )
+    _patch_execute_plan(monkeypatch, result=result)
+
+    (tmp_path / 'anim.jpg').write_bytes(b'webp-bytes')
+    aura = offline_aura(overrides={ASSETS_PATH: _assets_response()})
+
+    rc = cli.run_sync(str(tmp_path), 'Fake', apply=True, yes=True, aura=aura)
+
+    assert rc == 1
+    out = capsys.readouterr().out
+    assert 'Uploads: 1 succeeded, 0 failed' in out
+    assert 'Skipped: 1 file(s) whose content cannot be uploaded' in out
+    assert 'anim.jpg: Unsupported image format: WEBP' in out
+
+
 def test_apply_rate_limited_batch_aborts_with_single_backoff_message(tmp_path, monkeypatch, capsys):
     # execute_plan raising RateLimitError mid-apply must produce ONE clear
     # back-off message and rc 1 -- not N per-item lines (the confusing

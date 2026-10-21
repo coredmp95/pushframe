@@ -970,6 +970,17 @@ def run_google_sync(album_target: str, frame_arg: str, *, apply: bool = False,
     if result.upload_failures:
         print(f'{len(result.upload_failures)} upload(s) FAILED — no manifest '
               f'entry written; they will retry next run')
+    if result.upload_skipped:
+        # Per-item content skips (sync.classify_write_failure): never fed the
+        # lockout breaker. Named, because a retry cannot fix them — no
+        # manifest entry is written, so every run re-downloads, re-checks and
+        # re-reports them until they leave the album (or become supported).
+        print(f'{len(result.upload_skipped)} item(s) SKIPPED — content '
+              f'pushframe cannot upload (nothing was sent; NOT on the frame; '
+              f're-checked and re-reported every run until removed from the '
+              f'album):')
+        for path_str, reason in result.upload_skipped:
+            print(f'  {_gid_label(Path(path_str).name)}: {redact_tokens(reason)}')
     if failures:
         print(f'{len(failures)} download(s) failed and were NOT synced '
               f'(they will retry next run)')

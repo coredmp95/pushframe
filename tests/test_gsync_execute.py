@@ -362,6 +362,84 @@ def test_mpo_upload_persists_the_uploaded_bytes_md5_not_the_container(tmp_path, 
     assert persisted == get_md5(buf.getvalue())
 
 
+def _webp(n: int) -> bytes:
+    import io
+    from PIL import Image
+    buf = io.BytesIO()
+    # lossless: distinct colours must give distinct bytes (one want per md5)
+    Image.new('RGB', (4, 4), (n * 30 % 255, n * 7 % 255, 200)).save(
+        buf, format='WEBP', lossless=True)
+    return buf.getvalue()
+
+
+def _gif(n: int) -> bytes:
+    """A 2-frame animated GIF (a Google Photos 'animation')."""
+    import io
+    from PIL import Image
+    a = Image.new('RGB', (4, 4), (n % 255, 0, 0))
+    b = Image.new('RGB', (4, 4), (0, 0, n % 255))
+    buf = io.BytesIO()
+    a.save(buf, format='GIF', save_all=True, append_images=[b], duration=100)
+    return buf.getvalue()
+
+
+def test_unsupported_items_are_skipped_named_and_never_abort_the_apply(tmp_path, capsys):
+    """venus 2026-10-20 (debug breaker-counts-per-item-errors): items whose
+    content pushframe cannot upload must NOT trip the lockout breaker — the
+    run completes, the uploadable items land, the skipped ones are named
+    (and get no manifest entry), and no lockout advice is printed."""
+    ns = tuple(range(1, 9))                     # 1 on frame, 2-7 WebP, 8 JPEG
+    bodies = {n: _webp(n) for n in range(2, 8)}
+    bodies[8] = _jpeg(8)
+    router = _GoogleRouter(item_bodies=bodies, listing_ns=ns, metadata_count=8)
+    aura = _FakeAura(_assets_for(1))
+    rc = run_google_sync("Cadre", "Fabrice", apply=True, yes=True,
+                         session=_google_session(router), aura=aura,
+                         s3_client=_FakeS3(), sqs_client=_FakeSQS(),
+                         cache_dir=tmp_path / "cache",
+                         manifest_path=tmp_path / "manifest.json")
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "consecutive write failures" not in out
+    assert "60+ min" not in out
+    assert "Applied: 1 uploaded" in out
+    assert "6 item(s) SKIPPED" in out
+    assert out.count("Unsupported image format: WEBP") == 6
+    assert "upload(s) FAILED" not in out
+    manifest = json.loads((tmp_path / "manifest.json").read_text())
+    assert _gid(8) in manifest
+    assert not any(_gid(n) in manifest for n in range(2, 8))
+
+
+def test_gif_items_upload_as_first_frame_jpeg_and_persist_the_sent_md5(tmp_path, capsys):
+    """The venus album's real content: GIFs now upload (first frame as
+    JPEG, the MPO path) and the manifest persists the md5 of the bytes
+    actually sent, so the next run sees them as held (no drift)."""
+    import io
+    from PIL import Image
+    ns = tuple(range(1, 8))                     # 1 on frame, 2-6 GIF, 7 JPEG
+    bodies = {n: _gif(n) for n in range(2, 7)}
+    bodies[7] = _jpeg(7)
+    router = _GoogleRouter(item_bodies=bodies, listing_ns=ns, metadata_count=7)
+    aura = _FakeAura(_assets_for(1))
+    rc = run_google_sync("Cadre", "Fabrice", apply=True, yes=True,
+                         session=_google_session(router), aura=aura,
+                         s3_client=_FakeS3(), sqs_client=_FakeSQS(),
+                         cache_dir=tmp_path / "cache",
+                         manifest_path=tmp_path / "manifest.json")
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "Applied: 6 uploaded" in out
+    assert "SKIPPED" not in out
+    manifest = json.loads((tmp_path / "manifest.json").read_text())
+    im = Image.open(io.BytesIO(_gif(2)))
+    im.seek(0)
+    buf = io.BytesIO()
+    im.convert('RGB').save(buf, 'JPEG', quality=95)
+    assert manifest[_gid(2)]["md5_hash"] == get_md5(buf.getvalue())
+    assert manifest[_gid(2)]["md5_hash"] != get_md5(_gif(2))
+
+
 def test_failed_download_never_reaches_manifest(tmp_path, capsys):
     router = _GoogleRouter(item_bodies={2: _jpeg(2)}, fail_downloads={3})
     aura = _FakeAura(_assets_for(1))
