@@ -94,6 +94,9 @@ gate or a retry.
 | The run pauses with a `pacing Ns` countdown | The client-side write budget is refilling — **normal** after the initial burst | Nothing; long waits are by design (interrupts are safe) |
 | Budget exhausted / `--max-wait` reached | The configured wait ceiling was hit | Re-run later, or raise `PUSHFRAME_WRITE_BUDGET_MAX_WAIT` |
 | A geo guard mismatch | The account country doesn't match the expected one | Set `PUSHFRAME_COUNTRY` (e.g. `FR`) or check the account |
+| `waiting for account lock held by job … (pid …, …) since HH:MM — waited … of max …` | Another pushframe write run on the same account is active. Writes are serialized per account, so two jobs never double the write rate or race the budget file | Nothing — this is **normal**. The line repeats every 5 minutes and the run starts the moment the other one ends. Dry-runs, `status`, `inspect` and `doctor` never wait |
+| `<verb> failed: account lock still held by … after waiting …` | The safety cap (`PUSHFRAME_ACCOUNT_LOCK_MAX_WAIT`, default 12 h) was hit; the run changed nothing | Follow the message's remedy: inspect or stop the holder (`systemctl --user stop pushframe-<job>.service`), or raise the cap. The lock frees itself when its process exits — never delete the lock file |
+| `cannot open the account lock file …` / stderr note `account lock: no account identity …` | The lock file could not be opened (permissions), or the run has no account identity so the lock was skipped | Fix the permissions of `~/.local/state/pushframe/locks`; run `pushframe config` once so the account is known |
 
 ## Config & pairs
 

@@ -667,7 +667,7 @@ def test_config_set_help_explains_every_key_group(cfg_path, capsys):
                 'smtp_port', 'smtp_user', 'smtp_password', 'report_from',
                 'AURA_COUNTRY', 'AURA_GEO_FAIL_OPEN',
                 'AURA_WRITE_BUDGET_CAPACITY', 'AURA_WRITE_BUDGET_REFILL_PER_MIN',
-                'AURA_WRITE_BUDGET_WAIT', 'AURA_WRITE_BUDGET_MAX_WAIT',
+                'AURA_WRITE_BUDGET_WAIT', 'AURA_WRITE_BUDGET_MAX_WAIT', 'ACCOUNT_LOCK_MAX_WAIT',
                 'DEVICE_IDENTIFIER', 'USER_AGENT', 'LOCALE',
                 'AURA_APP_IDENTIFIER', 'AURA_API_BASE_URL',
                 'AURA_STATE_DIR', 'AWS_S3_BUCKET'):

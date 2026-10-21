@@ -251,7 +251,7 @@ anti-abuse trip, which pushframe detects and stops at the first refusal)
 the unit just ends; the next tick is the retry. Logs land in
 `~/.local/state/pushframe/<job>.log`.
 
-Two safety properties in scheduled mode:
+Three safety properties in scheduled mode:
 
 - **A mass-hide is skipped, not applied**: a plan that would hide more
   photos than the mass-hide threshold allows (20 % by default) is NOT applied — the run logs `SKIPPED (--scheduled)` and exits
@@ -259,6 +259,18 @@ Two safety properties in scheduled mode:
 - **Headless hosts** (servers, boxes without a desktop): timers fire without an active session
   only if you enable lingering once:
   `loginctl enable-linger $USER` (run it yourself; the tool never does).
+- **One write run per account at a time**: `sync --apply`, `push --apply`,
+  `google-sync --apply` (single, `--pair`, `--all`, `--report`) and
+  `reconcile --remove` hold a per-account lock for the WHOLE run (session,
+  listing, plan, apply), so two jobs firing in the same timer window run one
+  after the other instead of doubling the write rate or racing the budget
+  file. A waiting job logs who holds the lock (job, pid, verb, start time)
+  every 5 minutes. The kernel releases the lock when the holder exits, crashes
+  or is killed — there is no stale lock to clean up. The wait is capped by
+  `PUSHFRAME_ACCOUNT_LOCK_MAX_WAIT` (default 12 h); past it the run exits 1
+  with a named error and changes nothing. systemd `oneshot` units are not
+  killed while waiting. `status`, `inspect`, `doctor` and every dry-run never
+  wait.
 
 ### Email run reports — `schedule report` + `google-sync --report`
 
@@ -1037,6 +1049,7 @@ to adopt one.
 | `PUSHFRAME_WRITE_BUDGET_REFILL_PER_MIN` | `0.75` | Refill rate per minute |
 | `PUSHFRAME_WRITE_BUDGET_WAIT` | `true` | Wait for refill instead of stopping |
 | `PUSHFRAME_WRITE_BUDGET_MAX_WAIT` | `3600` | Max seconds to wait |
+| `PUSHFRAME_ACCOUNT_LOCK_MAX_WAIT` | `43200` | Max seconds a write run waits for another run on the same account (`0` = never wait) |
 | `PUSHFRAME_STATE_DIR` | `~/.config/pushframe` | Where the persisted budget lives |
 
 (The old `AURA_*` spellings are still read as fallbacks — see the legacy
@@ -1136,6 +1149,7 @@ see [Write budget and geo guard](#write-budget-and-geo-guard))
 | `AURA_WRITE_BUDGET_REFILL_PER_MIN` | Refill rate per minute (default 0.75) — how fast a long run may keep writing |
 | `AURA_WRITE_BUDGET_WAIT` | `true` (default) — wait for refill when dry; `false` — stop instead of waiting |
 | `AURA_WRITE_BUDGET_MAX_WAIT` | Max seconds a run will wait for a refill before giving up (default 3600) |
+| `ACCOUNT_LOCK_MAX_WAIT` | Max seconds a write run waits for another run on the same account (default 43200 = 12 h; `0` = never wait) |
 
 **Client identity** (what the API sees — read the client-identity notes
 above before touching any of these)

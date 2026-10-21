@@ -12,6 +12,45 @@ every channel.
 `pushframe` is an unofficial community CLI for Aura Frames digital photo
 frames; it is not affiliated with Aura Frames Inc.
 
+## [Unreleased]
+
+### Added
+
+- Per-account run lock: every write run (`sync --apply`, `push --apply`,
+  `google-sync --apply` in its single/`--pair`/`--all`/`--report` shapes, and
+  `reconcile --remove`) now holds a kernel `flock` keyed by the account for the
+  WHOLE run (session, listing, plan, apply). Two scheduled jobs firing in the
+  same `OnCalendar` + `RandomizedDelaySec` window used to overlap, doubling the
+  write rate against the anti-abuse surface and racing the persisted write
+  budget (last writer wins); they are now serialized, and the second one plans
+  from the state the first left behind. A waiting run prints who holds the
+  lock — job, pid, verb, start time — immediately and every 5 minutes. The
+  kernel releases the lock when the holder exits, crashes or is killed, so
+  there is no stale lock to clean up. The wait is capped by
+  `PUSHFRAME_ACCOUNT_LOCK_MAX_WAIT` (default 43200 s = 12 h; `config set
+  ACCOUNT_LOCK_MAX_WAIT`); past it the run exits 1 with
+  `<verb> failed: account lock still held by …` and a remedy, changing
+  nothing. `status`, `inspect`, `doctor` and every dry-run never take or wait
+  for the lock. The write-budget file and the lock share one account key
+  (unchanged `sha1(email)[:12]`), so existing budget files keep being found.
+
+### Fixed
+
+- Per-item content failures — an unsupported image format or undecodable file —
+  no longer feed the consecutive-write-failure (lockout) breaker: a 2231-photo
+  `google-sync --apply` was aborting with 0 written and the account-lockout
+  advice because five unsupported GIFs tripped it. Such items are skipped,
+  listed by name (`sync` also exits 1, and the email report flags it), and
+  re-checked every run until removed from the album. A GIF is now uploaded as
+  its first frame re-encoded as JPEG.
+- Cognito/S3/SQS credentials are refreshed on long runs: a budget-paced apply
+  outliving the 1 h temporary credentials failed every upload with
+  `ExpiredToken`, which was misreported as an account lockout ("wait 60+
+  minutes"). The credentials are now renewed proactively (5 min before expiry)
+  and once on an expiry error; an expiry that survives the refresh aborts with
+  the new typed `AwsCredentialsError` naming the real cause, with no lockout
+  advice and no budget trip.
+
 ## [5.1.38] - 2026-10-18
 
 ### Added
