@@ -2631,24 +2631,29 @@ def _main(argv=None) -> int:
             started = _time.time()
             buf = _io.StringIO()
             with contextlib.redirect_stdout(_Tee(sys.stdout, buf)):
-                rc = run_google_sync(args.album, args.frame or '--all',
-                                     apply=args.apply, yes=args.yes,
-                                     debug=args.debug,
-                                     batch_size=args.batch_size,
-                                     pair=args.pair,
-                                     run_all=args.all_pairs,
-                                     scheduled=args.scheduled)
+                rc = _under_account_lock(
+                    args.apply, 'google-sync', args.report_tag,
+                    lambda: run_google_sync(args.album, args.frame or '--all',
+                                            apply=args.apply, yes=args.yes,
+                                            debug=args.debug,
+                                            batch_size=args.batch_size,
+                                            pair=args.pair,
+                                            run_all=args.all_pairs,
+                                            scheduled=args.scheduled))
             _deliver_report(args.report, args.report_to, args.report_tag,
                             command=command, rc=rc, output=buf.getvalue(),
                             started_ts=started,
                             duration_s=_time.time() - started)
         else:
-            rc = run_google_sync(args.album, args.frame or '--all',
-                                 apply=args.apply, yes=args.yes,
-                                 debug=args.debug, batch_size=args.batch_size,
-                                 pair=args.pair,
-                                 run_all=args.all_pairs,
-                                 scheduled=args.scheduled)
+            rc = _under_account_lock(
+                args.apply, 'google-sync', args.report_tag,
+                lambda: run_google_sync(args.album, args.frame or '--all',
+                                        apply=args.apply, yes=args.yes,
+                                        debug=args.debug,
+                                        batch_size=args.batch_size,
+                                        pair=args.pair,
+                                        run_all=args.all_pairs,
+                                        scheduled=args.scheduled))
         if args.scheduled:
             # The job log carries the run's own bookkeeping — identity
             # (header above), end (rc + elapsed), then the size bound.
@@ -2681,13 +2686,15 @@ def _main(argv=None) -> int:
         if args.scheduled:
             _scheduled_run_header(args.report_tag)
         _t0 = _time.monotonic()
-        rc = run_sync(
-            args.dir, args.frame, apply=args.apply, yes=args.yes, debug=args.debug,
-            no_delete=True, limit=args.limit, batch_size=args.batch_size,
-            chunk_delay=args.chunk_delay, verb='push',
-            max_wait=args.max_wait, no_wait=args.no_wait,
-            country=args.country, ignore_budget=args.ignore_budget,
-        )
+        rc = _under_account_lock(
+            args.apply, 'push', args.report_tag,
+            lambda: run_sync(
+                args.dir, args.frame, apply=args.apply, yes=args.yes,
+                debug=args.debug, no_delete=True, limit=args.limit,
+                batch_size=args.batch_size, chunk_delay=args.chunk_delay,
+                verb='push', max_wait=args.max_wait, no_wait=args.no_wait,
+                country=args.country, ignore_budget=args.ignore_budget,
+            ))
         if args.scheduled:
             # Same bookkeeping contract as scheduled google-sync/sync: the
             # job log carries the run's identity (header above), end (rc +
@@ -2697,11 +2704,13 @@ def _main(argv=None) -> int:
             _rotate_job_log_if_large(args.report_tag)
         return rc
     if args.command == 'reconcile':
-        return run_reconcile(
-            args.frame, remove=args.remove, yes=args.yes, mechanism=args.mechanism,
-            max_age_hours=args.max_age_hours, include_unknown_age=args.include_unknown_age,
-            debug=args.debug,
-        )
+        return _under_account_lock(
+            args.remove, 'reconcile', None,
+            lambda: run_reconcile(
+                args.frame, remove=args.remove, yes=args.yes,
+                mechanism=args.mechanism, max_age_hours=args.max_age_hours,
+                include_unknown_age=args.include_unknown_age, debug=args.debug,
+            ))
     raise ValueError(f'Unhandled command: {args.command}')
 
 
